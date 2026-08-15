@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProjectGuid>{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>MistralOfficeAddin</RootNamespace>
+    <AssemblyName>MistralOfficeAddin</AssemblyName>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
+    <WarningLevel>4</WarningLevel>
+    <Deterministic>true</Deterministic>
+    <LangVersion>5</LangVersion>
+  </PropertyGroup>
+
+  <!-- x86 Configurations -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\x86\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <RegisterForComInterop>false</RegisterForComInterop>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\x86\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <RegisterForComInterop>false</RegisterForComInterop>
+  </PropertyGroup>
+
+  <!-- x64 Configurations -->
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\bin\x64\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <RegisterForComInterop>false</RegisterForComInterop>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <PlatformTarget>x64</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>..\bin\x64\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <RegisterForComInterop>false</RegisterForComInterop>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Xml" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsFormsIntegration" />
+    <Reference Include="Microsoft.CSharp" />
+
+    <!-- NuGet Packages -->
+    <Reference Include="NetOffice">
+      <HintPath>..\packages\NetOfficeFw.Core.1.9.10\lib\net462\NetOffice.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="OfficeApi">
+      <HintPath>..\packages\NetOfficeFw.Office.1.9.10\lib\net462\OfficeApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="WordApi">
+      <HintPath>..\packages\NetOfficeFw.Word.1.9.10\lib\net462\WordApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="ExcelApi">
+      <HintPath>..\packages\NetOfficeFw.Excel.1.9.10\lib\net462\ExcelApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="PowerPointApi">
+      <HintPath>..\packages\NetOfficeFw.PowerPoint.1.9.10\lib\net462\PowerPointApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="OutlookApi">
+      <HintPath>..\packages\NetOfficeFw.Outlook.1.9.10\lib\net462\OutlookApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="VBIDEApi">
+      <HintPath>..\packages\NetOfficeFw.VBIDE.1.9.10\lib\net462\VBIDEApi.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="stdole">
+      <HintPath>..\packages\stdole.7.0.3300\lib\net10\stdole.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Markdig">
+      <HintPath>..\packages\Markdig.0.22.0\lib\net452\Markdig.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="Markdig.Wpf">
+      <HintPath>..\packages\Markdig.Wpf.0.5.0.1\lib\net452\Markdig.Wpf.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Buffers">
+      <HintPath>..\packages\System.Buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Memory">
+      <HintPath>..\packages\System.Memory.4.5.4\lib\net461\System.Memory.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Numerics.Vectors">
+      <HintPath>..\packages\System.Numerics.Vectors.4.5.0\lib\net46\System.Numerics.Vectors.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.4.5.3\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="Addin\Connect.cs" />
+    <Compile Include="Addin\RibbonCallback.cs" />
+    <Compile Include="Addin\CustomTaskPaneManager.cs" />
+    <Compile Include="UI\ChatSidebar.xaml.cs">
+      <DependentUpon>ChatSidebar.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\SettingsWindow.xaml.cs">
+      <DependentUpon>SettingsWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\ChatFloatingWindow.cs" />
+    <Compile Include="UI\OfficeDockedPane.cs" />
+    <Compile Include="UI\Helpers\MarkdownHelper.cs" />
+    <Compile Include="UI\Converters\MarkdownConverter.cs" />
+    <Compile Include="API\MistralClient.cs" />
+    <Compile Include="API\StreamingParser.cs" />
+    <Compile Include="API\TokenCounter.cs" />
+    <Compile Include="API\Models\ChatRequest.cs" />
+    <Compile Include="API\Models\ChatResponse.cs" />
+    <Compile Include="API\Models\StreamingChunk.cs" />
+    <Compile Include="Core\ConfigManager.cs" />
+    <Compile Include="Core\ConversationStore.cs" />
+    <Compile Include="Core\VersionDetector.cs" />
+    <Compile Include="Core\Logger.cs" />
+    <Compile Include="Hosts\WordController.cs" />
+    <Compile Include="Hosts\WordMarkdownRenderer.cs" />
+    <Compile Include="Hosts\ExcelController.cs" />
+    <Compile Include="Hosts\PowerPointController.cs" />
+    <Compile Include="Hosts\OutlookController.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Page Include="UI\ChatSidebar.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\SettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Addin\Ribbon.xml" />
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="app.config" />
+  </ItemGroup>
+
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <Target Name="CopyAddinConfig" AfterTargets="Build">
+    <Copy SourceFiles="$(ProjectDir)app.config" DestinationFiles="$(OutputPath)MistralOfficeAddin.dll.config" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

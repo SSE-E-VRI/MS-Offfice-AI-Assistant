@@ -1,0 +1,182 @@
+<UserControl x:Class="MistralOfficeAddin.UI.ChatSidebar"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:local="clr-namespace:MistralOfficeAddin.UI"
+             xmlns:converters="clr-namespace:MistralOfficeAddin.UI.Converters"
+             xmlns:helpers="clr-namespace:MistralOfficeAddin.UI.Helpers"
+             mc:Ignorable="d" 
+             d:DesignHeight="700" d:DesignWidth="360"
+             Background="#FAFAFA" FontFamily="Segoe UI" FontSize="13">
+
+    <UserControl.Resources>
+        <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+        <converters:BooleanToVisibilityConverter x:Key="InverseBoolToVisConverter" Invert="True"/>
+
+        <Style TargetType="Button">
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="8,4"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- Header -->
+            <RowDefinition Height="Auto"/>
+            <!-- Context & Model Settings Bar -->
+            <RowDefinition Height="Auto"/>
+            <!-- Messages List -->
+            <RowDefinition Height="*"/>
+            <!-- Streaming / Typing Indicator -->
+            <RowDefinition Height="Auto"/>
+            <!-- Input Box & Actions -->
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- 1. Header -->
+        <Border Grid.Row="0" Background="#1E293B" Padding="12,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock Text="Mistral AI Assistant" FontWeight="Bold" Foreground="#F8FAFC" FontSize="14"/>
+                    <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="#94A3B8"/>
+                </StackPanel>
+
+                <Button x:Name="BtnNewChat" Grid.Column="2" Content="&#x1F504;" Background="Transparent" Foreground="#CBD5E1"
+                        ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"/>
+                <Button x:Name="BtnSettings" Grid.Column="3" Content="&#x2699;" Background="Transparent" Foreground="#CBD5E1" 
+                        ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"/>
+            </Grid>
+        </Border>
+
+        <!-- 2. Controls & Model Toolbar -->
+        <Border Grid.Row="1" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="10,6">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Model Selector -->
+                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" SelectionChanged="CmbModel_SelectionChanged">
+                    <ComboBoxItem Content="mistral-large-latest" IsSelected="True"/>
+                    <ComboBoxItem Content="mistral-small-latest"/>
+                    <ComboBoxItem Content="open-mistral-nemo"/>
+                    <ComboBoxItem Content="codestral-latest"/>
+                </ComboBox>
+
+                <!-- Context Insertion Toggle -->
+                <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Include Selection" 
+                          VerticalAlignment="Center" FontSize="11" Foreground="#475569" IsChecked="True"
+                          ToolTip="When checked, only highlighted text is sent as context. Ribbon actions still use the full document if nothing is selected."/>
+            </Grid>
+        </Border>
+
+        <!-- 3. Chat Messages Area -->
+        <!-- NOTE: VirtualizingStackPanel is used to prevent WPF from measuring all items at once -->
+        <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" 
+                      HorizontalScrollBarVisibility="Disabled" Padding="10,8"
+                      CanContentScroll="True">
+            <ItemsControl x:Name="MessagesItemsControl" VirtualizingStackPanel.IsVirtualizing="False">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,6">
+                            <!-- User Message Bubble (Right aligned) -->
+                            <Border x:Name="UserBubble" Background="#2563EB" CornerRadius="12,12,2,12" 
+                                    HorizontalAlignment="Right" MaxWidth="300" Padding="12,8"
+                                    Visibility="{Binding IsUser, Converter={StaticResource BoolToVisConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13"/>
+                                    <TextBlock Text="{Binding Timestamp, StringFormat=t}" FontSize="10" Foreground="#93C5FD" 
+                                               HorizontalAlignment="Right" Margin="0,4,0,0"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- AI Assistant Message Bubble (Left aligned) -->
+                            <!-- Uses MarkdownHelper to render rich Markdown (.md) formatting natively in TextBlock -->
+                            <Border x:Name="AssistantBubble" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" 
+                                    CornerRadius="12,12,12,2" HorizontalAlignment="Left" MaxWidth="320" Padding="12,10"
+                                    Visibility="{Binding IsAssistant, Converter={StaticResource BoolToVisConverter}}">
+                                <StackPanel>
+                                    <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}" 
+                                               TextWrapping="Wrap" Foreground="#1E293B" FontSize="13"
+                                               FontFamily="Segoe UI" LineHeight="20"/>
+
+                                    <!-- Action Bar below AI message -->
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                                        <Button Content="Copy" Background="#DBEAFE" Foreground="#1E3A8A" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="#93C5FD" BorderThickness="1"
+                                                Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                                        <Button Content="Insert" Background="#1D4ED8" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="#1E40AF" BorderThickness="1"
+                                                Click="BtnInsertMessage_Click" ToolTip="Insert at document cursor" Margin="6,0,0,0"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- System Message (Center aligned) -->
+                            <Border x:Name="SystemBubble" Background="#E2E8F0" CornerRadius="6" HorizontalAlignment="Center" 
+                                    Padding="8,4" Visibility="{Binding IsSystem, Converter={StaticResource BoolToVisConverter}}">
+                                <TextBlock Text="{Binding Content}" FontSize="11" Foreground="#475569" TextWrapping="Wrap" TextAlignment="Center"/>
+                            </Border>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+
+        <!-- 4. Typing Indicator -->
+        <Border x:Name="TypingIndicator" Grid.Row="3" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" 
+                Padding="12,6" Visibility="Collapsed">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Mistral is generating..." FontStyle="Italic" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
+                <Button x:Name="BtnStopStreaming" Content="Stop" Background="#FEE2E2" Foreground="#DC2626" 
+                        FontSize="11" FontWeight="Bold" Padding="8,2" Margin="12,0,0,0" Click="BtnStopStreaming_Click"/>
+            </StackPanel>
+        </Border>
+
+        <!-- 5. Input Area -->
+        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="10">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Message Input Box -->
+                <TextBox x:Name="TxtInput" Grid.Row="0" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
+                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
+                         BorderThickness="1" FontSize="13" KeyDown="TxtInput_KeyDown"
+                         ToolTip="Type your prompt here... (Ctrl+Enter to send)"/>
+
+                <!-- Quick Action Buttons + Send -->
+                <Grid Grid.Row="1" Margin="0,8,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="#F1F5F9" Foreground="#334155" 
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Summarize the selected text or document clearly."/>
+                        <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="#F1F5F9" Foreground="#334155" 
+                                FontSize="11" Padding="6,4" Click="BtnQuickAction_Click" Tag="Rewrite the selected text for improved clarity and tone."/>
+                    </StackPanel>
+
+                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="#2563EB" Foreground="#FFFFFF" 
+                            FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"/>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+  <ribbon>
+    <tabs>
+      <tab id="tabMistralAI" label="Mistral AI">
+        <group id="grpChat" label="Chat">
+          <button id="btnToggleSidebar" label="Open AI Chat" 
+                  imageMso="HappyFace" size="large"
+                  onAction="OnToggleSidebar"/>
+          <button id="btnNewChat" label="New Chat" 
+                  imageMso="NewAppointment" size="large"
+                  onAction="OnNewChat"/>
+        </group>
+        <group id="grpDraft" label="Draft">
+          <button id="btnGenerate" label="Generate" 
+                  imageMso="CreateReport" size="large"
+                  onAction="OnGenerate"/>
+          <button id="btnContinue" label="Continue Writing" 
+                  imageMso="GoToNextEdit" size="large"
+                  onAction="OnContinueWriting"/>
+        </group>
+        <group id="grpEdit" label="Edit">
+          <button id="btnSummarize" label="Summarize" 
+                  imageMso="AutoSummary" size="large"
+                  onAction="OnSummarize"/>
+          <button id="btnRewrite" label="Rewrite" 
+                  imageMso="ReviewTrackChanges" size="large"
+                  onAction="OnRewrite"/>
+          <button id="btnExpand" label="Expand" 
+                  imageMso="InkExpand" size="normal"
+                  onAction="OnExpand"/>
+          <button id="btnShorten" label="Shorten" 
+                  imageMso="ShrinkOnePage" size="normal"
+                  onAction="OnShorten"/>
+          <menu id="menuTranslate" label="Translate" 
+                imageMso="Translate" size="large">
+            <button id="btnTransEN" label="English" onAction="OnTranslate"/>
+            <button id="btnTransES" label="Spanish" onAction="OnTranslate"/>
+            <button id="btnTransFR" label="French" onAction="OnTranslate"/>
+            <button id="btnTransDE" label="German" onAction="OnTranslate"/>
+            <button id="btnTransZH" label="Chinese" onAction="OnTranslate"/>
+          </menu>
+        </group>
+        <group id="grpSettings" label="Settings">
+          <button id="btnSettings" label="Configure" 
+                  imageMso="AdpDiagramTableRelationships" size="large"
+                  onAction="OnOpenSettings"/>
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
+</customUI>

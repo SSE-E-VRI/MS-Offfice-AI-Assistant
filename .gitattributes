@@ -1,0 +1,29 @@
+# Set default behavior to auto-normalize line endings
+* text=auto
+
+# C# source files — CRLF on Windows checkout
+*.cs    text eol=crlf
+*.csproj text eol=crlf
+*.sln   text eol=crlf
+*.xaml  text eol=crlf
+*.resx  text eol=crlf
+*.config text eol=crlf
+*.xml   text eol=crlf
+
+# Scripts
+*.ps1   text eol=crlf
+*.cmd   text eol=crlf
+*.bat   text eol=crlf
+
+# Markdown / docs
+*.md    text eol=lf
+*.txt   text eol=lf
+
+# Binary files — no line ending conversion
+*.dll   binary
+*.exe   binary
+*.pdb   binary
+*.png   binary
+*.ico   binary
+*.nupkg binary
+nuget.exe binary
