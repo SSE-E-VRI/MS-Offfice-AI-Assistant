@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -10,14 +12,36 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using MistralOfficeAddin.API;
 using MistralOfficeAddin.API.Models;
+using MistralOfficeAddin.Attachments;
 using MistralOfficeAddin.Core;
 using MistralOfficeAddin.Hosts;
+using MistralOfficeAddin.Providers;
 
 namespace MistralOfficeAddin.UI
 {
+    public class AttachmentItemViewModel
+    {
+        public string FilePath { get; set; }
+        public string FileName { get; set; }
+        public long FileSizeBytes { get; set; }
+        public bool IsImage { get; set; }
+
+        public string DisplayIcon
+        {
+            get { return IsImage ? "🖼️" : "📄"; }
+        }
+
+        public string DisplayName
+        {
+            get { return string.Format("{0} ({1:F1} KB)", FileName, FileSizeBytes / 1024.0); }
+        }
+    }
+
     public partial class ChatSidebar : UserControl
     {
         private readonly ObservableCollection<ChatMessage> _messages = new ObservableCollection<ChatMessage>();
+        private readonly ObservableCollection<AttachmentItemViewModel> _pendingAttachments = new ObservableCollection<AttachmentItemViewModel>();
+        private readonly ChatOrchestrator _orchestrator;
         private CancellationTokenSource _streamingCts;
         private string _currentDocumentKey = "OfficeSession";
         private object _hostAppObj;
@@ -27,36 +51,107 @@ namespace MistralOfficeAddin.UI
         private WordController _wordCtrl;
         private ExcelController _excelCtrl;
         private PowerPointController _pptCtrl;
-        private OutlookController _outlookCtrl;
         private bool _hostInitialized;
 
         public ChatSidebar()
         {
             InitializeComponent();
             MessagesItemsControl.ItemsSource = _messages;
+            AttachmentsItemsControl.ItemsSource = _pendingAttachments;
+
+            _orchestrator = new ChatOrchestrator(ProviderFactory.CreateFromConfig(ConfigManager.Instance));
 
             SelectConfiguredModel();
 
             // Show welcome message immediately without waiting for host init
-            _messages.Add(new ChatMessage("system", "Mistral AI Assistant is ready. Click Configure (⚙️) to enter your API key, then start chatting!"));
+            _messages.Add(new ChatMessage("system", "AI Assistant is ready. Click Configure (⚙️) to enter your API key, then start chatting!"));
+        }
+
+        public void ReloadConfiguredProvider()
+        {
+            try
+            {
+                if (_orchestrator != null)
+                {
+                    var newProvider = ProviderFactory.CreateFromConfig(ConfigManager.Instance);
+                    _orchestrator.UpdateProvider(newProvider);
+                }
+                SelectConfiguredModel();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ChatSidebar: Failed to reload provider", ex);
+            }
         }
 
         private void SelectConfiguredModel()
         {
             try
             {
-                string configured = ConfigManager.Instance.DefaultModel;
-                if (string.IsNullOrWhiteSpace(configured) || CmbModel == null) return;
-                foreach (ComboBoxItem item in CmbModel.Items)
+                var config = ConfigManager.Instance;
+                var providerSettings = config.GetActiveProviderSettings();
+                string configured = providerSettings.DefaultModel;
+
+                if (CmbModel == null) return;
+
+                CmbModel.Items.Clear();
+                var defaultModels = GetDefaultModels(config.ActiveProvider);
+                foreach (var m in defaultModels)
                 {
-                    if (string.Equals(Convert.ToString(item.Content), configured, StringComparison.OrdinalIgnoreCase))
-                    {
-                        CmbModel.SelectedItem = item;
-                        return;
-                    }
+                    CmbModel.Items.Add(m.Id);
+                }
+
+                if (!string.IsNullOrWhiteSpace(configured))
+                {
+                    CmbModel.Text = configured;
+                }
+                else if (CmbModel.Items.Count > 0)
+                {
+                    CmbModel.SelectedIndex = 0;
                 }
             }
             catch { }
+        }
+
+        private List<AIModelInfo> GetDefaultModels(AIProviderType providerType)
+        {
+            switch (providerType)
+            {
+                case AIProviderType.Groq:
+                    return new List<AIModelInfo>
+                    {
+                        new AIModelInfo("llama-3.3-70b-versatile"),
+                        new AIModelInfo("llama-3.1-8b-instant"),
+                        new AIModelInfo("llama-3.2-11b-vision-preview"),
+                        new AIModelInfo("llama-3.2-90b-vision-preview"),
+                        new AIModelInfo("mixtral-8x7b-32768")
+                    };
+                case AIProviderType.Gemini:
+                    return new List<AIModelInfo>
+                    {
+                        new AIModelInfo("gemini-2.5-flash"),
+                        new AIModelInfo("gemini-2.5-pro"),
+                        new AIModelInfo("gemini-1.5-flash"),
+                        new AIModelInfo("gemini-1.5-pro")
+                    };
+                case AIProviderType.Custom:
+                    return new List<AIModelInfo>
+                    {
+                        new AIModelInfo("llama3"),
+                        new AIModelInfo("mistral"),
+                        new AIModelInfo("qwen2.5")
+                    };
+                case AIProviderType.Mistral:
+                default:
+                    return new List<AIModelInfo>
+                    {
+                        new AIModelInfo("mistral-large-latest"),
+                        new AIModelInfo("mistral-small-latest"),
+                        new AIModelInfo("open-mistral-nemo"),
+                        new AIModelInfo("codestral-latest"),
+                        new AIModelInfo("pixtral-large-latest")
+                    };
+            }
         }
 
         /// <summary>
@@ -98,11 +193,6 @@ namespace MistralOfficeAddin.UI
                     _pptCtrl = new PowerPointController(_hostAppObj);
                     docName = _pptCtrl.GetActivePresentationName();
                 }
-                else if (string.Equals(_hostType, "Outlook", StringComparison.OrdinalIgnoreCase))
-                {
-                    _outlookCtrl = new OutlookController(_hostAppObj);
-                    docName = _outlookCtrl.GetActiveItemTitle();
-                }
 
                 _currentDocumentKey = string.IsNullOrWhiteSpace(docName) ? "Document" : docName;
                 _hostInitialized = true;
@@ -130,7 +220,7 @@ namespace MistralOfficeAddin.UI
                 }
                 else
                 {
-                    _messages.Add(new ChatMessage("system", string.Format("Welcome to Mistral AI for {0}! Ask anything or use ribbon buttons to draft, rewrite, or summarize.", _hostType)));
+                    _messages.Add(new ChatMessage("system", string.Format("Welcome to AI Assistant for {0}! Ask anything or use ribbon buttons to draft, rewrite, or summarize.", _hostType)));
                 }
             }
             catch (Exception ex)
@@ -182,9 +272,9 @@ namespace MistralOfficeAddin.UI
         private async Task SendMessageAsync(string promptToSend, string customDisplayTitle)
         {
             var config = ConfigManager.Instance;
-            if (string.IsNullOrWhiteSpace(config.ApiKey))
+            if (string.IsNullOrWhiteSpace(config.ApiKey) && config.ActiveProvider != AIProviderType.Custom)
             {
-                _messages.Add(new ChatMessage("system", "API Key is missing. Click ⚙️ Settings to configure your Mistral API key."));
+                _messages.Add(new ChatMessage("system", "API Key is missing. Click ⚙️ Settings to configure your AI provider key."));
                 ScrollToBottom();
                 return;
             }
@@ -204,43 +294,93 @@ namespace MistralOfficeAddin.UI
                 _streamingCts.Cancel();
             _streamingCts = new CancellationTokenSource();
 
-            string selectedModel = config.DefaultModel ?? "mistral-large-latest";
-            if (CmbModel.SelectedItem is ComboBoxItem)
-            {
-                var item = (ComboBoxItem)CmbModel.SelectedItem;
-                selectedModel = Convert.ToString(item.Content);
-            }
+            string selectedModel = !string.IsNullOrWhiteSpace(CmbModel.Text)
+                ? CmbModel.Text.Trim()
+                : (config.DefaultModel ?? "default");
 
             try
             {
+                // Process pending attachments
+                var extractedAttachments = new List<AttachmentBlock>();
+                var textAttachmentContext = new StringBuilder();
+
+                if (_pendingAttachments.Count > 0)
+                {
+                    bool providerSupportsVision = _orchestrator != null && _orchestrator.CheckVisionSupport(selectedModel);
+
+                    foreach (var att in _pendingAttachments)
+                    {
+                        try
+                        {
+                            var block = await AttachmentExtractor.ExtractAsync(att.FilePath).ConfigureAwait(false);
+                            if (block.IsImage)
+                            {
+                                if (providerSupportsVision)
+                                {
+                                    extractedAttachments.Add(block);
+                                }
+                            }
+                            else
+                            {
+                                textAttachmentContext.AppendLine(string.Format("\n[Attachment: {0}]\n{1}\n[End Attachment]", block.FileName, block.ExtractedText));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warn(string.Format("Failed to extract attachment '{0}': {1}", att.FileName, ex.Message));
+                        }
+                    }
+                }
+
                 var historyForApi = _messages
                     .Where(m => (m.IsUser || m.IsAssistant) && m != assistantMsg)
                     .ToList();
 
+                // If attachments produced extracted text, augment the last user message
+                if (textAttachmentContext.Length > 0 && historyForApi.Count > 0)
+                {
+                    var lastUser = historyForApi.LastOrDefault(m => m.IsUser);
+                    if (lastUser != null)
+                    {
+                        lastUser.Content = lastUser.Content + "\n\n" + textAttachmentContext.ToString();
+                    }
+                }
+
                 var boundedMessages = TokenCounter.TruncateToFit(historyForApi, 24000, config.SystemPrompt);
 
-                using (var client = new MistralClient(config.BaseUrl, config.ApiKey))
+                var aiRequest = new AIRequest
                 {
-                    await client.StreamChatCallbackAsync(
-                        selectedModel,
-                        boundedMessages,
-                        config.Temperature,
-                        config.MaxTokens,
-                        delta =>
+                    Model = selectedModel,
+                    Messages = boundedMessages,
+                    Temperature = config.Temperature,
+                    MaxTokens = config.MaxTokens,
+                    SystemPrompt = config.SystemPrompt,
+                    Attachments = extractedAttachments
+                };
+
+                await _orchestrator.StreamChatAsync(
+                    aiRequest,
+                    delta =>
+                    {
+                        // Use Invoke with Background priority — prevents UI thread lockup
+                        Dispatcher.BeginInvoke(new Action(() =>
                         {
-                            // Use Invoke with Background priority — prevents UI thread lockup
-                            Dispatcher.BeginInvoke(new Action(() =>
-                            {
-                                assistantMsg.Content += delta;
-                            }), DispatcherPriority.Background);
-                        },
-                        _streamingCts.Token);
-                }
+                            assistantMsg.Content += delta;
+                        }), DispatcherPriority.Background);
+                    },
+                    _streamingCts.Token);
 
                 assistantMsg.IsStreaming = false;
                 // Scroll once at the end, not on every token
                 ScrollToBottom();
                 SaveConversationHistory();
+
+                // Clear attachments on UI thread after send
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    _pendingAttachments.Clear();
+                    UpdateAttachmentState();
+                }));
             }
             catch (OperationCanceledException)
             {
@@ -259,6 +399,108 @@ namespace MistralOfficeAddin.UI
                 TypingIndicator.Visibility = Visibility.Collapsed;
                 ScrollToBottom();
             }
+        }
+
+        private void BtnAttach_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var dlg = new Microsoft.Win32.OpenFileDialog
+                {
+                    Title = "Attach Documents or Images",
+                    Multiselect = true,
+                    Filter = "All Supported (*.docx;*.xlsx;*.pptx;*.pdf;*.png;*.jpg;*.txt)|*.docx;*.xlsx;*.pptx;*.pdf;*.png;*.jpg;*.jpeg;*.webp;*.gif;*.txt;*.csv;*.json;*.md|" +
+                             "Office Documents (*.docx;*.xlsx;*.pptx)|*.docx;*.xlsx;*.pptx|" +
+                             "PDF Documents (*.pdf)|*.pdf|" +
+                             "Images (*.png;*.jpg;*.jpeg;*.webp)|*.png;*.jpg;*.jpeg;*.webp;*.gif|" +
+                             "Text Files (*.txt;*.csv;*.json;*.md)|*.txt;*.csv;*.json;*.md|" +
+                             "All Files (*.*)|*.*"
+                };
+
+                if (dlg.ShowDialog() == true && dlg.FileNames != null)
+                {
+                    long currentTotal = _pendingAttachments.Sum(a => a.FileSizeBytes);
+
+                    foreach (string file in dlg.FileNames)
+                    {
+                        var fi = new FileInfo(file);
+                        if (!fi.Exists) continue;
+
+                        string ext = fi.Extension.ToLowerInvariant();
+                        if (ext == ".doc" || ext == ".xls" || ext == ".ppt" || ext == ".rtf")
+                        {
+                            MessageBox.Show(
+                                string.Format("Legacy binary format '{0}' is not supported.\nPlease save as modern Open XML (.docx, .xlsx, .pptx) or export to PDF.", fi.Name),
+                                "AI Assistant - Unsupported Format",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                            continue;
+                        }
+
+                        if (fi.Length > AttachmentExtractor.MaxPerFileSizeBytes)
+                        {
+                            MessageBox.Show(
+                                string.Format("File '{0}' exceeds the maximum allowed single file size of 20 MB.", fi.Name),
+                                "AI Assistant - File Too Large",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                            continue;
+                        }
+
+                        if (currentTotal + fi.Length > AttachmentExtractor.MaxTotalSizeBytes)
+                        {
+                            MessageBox.Show(
+                                "Total attachments exceed the aggregate 30 MB size limit.",
+                                "AI Assistant - Attachment Limit",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Warning);
+                            break;
+                        }
+
+                        bool isImg = ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".gif" || ext == ".bmp";
+                        _pendingAttachments.Add(new AttachmentItemViewModel
+                        {
+                            FilePath = fi.FullName,
+                            FileName = fi.Name,
+                            FileSizeBytes = fi.Length,
+                            IsImage = isImg
+                        });
+                        currentTotal += fi.Length;
+                    }
+
+                    UpdateAttachmentState();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Error attaching files", ex);
+                MessageBox.Show("Could not attach file: " + ex.Message, "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void BtnRemoveAttachment_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as Button;
+            if (btn != null)
+            {
+                var item = btn.DataContext as AttachmentItemViewModel;
+                if (item != null)
+                {
+                    _pendingAttachments.Remove(item);
+                    UpdateAttachmentState();
+                }
+            }
+        }
+
+        private void UpdateAttachmentState()
+        {
+            AttachmentsItemsControl.Visibility = _pendingAttachments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+            bool hasImages = _pendingAttachments.Any(a => a.IsImage);
+            string selectedModel = !string.IsNullOrWhiteSpace(CmbModel.Text) ? CmbModel.Text.Trim() : (ConfigManager.Instance.DefaultModel ?? "");
+            bool supportsVision = _orchestrator != null && _orchestrator.CheckVisionSupport(selectedModel);
+
+            VisionWarningBanner.Visibility = (hasImages && !supportsVision) ? Visibility.Visible : Visibility.Collapsed;
         }
 
         private string GetCurrentContextText(bool selectionOnly)
@@ -282,13 +524,12 @@ namespace MistralOfficeAddin.UI
                         return string.Format("[Document Content: {0}]:\n{1}", _currentDocumentKey, docText);
                     }
                 }
-                if (selectionOnly && _excelCtrl == null && _pptCtrl == null && _outlookCtrl == null)
+                if (selectionOnly && _excelCtrl == null && _pptCtrl == null)
                 {
                     return string.Empty;
                 }
                 if (_excelCtrl != null) return _excelCtrl.GetSelectedRangeValues();
                 if (_pptCtrl != null) return _pptCtrl.GetSlideText();
-                if (_outlookCtrl != null) return _outlookCtrl.GetEmailBody();
             }
             catch (Exception ex)
             {
@@ -301,13 +542,15 @@ namespace MistralOfficeAddin.UI
         {
             if (_streamingCts != null)
                 _streamingCts.Cancel();
+            if (_orchestrator != null)
+                _orchestrator.CancelCurrentStream();
         }
 
         public void StartNewChat(bool confirm)
         {
             if (confirm)
             {
-                if (MessageBox.Show("Start a new chat session and clear current conversation?", "Mistral AI",
+                if (MessageBox.Show("Start a new chat session and clear current conversation?", "AI Assistant",
                     MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 {
                     return;
@@ -329,7 +572,10 @@ namespace MistralOfficeAddin.UI
             try
             {
                 var win = new SettingsWindow();
-                win.ShowDialog();
+                if (win.ShowDialog() == true)
+                {
+                    ReloadConfiguredProvider();
+                }
             }
             catch (Exception ex)
             {
@@ -364,14 +610,12 @@ namespace MistralOfficeAddin.UI
                     _excelCtrl.InsertText(content);
                 else if (_pptCtrl != null)
                     _pptCtrl.AddBulletPoints(content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList());
-                else if (_outlookCtrl != null)
-                    _outlookCtrl.SetComposeBody(content);
                 else
-                    MessageBox.Show("No Office document is active. Open a document and try again.", "Mistral AI", MessageBoxButton.OK, MessageBoxImage.Information);
+                    MessageBox.Show("No Office document is active. Open a document and try again.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(string.Format("Could not insert text: {0}", ex.Message), "Mistral AI", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(string.Format("Could not insert text: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -398,10 +642,9 @@ namespace MistralOfficeAddin.UI
         private void CmbModel_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (!_hostInitialized) return;
-            if (CmbModel != null && CmbModel.SelectedItem is ComboBoxItem)
+            if (CmbModel != null && !string.IsNullOrWhiteSpace(CmbModel.Text))
             {
-                var item = (ComboBoxItem)CmbModel.SelectedItem;
-                ConfigManager.Instance.DefaultModel = Convert.ToString(item.Content);
+                ConfigManager.Instance.DefaultModel = CmbModel.Text.Trim();
                 ConfigManager.Instance.Save();
             }
         }

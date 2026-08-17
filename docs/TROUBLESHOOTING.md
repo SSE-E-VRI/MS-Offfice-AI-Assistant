@@ -1,6 +1,9 @@
-# Mistral AI Office Assistant — Troubleshooting Guide
+# AI Assistant for Microsoft Office — Troubleshooting Guide
 
-This guide covers common issues and resolutions for the Mistral AI Office Add-in.
+**Version 0.0.0**  
+*Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
+
+This guide covers common issues and resolutions for the AI Assistant Office Add-in.
 
 ---
 

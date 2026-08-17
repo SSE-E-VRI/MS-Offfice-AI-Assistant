@@ -1,9 +1,9 @@
-# PowerShell script to register Mistral Office Add-in for current user
+# PowerShell script to register AI Assistant Add-in for current user
 $ErrorActionPreference = "Stop"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  Registering Mistral Office Add-in (Current User)          " -ForegroundColor Cyan
-Write-Host "  Covers: Word, Excel, PowerPoint, Outlook (2010 - 365)     " -ForegroundColor Cyan
+Write-Host "  Registering AI Assistant Add-in (Current User)            " -ForegroundColor Cyan
+Write-Host "  Covers: Word, Excel, PowerPoint (2010 - 365)              " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -93,31 +93,16 @@ if ($copied) {
     Write-Host "      WARNING: Could not write HKLM. Re-run this script from an elevated PowerShell so Word can dock the pane." -ForegroundColor Red
 }
 
-# 4. Clear Resiliency / Disabled Items & Enable Add-in in Office
-Write-Host "[4/4] Clearing DisabledItems and enabling Add-in in Word, Excel, PowerPoint, Outlook..." -ForegroundColor Yellow
-$apps = @("Word", "Excel", "PowerPoint", "Outlook")
+# 4. Configure DoNotDisableAddinList & Enable Add-in in Office
+Write-Host "[4/4] Enabling Add-in in Word, Excel, PowerPoint..." -ForegroundColor Yellow
+$apps = @("Word", "Excel", "PowerPoint")
 $versions = @("14.0", "15.0", "16.0")
 
 foreach ($ver in $versions) {
     foreach ($app in $apps) {
         $resiliencyBase = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency"
         if (Test-Path $resiliencyBase) {
-            # 1. Delete all properties directly inside DisabledItems
-            $disabledPath = "$resiliencyBase\DisabledItems"
-            if (Test-Path $disabledPath) {
-                Remove-Item -Path $disabledPath -Recurse -Force -ErrorAction SilentlyContinue
-                Write-Host "  Cleared DisabledItems for $app ($ver)" -ForegroundColor Green
-            }
-
-            # 2. Delete CrashingAddinList and StartupItems
-            foreach ($sub in @("CrashingAddinList", "StartupItems", "NotificationItems")) {
-                $target = "$resiliencyBase\$sub"
-                if (Test-Path $target) {
-                    Remove-Item -Path $target -Recurse -Force -ErrorAction SilentlyContinue
-                }
-            }
-
-            # 3. Add to DoNotDisableAddinList so Office never prompts to disable
+            # Add ONLY this add-in to DoNotDisableAddinList (do NOT erase unrelated add-in resiliency data)
             $doNotDisable = "$resiliencyBase\DoNotDisableAddinList"
             if (-not (Test-Path $doNotDisable)) {
                 New-Item -Path $doNotDisable -Force | Out-Null
@@ -127,7 +112,7 @@ foreach ($ver in $versions) {
     }
 }
 
-# Clean old duplicate Connect progid
+# Clean old duplicate Connect progid if present and configure MistralAI.Addin
 foreach ($app in $apps) {
     $oldKey = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Connect"
     if (Test-Path $oldKey) {
@@ -138,12 +123,12 @@ foreach ($app in $apps) {
     if (-not (Test-Path $key)) {
         New-Item -Path $key -Force | Out-Null
     }
-    Set-ItemProperty -Path $key -Name "FriendlyName" -Value "Mistral AI Assistant"
-    Set-ItemProperty -Path $key -Name "Description" -Value "AI assistant using your own Mistral API key"
+    Set-ItemProperty -Path $key -Name "FriendlyName" -Value "AI Assistant"
+    Set-ItemProperty -Path $key -Name "Description" -Value "AI Assistant for Word, Excel, and PowerPoint"
     Set-ItemProperty -Path $key -Name "LoadBehavior" -Value 3 -Type DWord
 }
 
 Write-Host "`n============================================================" -ForegroundColor Green
-Write-Host "  [SUCCESS] Mistral AI Add-in registered and enabled!       " -ForegroundColor Green
-Write-Host "  Launch Word, Excel, PowerPoint, or Outlook to start.      " -ForegroundColor Green
+Write-Host "  [SUCCESS] AI Assistant Add-in registered and enabled!     " -ForegroundColor Green
+Write-Host "  Launch Word, Excel, or PowerPoint to start.               " -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green

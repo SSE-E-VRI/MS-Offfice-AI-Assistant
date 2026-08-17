@@ -11,7 +11,7 @@ namespace MistralOfficeAddin
             "<customUI xmlns=\"http://schemas.microsoft.com/office/2006/01/customUI\">" +
             "  <ribbon>" +
             "    <tabs>" +
-            "      <tab id=\"tabMistralAI\" label=\"Mistral AI\">" +
+            "      <tab id=\"tabMistralAI\" label=\"AI Assistant\">" +
             "        <group id=\"grpMistralAssistant\" label=\"AI Assistant\">" +
             "          <button id=\"btnMistralChat\" label=\"Chat Pane\" size=\"large\"" +
             "                  imageMso=\"HappyFace\" onAction=\"OnChatButtonClick\" />" +

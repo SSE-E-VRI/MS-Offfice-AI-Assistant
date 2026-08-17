@@ -1,29 +1,33 @@
-# Mistral AI Office Assistant 🤖
+# AI Assistant for Microsoft Office 🤖
 
-A cross-version Microsoft Office COM Add-in bringing modern AI chat and document intelligence to **Word, Excel, PowerPoint, and Outlook** across **Office 2010 through Office 365**.
+**Version 0.0.0**  
+*Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
-Powered by the **Mistral AI API** with a Bring-Your-Own-Key (BYOK) architecture, zero third-party intermediary servers, and encrypted local storage via Windows DPAPI.
+A cross-version Microsoft Office COM Add-in bringing modern AI chat and document intelligence to **Word, Excel, and PowerPoint** across **Office 2010 through Office 365**.
+
+Powered by a provider-neutral orchestration architecture supporting **Mistral, Groq, Gemini, and Custom OpenAI-compatible endpoints** with a Bring-Your-Own-Key (BYOK) model, zero intermediary servers, and encrypted local storage via Windows DPAPI.
 
 ---
 
 ## ✨ Features
 
 - **Cross-Version & Universal**: Runs smoothly on Office 2010, 2013, 2016, 2019, 2021, and Microsoft 365 (both 32-bit and 64-bit architectures).
+- **Multi-Provider AI Support**: Seamlessly switch between Mistral, Groq, Gemini, and Custom OpenAI-compatible endpoints (such as local Ollama or private LLM gateways).
 - **Modern WPF Sidebar UI**: Sleek, responsive chat interface with Markdig Markdown rendering, animated token streaming, code blocks, and instant copy/insert buttons.
 - **Deep Office Integration**:
   - **Word**: Document drafting, text continuation, summarization, rewriting, track changes integration, and multilingual translation.
   - **Excel**: Selection range analysis and formula generation (`=XLOOKUP`, `=SUMIFS`, etc.).
   - **PowerPoint**: Slide context reading, bullet point generation, and speaker notes creation.
-  - **Outlook**: Reading pane summarization and smart reply composition.
-- **Real-Time Streaming**: Low-latency SSE parser streaming tokens live as Mistral generates them.
-- **Security & Privacy**: Direct HTTPS connections to `api.mistral.ai`. API keys are encrypted with Windows DPAPI. No telemetry, no middleman servers.
+- **Local Attachments & Vision**: Safe Open XML text extraction (.docx, .xlsx, .pptx), PDF extraction via PdfPig, and image attachment routing to vision-enabled models.
+- **Real-Time Streaming**: Low-latency SSE parser streaming tokens live as AI models generate them.
+- **Security & Privacy**: Direct HTTPS connections to AI provider APIs. API keys are encrypted with Windows DPAPI. No telemetry, no middleman servers.
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-Office Application (Word, Excel, PowerPoint, Outlook)
+Office Application (Word, Excel, PowerPoint)
     │
     ├── Ribbon Tab (Ribbon.xml + RibbonCallback.cs)
     └── Custom Task Pane (ICustomTaskPaneConsumer)
@@ -34,9 +38,14 @@ Office Application (Word, Excel, PowerPoint, Outlook)
                             │
                             └── ChatSidebar (WPF UserControl)
                                     ├── Markdig Markdown Renderer
-                                    ├── MistralClient (Async HTTP + SSE)
+                                    ├── ChatOrchestrator (IAIProvider)
+                                    │     ├── MistralProvider
+                                    │     ├── GroqProvider
+                                    │     ├── GeminiProvider
+                                    │     └── CustomApiProvider
+                                    ├── AttachmentExtractor (OpenXML / PdfPig / Vision)
                                     ├── ConfigManager (DPAPI Encryption)
-                                    └── Host Controllers (Word/Excel/PPT/Outlook)
+                                    └── Host Controllers (Word/Excel/PowerPoint)
 ```
 
 ---

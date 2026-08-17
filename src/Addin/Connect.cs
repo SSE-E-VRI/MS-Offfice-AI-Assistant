@@ -263,7 +263,7 @@ namespace MistralOfficeAddin.Addin
 <customUI xmlns=""http://schemas.microsoft.com/office/2009/07/customui"">
   <ribbon>
     <tabs>
-      <tab id=""tabMistralAI"" label=""Mistral AI"">
+      <tab id=""tabMistralAI"" label=""AI Assistant"">
         <group id=""grpChat"" label=""AI Chat"">
           <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""HappyFace"" size=""large"" onAction=""OnToggleSidebar""/>
           <button id=""btnSettings"" label=""Configure"" imageMso=""AdpDiagramTableRelationships"" size=""large"" onAction=""OnOpenSettings""/>

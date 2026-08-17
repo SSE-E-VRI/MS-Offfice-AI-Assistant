@@ -1,10 +1,10 @@
-; Inno Setup 6 Script for Mistral AI Office Add-in (32-bit / x86)
-; Target: 32-bit Microsoft Office (Word, Excel, PowerPoint, Outlook)
+; Inno Setup 6 Script for AI Assistant Office Add-in (32-bit / x86)
+; Target: 32-bit Microsoft Office (Word, Excel, PowerPoint)
 
-#define MyAppName "Mistral AI Office Add-in (32-bit)"
-#define MyAppVersion "1.0.0"
-#define MyAppPublisher "Mistral AI Community"
-#define MyAppURL "https://mistral.ai"
+#define MyAppName "AI Assistant Office Add-in (32-bit)"
+#define MyAppVersion "0.0.0"
+#define MyAppPublisher "D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302"
+#define MyAppURL ""
 #define MyAppExeName "MistralOfficeAddin.dll"
 
 [Setup]
@@ -15,10 +15,10 @@ AppPublisher={#MyAppPublisher}
 AppPublisherURL={#MyAppURL}
 AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
-DefaultDirName={pf32}\MistralOfficeAddin
+DefaultDirName={pf32}\AIAssistant
 DisableProgramGroupPage=yes
 LicenseFile=..\LICENSE
-OutputBaseFilename=MistralOfficeAddin-Setup-x86
+OutputBaseFilename=AIAssistant-Setup-x86
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
@@ -35,24 +35,19 @@ Source: "..\bin\x86\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Registry]
 ; Word Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Mistral AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI assistant using your own Mistral API key"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Excel Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Mistral AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI assistant using your own Mistral API key"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; PowerPoint Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Mistral AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI assistant using your own Mistral API key"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
-
-; Outlook Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Outlook\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "Mistral AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Outlook\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI assistant using your own Mistral API key"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Outlook\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Task pane ActiveX (Office CreateCTP requires HKLM CLSID + Control categories)
 Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Control"; Flags: uninsdeletekey

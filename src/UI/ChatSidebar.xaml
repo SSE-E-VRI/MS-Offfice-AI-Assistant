@@ -47,7 +47,7 @@
 
                 <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                    <TextBlock Text="Mistral AI Assistant" FontWeight="Bold" Foreground="#F8FAFC" FontSize="14"/>
+                    <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="#F8FAFC" FontSize="14"/>
                     <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="#94A3B8"/>
                 </StackPanel>
 
@@ -67,12 +67,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Model Selector -->
-                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" SelectionChanged="CmbModel_SelectionChanged">
-                    <ComboBoxItem Content="mistral-large-latest" IsSelected="True"/>
-                    <ComboBoxItem Content="mistral-small-latest"/>
-                    <ComboBoxItem Content="open-mistral-nemo"/>
-                    <ComboBoxItem Content="codestral-latest"/>
-                </ComboBox>
+                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="True" SelectionChanged="CmbModel_SelectionChanged"/>
 
                 <!-- Context Insertion Toggle -->
                 <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Include Selection" 
@@ -138,7 +133,7 @@
         <Border x:Name="TypingIndicator" Grid.Row="3" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" 
                 Padding="12,6" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Mistral is generating..." FontStyle="Italic" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
+                <TextBlock Text="AI Assistant is generating..." FontStyle="Italic" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
                 <Button x:Name="BtnStopStreaming" Content="Stop" Background="#FEE2E2" Foreground="#DC2626" 
                         FontSize="11" FontWeight="Bold" Padding="8,2" Margin="12,0,0,0" Click="BtnStopStreaming_Click"/>
             </StackPanel>
@@ -148,18 +143,53 @@
         <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="10">
             <Grid>
                 <Grid.RowDefinitions>
+                    <!-- Attachment Chips List -->
                     <RowDefinition Height="Auto"/>
+                    <!-- Vision Warning Banner -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Message Input Box -->
+                    <RowDefinition Height="Auto"/>
+                    <!-- Action Bar -->
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <!-- Message Input Box -->
-                <TextBox x:Name="TxtInput" Grid.Row="0" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
+                <!-- 0. Attachment Chips -->
+                <ItemsControl x:Name="AttachmentsItemsControl" Grid.Row="0" Margin="0,0,0,6" Visibility="Collapsed">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="4" 
+                                    Padding="6,3" Margin="0,0,6,4">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding DisplayIcon}" FontSize="12" Margin="0,0,4,0"/>
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#1E3A8A" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
+                                    <Button Content="✕" Background="Transparent" Foreground="#94A3B8" FontSize="11" 
+                                            Margin="4,0,0,0" Padding="2,0" Cursor="Hand" Click="BtnRemoveAttachment_Click" ToolTip="Remove attachment"/>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- 1. Vision Capability Warning -->
+                <Border x:Name="VisionWarningBanner" Grid.Row="1" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" 
+                        CornerRadius="4" Padding="6,4" Margin="0,0,0,6" Visibility="Collapsed">
+                    <TextBlock Text="⚠ Selected model does not support image analysis. Images will be skipped." 
+                               FontSize="11" Foreground="#92400E" TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- 2. Message Input Box -->
+                <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
                          TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
                          BorderThickness="1" FontSize="13" KeyDown="TxtInput_KeyDown"
                          ToolTip="Type your prompt here... (Ctrl+Enter to send)"/>
 
-                <!-- Quick Action Buttons + Send -->
-                <Grid Grid.Row="1" Margin="0,8,0,0">
+                <!-- 3. Quick Action Buttons + Attach + Send -->
+                <Grid Grid.Row="3" Margin="0,8,0,0">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
@@ -167,6 +197,8 @@
                     </Grid.ColumnDefinitions>
 
                     <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <Button x:Name="BtnAttach" Content="📎 Attach" Background="#F1F5F9" Foreground="#334155" 
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"/>
                         <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="#F1F5F9" Foreground="#334155" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Summarize the selected text or document clearly."/>
                         <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="#F1F5F9" Foreground="#334155" 

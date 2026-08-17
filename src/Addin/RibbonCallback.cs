@@ -154,7 +154,7 @@ namespace MistralOfficeAddin.Addin
             catch (Exception ex)
             {
                 Logger.Error("OnOpenSettings error", ex);
-                MessageBox.Show(string.Format("Could not open settings: {0}", ex.Message), "Mistral AI", 
+                MessageBox.Show(string.Format("Could not open settings: {0}", ex.Message), "AI Assistant", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }

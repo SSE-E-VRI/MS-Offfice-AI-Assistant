@@ -1,6 +1,9 @@
-# Mistral AI Office Assistant — User Guide
+# AI Assistant for Microsoft Office — User Guide
 
-Welcome to the **Mistral AI Office Assistant**, a cross-version Microsoft Office add-in that brings OpenAI-compatible, BYOK (Bring Your Own Key) AI capabilities to **Word, Excel, PowerPoint, and Outlook** from **Office 2010 to Office 365**.
+**Version 0.0.0**  
+*Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
+
+Welcome to **AI Assistant**, a cross-version Microsoft Office add-in that brings multi-provider AI capabilities (Mistral, Groq, Gemini, and Custom OpenAI-compatible endpoints) to **Word, Excel, and PowerPoint** from **Office 2010 to Office 365**.
 
 ---
 
@@ -9,7 +12,7 @@ Welcome to the **Mistral AI Office Assistant**, a cross-version Microsoft Office
 ### 1. Installation
 
 #### Automated Installer (Recommended)
-1. Run `MistralOfficeAddin-Setup-x64.exe` (for 64-bit Office) or `MistralOfficeAddin-Setup-x86.exe` (for 32-bit Office).
+1. Run `AIAssistant-Setup-x64.exe` (for 64-bit Office) or `AIAssistant-Setup-x86.exe` (for 32-bit Office).
 2. Follow the setup wizard instructions.
 
 #### Developer / Local Installation
@@ -20,14 +23,14 @@ Welcome to the **Mistral AI Office Assistant**, a cross-version Microsoft Office
 
 ### 2. Configuration & API Key
 
-1. Open Microsoft Word, Excel, PowerPoint, or Outlook.
-2. Switch to the **Mistral AI** tab on the Ribbon.
+1. Open Microsoft Word, Excel, or PowerPoint.
+2. Switch to the **AI Assistant** tab on the Ribbon.
 3. Click **Configure** (or the ⚙️ icon in the chat sidebar).
-4. Paste your Mistral API key (get one from [console.mistral.ai](https://console.mistral.ai)).
-5. Select your default model (e.g. `mistral-large-latest`, `mistral-small-latest`, `open-mistral-nemo`).
-6. Click **Test Connection** to verify your key, then click **Save Settings**.
+4. Select your preferred provider (Mistral, Groq, Gemini, or Custom API).
+5. Paste your API key, choose or enter your model, and click **Test Connection** to verify.
+6. Click **Save Settings**.
 
-> **Security Note:** Your API key is encrypted using Windows DPAPI (`DataProtectionScope.CurrentUser`) and stored securely in `%LOCALAPPDATA%\MistralOfficeAddin\config.dat`. It is never transmitted to any third-party server—only directly to `api.mistral.ai`.
+> **Security Note:** Your credentials are encrypted using Windows DPAPI (`DataProtectionScope.CurrentUser`) and stored securely in `%LOCALAPPDATA%\MistralOfficeAddin\config.dat`. They are never transmitted to third-party intermediary servers—only directly to the selected provider endpoint.
 
 ---
 
@@ -50,9 +53,6 @@ Welcome to the **Mistral AI Office Assistant**, a cross-version Microsoft Office
 ### 📽️ Microsoft PowerPoint
 - **Generate Bullet Points**: Create formatted bullet points and insert them directly into slide text boxes.
 - **Speaker Notes**: Draft and apply speaker notes to the active slide.
-
-### ✉️ Microsoft Outlook
-- **Email Drafting & Replies**: Summarize incoming emails and generate context-aware draft replies.
 
 ---
 

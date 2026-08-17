@@ -2,7 +2,7 @@
 <customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
   <ribbon>
     <tabs>
-      <tab id="tabMistralAI" label="Mistral AI">
+      <tab id="tabMistralAI" label="AI Assistant">
         <group id="grpChat" label="Chat">
           <button id="btnToggleSidebar" label="Open AI Chat" 
                   imageMso="HappyFace" size="large"

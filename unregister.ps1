@@ -1,11 +1,11 @@
-# PowerShell script to unregister Mistral Office Add-in
+# PowerShell script to unregister AI Assistant Office Add-in
 $ErrorActionPreference = "SilentlyContinue"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  Unregistering Mistral Office Add-in                      " -ForegroundColor Cyan
+Write-Host "  Unregistering AI Assistant Office Add-in                  " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
-$apps = @("Word", "Excel", "PowerPoint", "Outlook")
+$apps = @("Word", "Excel", "PowerPoint")
 $progIds = @("MistralAI.Addin", "MistralAI.Connect")
 
 foreach ($app in $apps) {
