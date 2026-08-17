@@ -67,6 +67,7 @@ namespace MistralOfficeAddin.Providers
                 request.Messages,
                 request.Temperature,
                 request.MaxTokens,
+                request.Attachments,
                 ct).ConfigureAwait(false);
 
             return new AIResponse(content) { Model = request.Model };
@@ -81,6 +82,7 @@ namespace MistralOfficeAddin.Providers
                 request.Temperature,
                 request.MaxTokens,
                 onDeltaReceived,
+                request.Attachments,
                 ct).ConfigureAwait(false);
         }
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -9,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using MistralOfficeAddin.API;
 using MistralOfficeAddin.API.Models;
+using MistralOfficeAddin.Attachments;
 using MistralOfficeAddin.Core;
 using Newtonsoft.Json;
 
@@ -86,8 +88,7 @@ namespace MistralOfficeAddin.Providers
                               host == "localhost" ||
                               host == "127.0.0.1" ||
                               host == "::1" ||
-                              host == "0.0.0.0" ||
-                              host.EndsWith(".local");
+                              host == "0.0.0.0";
 
             if (!isLoopback)
             {
@@ -175,23 +176,92 @@ namespace MistralOfficeAddin.Providers
             return list;
         }
 
+        public static object BuildPayload(
+            string model,
+            List<ChatMessage> messages,
+            double temperature,
+            int maxTokens,
+            bool stream,
+            List<AttachmentBlock> attachments = null)
+        {
+            var messagePayloads = new List<object>();
+
+            if (messages != null)
+            {
+                int lastUserIdx = -1;
+                for (int i = messages.Count - 1; i >= 0; i--)
+                {
+                    if (messages[i].IsUser)
+                    {
+                        lastUserIdx = i;
+                        break;
+                    }
+                }
+
+                bool hasImages = attachments != null && attachments.Any(a => a.IsImage && a.RawBytes != null && a.RawBytes.Length > 0);
+
+                for (int i = 0; i < messages.Count; i++)
+                {
+                    var m = messages[i];
+                    if (i == lastUserIdx && hasImages)
+                    {
+                        var contentParts = new List<object>();
+                        if (!string.IsNullOrEmpty(m.Content))
+                        {
+                            contentParts.Add(new { type = "text", text = m.Content });
+                        }
+
+                        foreach (var att in attachments)
+                        {
+                            if (att.IsImage && att.RawBytes != null && att.RawBytes.Length > 0)
+                            {
+                                string mime = !string.IsNullOrWhiteSpace(att.ContentType) ? att.ContentType : "image/jpeg";
+                                string dataUrl = string.Format("data:{0};base64,{1}", mime, Convert.ToBase64String(att.RawBytes));
+                                contentParts.Add(new
+                                {
+                                    type = "image_url",
+                                    image_url = new { url = dataUrl }
+                                });
+                            }
+                        }
+
+                        messagePayloads.Add(new
+                        {
+                            role = m.Role,
+                            content = contentParts
+                        });
+                    }
+                    else
+                    {
+                        messagePayloads.Add(new
+                        {
+                            role = m.Role,
+                            content = m.Content ?? string.Empty
+                        });
+                    }
+                }
+            }
+
+            return new
+            {
+                model = model,
+                messages = messagePayloads,
+                temperature = temperature,
+                max_tokens = maxTokens,
+                stream = stream
+            };
+        }
+
         public async Task<string> ChatAsync(
             string model,
             List<ChatMessage> messages,
             double temperature,
             int maxTokens,
+            List<AttachmentBlock> attachments = null,
             CancellationToken ct = default(CancellationToken))
         {
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = new ChatRequest
-            {
-                Model = model,
-                Messages = messages,
-                Temperature = temperature,
-                MaxTokens = maxTokens,
-                Stream = false
-            };
-
+            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, false, attachments);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -219,6 +289,7 @@ namespace MistralOfficeAddin.Providers
 
                         int statusCode = (int)response.StatusCode;
                         string errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        Logger.Warn(string.Format("{0} API error (HTTP {1}): {2}", _providerType, statusCode, errorBody));
 
                         if ((statusCode == 429 || statusCode >= 500) && attempt < maxRetries)
                         {
@@ -227,7 +298,7 @@ namespace MistralOfficeAddin.Providers
                         else
                         {
                             throw new AIException(
-                                string.Format("API returned error {0} ({1}): {2}", statusCode, response.ReasonPhrase, errorBody),
+                                string.Format("{0} API returned HTTP {1} ({2}). Check log for details.", _providerType, statusCode, response.ReasonPhrase),
                                 _providerType,
                                 statusCode);
                         }
@@ -255,20 +326,13 @@ namespace MistralOfficeAddin.Providers
             double temperature,
             int maxTokens,
             Action<string> onDeltaReceived,
+            List<AttachmentBlock> attachments = null,
             CancellationToken ct = default(CancellationToken))
         {
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
 
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = new ChatRequest
-            {
-                Model = model,
-                Messages = messages,
-                Temperature = temperature,
-                MaxTokens = maxTokens,
-                Stream = true
-            };
-
+            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, true, attachments);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -291,6 +355,7 @@ namespace MistralOfficeAddin.Providers
                         {
                             int statusCode = (int)response.StatusCode;
                             string errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                            Logger.Warn(string.Format("{0} streaming error (HTTP {1}): {2}", _providerType, statusCode, errorBody));
 
                             if ((statusCode == 429 || statusCode >= 500) && attempt < maxRetries)
                             {
@@ -299,7 +364,7 @@ namespace MistralOfficeAddin.Providers
                             else
                             {
                                 throw new AIException(
-                                    string.Format("Streaming API error {0} ({1}): {2}", statusCode, response.ReasonPhrase, errorBody),
+                                    string.Format("{0} streaming returned HTTP {1} ({2}). Check log for details.", _providerType, statusCode, response.ReasonPhrase),
                                     _providerType,
                                     statusCode);
                             }
@@ -322,7 +387,7 @@ namespace MistralOfficeAddin.Providers
                                         if (isDone) break;
                                         if (!string.IsNullOrEmpty(delta))
                                         {
-                                            onDeltaReceived(delta);
+                                             onDeltaReceived(delta);
                                         }
                                     }
                                 }
@@ -343,6 +408,8 @@ namespace MistralOfficeAddin.Providers
                     delayMs *= 2;
                 }
             }
+
+            throw new AIException("Failed to stream response after multiple attempts.", _providerType);
         }
 
         public void Dispose()

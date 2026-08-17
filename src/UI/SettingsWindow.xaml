@@ -59,7 +59,7 @@
                         <!-- Provider Selection ComboBox -->
                         <TextBlock Text="Active Provider" FontWeight="SemiBold" Margin="0,0,0,4"/>
                         <ComboBox x:Name="CmbProvider" Margin="0,0,0,12" Padding="6,5" SelectionChanged="CmbProvider_SelectionChanged">
-                            <ComboBoxItem Content="Mistral AI" Tag="Mistral" IsSelected="True"/>
+                            <ComboBoxItem Content="Mistral AI" Tag="Mistral"/>
                             <ComboBoxItem Content="Groq (Ultra-Fast)" Tag="Groq"/>
                             <ComboBoxItem Content="Google Gemini" Tag="Gemini"/>
                             <ComboBoxItem Content="Custom API (OpenAI-Compatible / Ollama)" Tag="Custom"/>
@@ -67,7 +67,7 @@
 
                         <!-- API Key -->
                         <TextBlock x:Name="LblApiKey" Text="API Key *" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                        <Grid Margin="0,0,0,10">
+                        <Grid Margin="0,0,0,4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -78,6 +78,12 @@
                                     Background="#F1F5F9" Foreground="#475569" Click="BtnToggleKey_Click"
                                     ToolTip="Show/Hide Key"/>
                         </Grid>
+                        <TextBlock x:Name="PnlApiKeyHelp" Margin="0,0,0,10" FontSize="11" VerticalAlignment="Center">
+                            <Run Text="Don't have an API key? " Foreground="#64748B"/>
+                            <Hyperlink x:Name="LnkApiKey" NavigateUri="https://console.mistral.ai/api-keys/" RequestNavigate="LnkApiKey_RequestNavigate" Foreground="#2563EB" Cursor="Hand">
+                                <Run Text="Click here"/>
+                            </Hyperlink>
+                        </TextBlock>
 
                         <!-- Base URL -->
                         <TextBlock x:Name="LblBaseUrl" Text="API Endpoint URL" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -154,12 +160,24 @@
                        TextWrapping="Wrap" FontSize="12" Foreground="#059669"/>
         </Grid>
 
-        <!-- Action Buttons -->
-        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button x:Name="BtnCancel" Content="Cancel" Margin="0,0,8,0" Width="90" 
-                    Background="#F1F5F9" Foreground="#334155" Click="BtnCancel_Click"/>
-            <Button x:Name="BtnSave" Content="Save Settings" Width="130" 
-                    Background="#2563EB" Foreground="#FFFFFF" Click="BtnSave_Click"/>
-        </StackPanel>
+        <!-- Action Buttons & Credit -->
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
+                <TextBlock Text="AI Assistant v0.3.0" FontWeight="Bold" FontSize="11" Foreground="#475569"/>
+                <TextBlock Text="Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302" FontSize="10" Foreground="#64748B" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="BtnCancel" Content="Cancel" Margin="0,0,8,0" Width="85" 
+                        Background="#F1F5F9" Foreground="#334155" Click="BtnCancel_Click"/>
+                <Button x:Name="BtnSave" Content="Save Settings" Width="120" 
+                        Background="#2563EB" Foreground="#FFFFFF" Click="BtnSave_Click"/>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

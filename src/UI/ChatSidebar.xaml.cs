@@ -46,6 +46,7 @@ namespace MistralOfficeAddin.UI
         private string _currentDocumentKey = "OfficeSession";
         private object _hostAppObj;
         private string _hostType = "Office";
+        private bool _isSending = false;
 
         // Host Controllers — created lazily, not during startup
         private WordController _wordCtrl;
@@ -64,7 +65,14 @@ namespace MistralOfficeAddin.UI
             SelectConfiguredModel();
 
             // Show welcome message immediately without waiting for host init
-            _messages.Add(new ChatMessage("system", "AI Assistant is ready. Click Configure (⚙️) to enter your API key, then start chatting!"));
+            if (ConfigManager.Instance.LoadFailed)
+            {
+                _messages.Add(new ChatMessage("system", "⚠ Configuration could not be read and was reset to defaults. Please re-enter your settings in Configure (⚙️)."));
+            }
+            else
+            {
+                _messages.Add(new ChatMessage("system", "AI Assistant is ready. Click Configure (⚙️) to enter your API key, then start chatting!"));
+            }
         }
 
         public void ReloadConfiguredProvider()
@@ -103,7 +111,11 @@ namespace MistralOfficeAddin.UI
 
                 if (!string.IsNullOrWhiteSpace(configured))
                 {
-                    CmbModel.Text = configured;
+                    if (!CmbModel.Items.Contains(configured))
+                    {
+                        CmbModel.Items.Insert(0, configured);
+                    }
+                    CmbModel.SelectedItem = configured;
                 }
                 else if (CmbModel.Items.Count > 0)
                 {
@@ -247,16 +259,71 @@ namespace MistralOfficeAddin.UI
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
-            string contextText = GetCurrentContextText(false);
-            string fullPrompt = string.IsNullOrEmpty(contextText)
-                ? prompt
-                : string.Format("{0}\n\n[Context]:\n{1}", prompt, contextText);
+            if (_isSending && _streamingCts != null)
+            {
+                try { _streamingCts.Cancel(); } catch { }
+            }
 
-            await SendMessageAsync(fullPrompt, promptTitle);
+            string selectedText = GetSelectedTextOnly();
+            string fullPrompt;
+            string displayTitle = promptTitle;
+
+            if (!string.IsNullOrWhiteSpace(selectedText))
+            {
+                if (promptTitle != null && promptTitle.StartsWith("Translate", StringComparison.OrdinalIgnoreCase))
+                {
+                    fullPrompt = string.Format("{0}\n\nText to translate:\n\"\"\"\n{1}\n\"\"\"", prompt, selectedText);
+                }
+                else
+                {
+                    fullPrompt = string.Format("{0}\n\n[Selected Text]:\n{1}", prompt, selectedText);
+                }
+
+                string snippet = selectedText.Trim().Replace('\r', ' ').Replace('\n', ' ');
+                if (snippet.Length > 80) snippet = snippet.Substring(0, 77) + "...";
+                displayTitle = string.Format("{0}:\n\"{1}\"", promptTitle, snippet);
+            }
+            else
+            {
+                string contextText = GetCurrentContextText(false);
+                fullPrompt = string.IsNullOrEmpty(contextText)
+                    ? prompt
+                    : string.Format("{0}\n\n[Context]:\n{1}", prompt, contextText);
+            }
+
+            await SendMessageAsync(fullPrompt, displayTitle);
+        }
+
+        private string GetSelectedTextOnly()
+        {
+            try
+            {
+                if (_wordCtrl != null)
+                {
+                    string sel = _wordCtrl.GetSelectedText();
+                    if (!string.IsNullOrWhiteSpace(sel)) return sel;
+                }
+                if (_excelCtrl != null)
+                {
+                    string sel = _excelCtrl.GetSelectedRangeValues();
+                    if (!string.IsNullOrWhiteSpace(sel)) return sel;
+                }
+                if (_pptCtrl != null)
+                {
+                    string sel = _pptCtrl.GetSlideText();
+                    if (!string.IsNullOrWhiteSpace(sel)) return sel;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("GetSelectedTextOnly failed: {0}", ex.Message));
+            }
+            return string.Empty;
         }
 
         private async void BtnSend_Click(object sender, RoutedEventArgs e)
         {
+            if (_isSending) return;
             string text = TxtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(text)) return;
             TxtInput.Clear();
@@ -279,6 +346,12 @@ namespace MistralOfficeAddin.UI
                 return;
             }
 
+            if (_isSending && _streamingCts != null)
+            {
+                try { _streamingCts.Cancel(); } catch { }
+            }
+
+            _isSending = true;
             string displayUserMessage = customDisplayTitle ?? promptToSend;
             _messages.Add(new ChatMessage("user", displayUserMessage));
             ScrollToBottom();
@@ -291,8 +364,12 @@ namespace MistralOfficeAddin.UI
             TypingIndicator.Visibility = Visibility.Visible;
 
             if (_streamingCts != null)
-                _streamingCts.Cancel();
+            {
+                try { _streamingCts.Cancel(); } catch { }
+                try { _streamingCts.Dispose(); } catch { }
+            }
             _streamingCts = new CancellationTokenSource();
+            var myStreamCts = _streamingCts;
 
             string selectedModel = !string.IsNullOrWhiteSpace(CmbModel.Text)
                 ? CmbModel.Text.Trim()
@@ -300,24 +377,29 @@ namespace MistralOfficeAddin.UI
 
             try
             {
-                // Process pending attachments
+                // Process pending attachments without leaving UI thread
                 var extractedAttachments = new List<AttachmentBlock>();
                 var textAttachmentContext = new StringBuilder();
 
                 if (_pendingAttachments.Count > 0)
                 {
                     bool providerSupportsVision = _orchestrator != null && _orchestrator.CheckVisionSupport(selectedModel);
+                    int droppedImagesCount = 0;
 
                     foreach (var att in _pendingAttachments)
                     {
                         try
                         {
-                            var block = await AttachmentExtractor.ExtractAsync(att.FilePath).ConfigureAwait(false);
+                            var block = await AttachmentExtractor.ExtractAsync(att.FilePath);
                             if (block.IsImage)
                             {
                                 if (providerSupportsVision)
                                 {
                                     extractedAttachments.Add(block);
+                                }
+                                else
+                                {
+                                    droppedImagesCount++;
                                 }
                             }
                             else
@@ -330,13 +412,20 @@ namespace MistralOfficeAddin.UI
                             Logger.Warn(string.Format("Failed to extract attachment '{0}': {1}", att.FileName, ex.Message));
                         }
                     }
+
+                    if (droppedImagesCount > 0)
+                    {
+                        _messages.Insert(_messages.IndexOf(assistantMsg), new ChatMessage("system", "⚠ Note: Image attachments were omitted — the selected model does not support vision analysis."));
+                    }
                 }
 
+                // Clone message list for API request to avoid mutating bound UI user messages
                 var historyForApi = _messages
                     .Where(m => (m.IsUser || m.IsAssistant) && m != assistantMsg)
+                    .Select(m => new ChatMessage(m.Role, m.Content))
                     .ToList();
 
-                // If attachments produced extracted text, augment the last user message
+                // If attachments produced extracted text, augment the last user message copy
                 if (textAttachmentContext.Length > 0 && historyForApi.Count > 0)
                 {
                     var lastUser = historyForApi.LastOrDefault(m => m.IsUser);
@@ -346,7 +435,8 @@ namespace MistralOfficeAddin.UI
                     }
                 }
 
-                var boundedMessages = TokenCounter.TruncateToFit(historyForApi, 24000, config.SystemPrompt);
+                string effectiveSystemPrompt = BuildHostAwareSystemPrompt(config.SystemPrompt);
+                var boundedMessages = TokenCounter.TruncateToFit(historyForApi, 24000, effectiveSystemPrompt);
 
                 var aiRequest = new AIRequest
                 {
@@ -354,50 +444,87 @@ namespace MistralOfficeAddin.UI
                     Messages = boundedMessages,
                     Temperature = config.Temperature,
                     MaxTokens = config.MaxTokens,
-                    SystemPrompt = config.SystemPrompt,
+                    SystemPrompt = effectiveSystemPrompt,
                     Attachments = extractedAttachments
                 };
+
+                var tokenAccumulator = new StringBuilder();
 
                 await _orchestrator.StreamChatAsync(
                     aiRequest,
                     delta =>
                     {
-                        // Use Invoke with Background priority — prevents UI thread lockup
+                        if (string.IsNullOrEmpty(delta)) return;
+                        lock (tokenAccumulator)
+                        {
+                            tokenAccumulator.Append(delta);
+                        }
                         Dispatcher.BeginInvoke(new Action(() =>
                         {
                             assistantMsg.Content += delta;
                         }), DispatcherPriority.Background);
                     },
-                    _streamingCts.Token);
+                    myStreamCts.Token);
 
-                assistantMsg.IsStreaming = false;
-                // Scroll once at the end, not on every token
-                ScrollToBottom();
-                SaveConversationHistory();
-
-                // Clear attachments on UI thread after send
-                Dispatcher.BeginInvoke(new Action(() =>
+                string fullAssistantText;
+                lock (tokenAccumulator)
                 {
+                    fullAssistantText = tokenAccumulator.ToString();
+                }
+
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    assistantMsg.Content = fullAssistantText;
+                    assistantMsg.IsStreaming = false;
+
+                    // Parse structured spreadsheet actions from Excel responses
+                    string cleanContent;
+                    var extractedActions = SpreadsheetActionParser.ExtractActions(fullAssistantText, out cleanContent);
+                    if (extractedActions != null && extractedActions.Count > 0)
+                    {
+                        assistantMsg.Content = cleanContent;
+                        foreach (var act in extractedActions)
+                        {
+                            assistantMsg.Actions.Add(act);
+                        }
+                        assistantMsg.NotifyActionsChanged();
+                    }
+
+                    // Scroll once at the end, not on every token
+                    ScrollToBottom();
+                    SaveConversationHistory();
+
+                    // Clear attachments on UI thread after send
                     _pendingAttachments.Clear();
                     UpdateAttachmentState();
                 }));
             }
             catch (OperationCanceledException)
             {
-                assistantMsg.Content += "\n\n*(Generation stopped)*";
-                assistantMsg.IsStreaming = false;
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    assistantMsg.Content += "\n\n*(Generation stopped)*";
+                    assistantMsg.IsStreaming = false;
+                }));
             }
             catch (Exception ex)
             {
                 Logger.Error("Chat completion error", ex);
-                assistantMsg.Content = string.Format("Error: {0}", ex.Message);
-                assistantMsg.IsStreaming = false;
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    assistantMsg.Content = string.Format("Error: {0}", ex.Message);
+                    assistantMsg.IsStreaming = false;
+                }));
             }
             finally
             {
-                BtnSend.IsEnabled = true;
-                TypingIndicator.Visibility = Visibility.Collapsed;
-                ScrollToBottom();
+                _isSending = false;
+                Dispatcher.Invoke(new Action(() =>
+                {
+                    BtnSend.IsEnabled = true;
+                    TypingIndicator.Visibility = Visibility.Collapsed;
+                    ScrollToBottom();
+                }));
             }
         }
 
@@ -419,6 +546,16 @@ namespace MistralOfficeAddin.UI
 
                 if (dlg.ShowDialog() == true && dlg.FileNames != null)
                 {
+                    if (_pendingAttachments.Count + dlg.FileNames.Length > AttachmentExtractor.MaxFileCount)
+                    {
+                        MessageBox.Show(
+                            string.Format("You cannot attach more than {0} files per message.", AttachmentExtractor.MaxFileCount),
+                            "AI Assistant - Attachment Limit",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Warning);
+                        return;
+                    }
+
                     long currentTotal = _pendingAttachments.Sum(a => a.FileSizeBytes);
 
                     foreach (string file in dlg.FileNames)
@@ -495,12 +632,46 @@ namespace MistralOfficeAddin.UI
         private void UpdateAttachmentState()
         {
             AttachmentsItemsControl.Visibility = _pendingAttachments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateVisionWarning();
+        }
 
+        private void UpdateVisionWarning()
+        {
             bool hasImages = _pendingAttachments.Any(a => a.IsImage);
             string selectedModel = !string.IsNullOrWhiteSpace(CmbModel.Text) ? CmbModel.Text.Trim() : (ConfigManager.Instance.DefaultModel ?? "");
             bool supportsVision = _orchestrator != null && _orchestrator.CheckVisionSupport(selectedModel);
 
             VisionWarningBanner.Visibility = (hasImages && !supportsVision) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private string BuildHostAwareSystemPrompt(string basePrompt)
+        {
+            string hostContext = "";
+            if (_hostType == "Excel" || _excelCtrl != null)
+            {
+                hostContext = "\n\nYou are embedded inside Microsoft Excel.\n" +
+                    "When generating calculations, formulas, or spreadsheet changes:\n" +
+                    "1. Inspect the provided Worksheet Context with its explicit Column Letters (Col A, Col B, Col C, etc.) and Header names.\n" +
+                    "2. When matching category/text columns with prefixes (e.g. '0001-non ferrous items'), use wildcard criteria (e.g. \"*non ferrous*\") in SUMIF/COUNTIF.\n" +
+                    "3. Start row-level data formulas at Row 2 (e.g. F2, G2) rather than header Row 1.\n" +
+                    "4. ALWAYS return executable spreadsheet actions in a structured <excel_actions> XML block:\n" +
+                    "   <excel_actions>\n" +
+                    "     <excel_action target=\"K20\" type=\"formula\" formula=\"=SUMIF(B:B, &quot;*non ferrous*&quot;, F:F)\" description=\"Total non-ferrous value\" />\n" +
+                    "     <excel_action target=\"K21\" type=\"formula\" formula=\"=COUNTIF(E:E, 0)\" description=\"Count of zero-quantity items\" />\n" +
+                    "     <excel_action target=\"K22\" type=\"formula\" formula=\"=AVERAGEIF(E:E, 0, F:F)\" description=\"Average value of zero-quantity items\" />\n" +
+                    "     <excel_action target=\"G2:G27\" type=\"filldown\" formula=\"=IF(F2&gt;50000, &quot;High Value&quot;, &quot;&quot;)\" description=\"High value flag (&gt;50,000)\" />\n" +
+                    "   </excel_actions>\n" +
+                    "5. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
+            }
+            else if (_hostType == "Word" || _wordCtrl != null)
+            {
+                hostContext = "\n\nYou are embedded inside Microsoft Word. When the user asks to write, edit, rewrite, summarize, or translate text, provide the polished text directly without tutorial meta-commentary.";
+            }
+            else if (_hostType == "PowerPoint" || _pptCtrl != null)
+            {
+                hostContext = "\n\nYou are embedded inside Microsoft PowerPoint. When the user asks for slides or bullet points, provide structured slides with Slide titles, concise bullet points, and speaker notes.";
+            }
+            return (basePrompt ?? "You are an expert AI assistant embedded inside Microsoft Office.") + hostContext;
         }
 
         private string GetCurrentContextText(bool selectionOnly)
@@ -524,11 +695,22 @@ namespace MistralOfficeAddin.UI
                         return string.Format("[Document Content: {0}]:\n{1}", _currentDocumentKey, docText);
                     }
                 }
-                if (selectionOnly && _excelCtrl == null && _pptCtrl == null)
+                if (_excelCtrl != null)
                 {
-                    return string.Empty;
+                    if (selectionOnly)
+                    {
+                        string sel = _excelCtrl.GetSelectedRangeValues();
+                        if (!string.IsNullOrWhiteSpace(sel))
+                        {
+                            return sel;
+                        }
+                    }
+                    string snapshot = _excelCtrl.GetWorksheetSnapshot(70, 26);
+                    if (!string.IsNullOrWhiteSpace(snapshot))
+                    {
+                        return snapshot;
+                    }
                 }
-                if (_excelCtrl != null) return _excelCtrl.GetSelectedRangeValues();
                 if (_pptCtrl != null) return _pptCtrl.GetSlideText();
             }
             catch (Exception ex)
@@ -541,9 +723,13 @@ namespace MistralOfficeAddin.UI
         private void BtnStopStreaming_Click(object sender, RoutedEventArgs e)
         {
             if (_streamingCts != null)
+            {
                 _streamingCts.Cancel();
+            }
             if (_orchestrator != null)
+            {
                 _orchestrator.CancelCurrentStream();
+            }
         }
 
         public void StartNewChat(bool confirm)
@@ -579,7 +765,7 @@ namespace MistralOfficeAddin.UI
             }
             catch (Exception ex)
             {
-                Logger.Error("Failed to open SettingsWindow", ex);
+                MessageBox.Show(string.Format("Could not open settings: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -588,6 +774,50 @@ namespace MistralOfficeAddin.UI
             var btn = sender as Button;
             if (btn == null) return null;
             return btn.DataContext as ChatMessage;
+        }
+
+        private void BtnApplyAction_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as Button;
+            var action = btn != null ? btn.Tag as SpreadsheetAction : null;
+            if (action == null) return;
+
+            if (_excelCtrl != null)
+            {
+                bool ok = _excelCtrl.ApplySpreadsheetAction(action);
+                if (!ok && !string.IsNullOrEmpty(action.ErrorMessage))
+                {
+                    MessageBox.Show(action.ErrorMessage, "Spreadsheet Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            else
+            {
+                MessageBox.Show("No active Excel spreadsheet found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void BtnApplyAllActions_Click(object sender, RoutedEventArgs e)
+        {
+            var msg = GetMessageFromSender(sender);
+            if (msg == null || msg.Actions == null || msg.Actions.Count == 0) return;
+
+            if (_excelCtrl == null)
+            {
+                MessageBox.Show("No active Excel spreadsheet found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            int appliedCount = 0;
+            foreach (var act in msg.Actions)
+            {
+                if (act.Status == SpreadsheetActionStatus.Pending || act.Status == SpreadsheetActionStatus.Error)
+                {
+                    if (_excelCtrl.ApplySpreadsheetAction(act))
+                    {
+                        appliedCount++;
+                    }
+                }
+            }
         }
 
         private void BtnCopyMessage_Click(object sender, RoutedEventArgs e)
@@ -609,7 +839,7 @@ namespace MistralOfficeAddin.UI
                 else if (_excelCtrl != null)
                     _excelCtrl.InsertText(content);
                 else if (_pptCtrl != null)
-                    _pptCtrl.AddBulletPoints(content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).ToList());
+                    _pptCtrl.InsertText(content);
                 else
                     MessageBox.Show("No Office document is active. Open a document and try again.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -630,6 +860,45 @@ namespace MistralOfficeAddin.UI
             }
         }
 
+        private void TxtInput_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+            {
+                TxtInput.Focus();
+                Keyboard.Focus(TxtInput);
+                try
+                {
+                    var source = System.Windows.PresentationSource.FromVisual(TxtInput) as System.Windows.Interop.HwndSource;
+                    if (source != null && source.Handle != IntPtr.Zero)
+                    {
+                        IntPtr curFocus = NativeWnd.GetFocus();
+                        if (curFocus != source.Handle && !NativeWnd.IsChild(source.Handle, curFocus))
+                        {
+                            NativeWnd.SetFocus(source.Handle);
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
+        private void TxtInput_GotFocus(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var source = System.Windows.PresentationSource.FromVisual(TxtInput) as System.Windows.Interop.HwndSource;
+                if (source != null && source.Handle != IntPtr.Zero)
+                {
+                    IntPtr curFocus = NativeWnd.GetFocus();
+                    if (curFocus != source.Handle && !NativeWnd.IsChild(source.Handle, curFocus))
+                    {
+                        NativeWnd.SetFocus(source.Handle);
+                    }
+                }
+            }
+            catch { }
+        }
+
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
@@ -642,9 +911,10 @@ namespace MistralOfficeAddin.UI
         private void CmbModel_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (!_hostInitialized) return;
-            if (CmbModel != null && !string.IsNullOrWhiteSpace(CmbModel.Text))
+            string selected = (CmbModel != null ? CmbModel.SelectedItem as string : null) ?? (CmbModel != null ? CmbModel.Text : null);
+            if (!string.IsNullOrWhiteSpace(selected))
             {
-                ConfigManager.Instance.DefaultModel = CmbModel.Text.Trim();
+                ConfigManager.Instance.DefaultModel = selected.Trim();
                 ConfigManager.Instance.Save();
             }
         }

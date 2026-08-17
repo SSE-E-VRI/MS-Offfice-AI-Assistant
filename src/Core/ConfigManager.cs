@@ -68,6 +68,7 @@ namespace MistralOfficeAddin.Core
         public int MaxTokens { get; set; }
         public string SystemPrompt { get; set; }
         public bool AutoInsertResponse { get; set; }
+        public bool LoadFailed { get; private set; }
 
         // Backward-compatibility accessors
         public string BaseUrl
@@ -226,7 +227,7 @@ namespace MistralOfficeAddin.Core
                         if (this.Gemini == null) this.Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-1.5-flash");
                         if (this.Custom == null) this.Custom = new ProviderSettings("http://localhost:11434/v1", "llama3");
 
-                        this.Temperature = dto.Temperature > 0 ? dto.Temperature : 0.7;
+                        this.Temperature = dto.Temperature.HasValue ? dto.Temperature.Value : 0.7;
                         this.MaxTokens = dto.MaxTokens > 0 ? dto.MaxTokens : 4096;
                         this.SystemPrompt = !string.IsNullOrWhiteSpace(dto.SystemPrompt) ? dto.SystemPrompt : this.SystemPrompt;
                         this.AutoInsertResponse = dto.AutoInsertResponse;
@@ -236,6 +237,7 @@ namespace MistralOfficeAddin.Core
                 }
                 catch (Exception ex)
                 {
+                    this.LoadFailed = true;
                     Logger.Error("Failed to load configuration", ex);
                 }
             }
@@ -259,7 +261,7 @@ namespace MistralOfficeAddin.Core
             [JsonProperty("DefaultModel")]
             public string LegacyDefaultModel { get; set; }
 
-            public double Temperature { get; set; }
+            public double? Temperature { get; set; }
             public int MaxTokens { get; set; }
             public string SystemPrompt { get; set; }
             public bool AutoInsertResponse { get; set; }

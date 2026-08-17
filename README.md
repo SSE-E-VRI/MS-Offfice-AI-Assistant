@@ -1,6 +1,6 @@
 # AI Assistant for Microsoft Office 🤖
 
-**Version 0.0.0**  
+**Version 0.3.0**  
 *Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
 A cross-version Microsoft Office COM Add-in bringing modern AI chat and document intelligence to **Word, Excel, and PowerPoint** across **Office 2010 through Office 365**.

@@ -141,6 +141,7 @@ namespace MistralOfficeAddin.Providers
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
 
             IAIProvider provider;
+            CancellationTokenSource myCts;
             CancellationTokenSource linkedCts;
 
             lock (_syncLock)
@@ -152,8 +153,16 @@ namespace MistralOfficeAddin.Providers
                     throw new InvalidOperationException("No AI provider is currently configured.");
                 }
 
-                _activeStreamCts = new CancellationTokenSource();
-                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, _activeStreamCts.Token);
+                if (_activeStreamCts != null)
+                {
+                    try { _activeStreamCts.Cancel(); } catch { }
+                    try { _activeStreamCts.Dispose(); } catch { }
+                    _activeStreamCts = null;
+                }
+
+                myCts = new CancellationTokenSource();
+                _activeStreamCts = myCts;
+                linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct, myCts.Token);
                 _isStreaming = true;
             }
 
@@ -165,9 +174,9 @@ namespace MistralOfficeAddin.Providers
             {
                 lock (_syncLock)
                 {
-                    _isStreaming = false;
-                    if (_activeStreamCts != null)
+                    if (_activeStreamCts == myCts)
                     {
+                        _isStreaming = false;
                         _activeStreamCts.Dispose();
                         _activeStreamCts = null;
                     }

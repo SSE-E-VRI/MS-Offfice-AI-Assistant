@@ -167,7 +167,8 @@ namespace MistralOfficeAddin.Providers
 
                 int code = (int)resp.StatusCode;
                 string err = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                throw new AIException(string.Format("Gemini API error {0}: {1}", code, err), AIProviderType.Gemini, code);
+                Logger.Warn(string.Format("Gemini API error (HTTP {0}): {1}", code, err));
+                throw new AIException(string.Format("Gemini API returned HTTP {0} ({1}). Check log for details.", code, resp.ReasonPhrase), AIProviderType.Gemini, code);
             }
         }
 
@@ -194,7 +195,8 @@ namespace MistralOfficeAddin.Providers
                 {
                     int statusCode = (int)response.StatusCode;
                     string errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    throw new AIException(string.Format("Gemini Streaming error {0}: {1}", statusCode, errorBody), AIProviderType.Gemini, statusCode);
+                    Logger.Warn(string.Format("Gemini streaming error (HTTP {0}): {1}", statusCode, errorBody));
+                    throw new AIException(string.Format("Gemini streaming returned HTTP {0} ({1}). Check log for details.", statusCode, response.ReasonPhrase), AIProviderType.Gemini, statusCode);
                 }
 
                 using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))

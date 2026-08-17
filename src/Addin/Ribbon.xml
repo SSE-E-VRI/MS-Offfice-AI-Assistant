@@ -5,45 +5,49 @@
       <tab id="tabMistralAI" label="AI Assistant">
         <group id="grpChat" label="Chat">
           <button id="btnToggleSidebar" label="Open AI Chat" 
-                  imageMso="HappyFace" size="large"
+                  imageMso="ReviewNewComment" size="large"
                   onAction="OnToggleSidebar"/>
           <button id="btnNewChat" label="New Chat" 
-                  imageMso="NewAppointment" size="large"
+                  imageMso="FileNew" size="large"
                   onAction="OnNewChat"/>
         </group>
         <group id="grpDraft" label="Draft">
           <button id="btnGenerate" label="Generate" 
-                  imageMso="CreateReport" size="large"
+                  imageMso="AutoFormat" size="large"
                   onAction="OnGenerate"/>
           <button id="btnContinue" label="Continue Writing" 
-                  imageMso="GoToNextEdit" size="large"
+                  imageMso="ReviewNextChange" size="large"
                   onAction="OnContinueWriting"/>
         </group>
         <group id="grpEdit" label="Edit">
           <button id="btnSummarize" label="Summarize" 
-                  imageMso="AutoSummary" size="large"
+                  imageMso="ViewOutlineView" size="large"
                   onAction="OnSummarize"/>
           <button id="btnRewrite" label="Rewrite" 
                   imageMso="ReviewTrackChanges" size="large"
                   onAction="OnRewrite"/>
           <button id="btnExpand" label="Expand" 
-                  imageMso="InkExpand" size="normal"
+                  imageMso="FontSizeIncrease" size="normal"
                   onAction="OnExpand"/>
           <button id="btnShorten" label="Shorten" 
-                  imageMso="ShrinkOnePage" size="normal"
+                  imageMso="FontSizeDecrease" size="normal"
                   onAction="OnShorten"/>
           <menu id="menuTranslate" label="Translate" 
                 imageMso="Translate" size="large">
-            <button id="btnTransEN" label="English" onAction="OnTranslate"/>
-            <button id="btnTransES" label="Spanish" onAction="OnTranslate"/>
-            <button id="btnTransFR" label="French" onAction="OnTranslate"/>
-            <button id="btnTransDE" label="German" onAction="OnTranslate"/>
-            <button id="btnTransZH" label="Chinese" onAction="OnTranslate"/>
+            <button id="btnTransTA" label="Tamil (தமிழ்)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransHI" label="Hindi (हिन्दी)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransTE" label="Telugu (తెలుగు)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransKN" label="Kannada (ಕನ್ನಡ)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransML" label="Malayalam (മലയാളം)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransBN" label="Bengali (বাংলা)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransMR" label="Marathi (मराठी)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransGU" label="Gujarati (ગુજરાતી)" imageMso="SetLanguage" onAction="OnTranslate"/>
+            <button id="btnTransEN" label="English" imageMso="SetLanguage" onAction="OnTranslate"/>
           </menu>
         </group>
         <group id="grpSettings" label="Settings">
           <button id="btnSettings" label="Configure" 
-                  imageMso="AdpDiagramTableRelationships" size="large"
+                  imageMso="PropertySheet" size="large"
                   onAction="OnOpenSettings"/>
         </group>
       </tab>

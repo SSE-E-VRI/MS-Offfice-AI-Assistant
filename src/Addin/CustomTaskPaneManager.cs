@@ -243,6 +243,39 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        protected override void WndProc(ref Message m)
+        {
+            const int WM_MOUSEACTIVATE = 0x0021;
+            const int WM_SETFOCUS = 0x0007;
+            const int MA_ACTIVATE = 1;
+
+            if (m.Msg == WM_MOUSEACTIVATE)
+            {
+                m.Result = new IntPtr(MA_ACTIVATE);
+                if (_elementHost != null && _elementHost.IsHandleCreated)
+                {
+                    IntPtr curFocus = MistralOfficeAddin.UI.NativeWnd.GetFocus();
+                    if (curFocus != _elementHost.Handle && !MistralOfficeAddin.UI.NativeWnd.IsChild(_elementHost.Handle, curFocus))
+                    {
+                        MistralOfficeAddin.UI.NativeWnd.SetFocus(_elementHost.Handle);
+                    }
+                }
+                return;
+            }
+            if (m.Msg == WM_SETFOCUS)
+            {
+                if (_elementHost != null && _elementHost.IsHandleCreated)
+                {
+                    IntPtr curFocus = MistralOfficeAddin.UI.NativeWnd.GetFocus();
+                    if (curFocus != _elementHost.Handle && !MistralOfficeAddin.UI.NativeWnd.IsChild(_elementHost.Handle, curFocus))
+                    {
+                        MistralOfficeAddin.UI.NativeWnd.SetFocus(_elementHost.Handle);
+                    }
+                }
+            }
+            base.WndProc(ref m);
+        }
+
         public void InitializeHost(object appObj, string hostType)
         {
             if (!_sidebarInitialized || _wpfSidebar == null)
@@ -300,6 +333,21 @@ namespace MistralOfficeAddin.Addin
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("TaskPaneControl.StartNewChat failed: {0}", ex.Message));
+            }
+        }
+
+        public void ReloadConfiguredProvider()
+        {
+            try
+            {
+                if (_wpfSidebar != null)
+                {
+                    _wpfSidebar.ReloadConfiguredProvider();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("TaskPaneControl.ReloadConfiguredProvider failed: {0}", ex.Message));
             }
         }
 
@@ -506,6 +554,29 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        public void ReloadConfiguredProvider()
+        {
+            try
+            {
+                if (_taskPaneControl != null)
+                {
+                    _taskPaneControl.ReloadConfiguredProvider();
+                }
+                if (_dockedPane != null && !_dockedPane.IsDisposed && _dockedPane.Sidebar != null)
+                {
+                    _dockedPane.Sidebar.ReloadConfiguredProvider();
+                }
+                if (_floatingWindow != null && _floatingWindow.Sidebar != null)
+                {
+                    _floatingWindow.Sidebar.ReloadConfiguredProvider();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("CustomTaskPaneManager.ReloadConfiguredProvider failed: {0}", ex.Message));
+            }
+        }
+
         private void CreateAndShowPane()
         {
             // Word 2010 cannot CoCreate the .NET ActiveX CTP control. Dock as a
@@ -632,7 +703,7 @@ namespace MistralOfficeAddin.Addin
         {
             try
             {
-                object pane = factory.CreateCTP(axId, "Mistral AI Assistant", parentWindow);
+                object pane = factory.CreateCTP(axId, "AI Assistant", parentWindow);
                 if (pane != null)
                 {
                     Logger.Info(string.Format("CreateCTP succeeded with '{0}'.", axId));

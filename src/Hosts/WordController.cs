@@ -46,30 +46,57 @@ namespace MistralOfficeAddin.Hosts
         {
             try
             {
-                var app = GetApp();
-                if (app != null && app.Selection != null)
+                if (_rawAppObj != null)
                 {
-                    // If selection is just the blinking cursor (insertion point), return empty to read full document
-                    if (app.Selection.Type == Word.Enums.WdSelectionType.wdSelectionIP)
+                    dynamic app = _rawAppObj;
+                    dynamic selection = app.Selection;
+                    if (selection != null)
                     {
-                        return string.Empty;
-                    }
-
-                    string text = app.Selection.Text;
-                    if (!string.IsNullOrEmpty(text))
-                    {
-                        text = text.TrimEnd('\r', '\n', '\a', ' ');
-                        // Ignore 1-character selections (usually accidental cursor clicks)
-                        if (text.Trim().Length > 1)
+                        int selType = Convert.ToInt32(selection.Type);
+                        // wdSelectionIP = 1 (insertion point / blinking cursor only)
+                        if (selType != 1)
                         {
-                            return text;
+                            string text = Convert.ToString(selection.Text);
+                            if (!string.IsNullOrEmpty(text))
+                            {
+                                text = text.TrimEnd('\r', '\n', '\a', ' ', '\t');
+                                if (text.Length > 0)
+                                {
+                                    return text;
+                                }
+                            }
                         }
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.Warn(string.Format("WordController.GetSelectedText failed: {0}", ex.Message));
+                Logger.Warn(string.Format("WordController.GetSelectedText dynamic failed: {0}", ex.Message));
+            }
+
+            try
+            {
+                var app = GetApp();
+                if (app != null && app.Selection != null)
+                {
+                    // If selection is just the blinking cursor (insertion point), return empty
+                    if (app.Selection.Type != Word.Enums.WdSelectionType.wdSelectionIP)
+                    {
+                        string text = app.Selection.Text;
+                        if (!string.IsNullOrEmpty(text))
+                        {
+                            text = text.TrimEnd('\r', '\n', '\a', ' ', '\t');
+                            if (text.Length > 0)
+                            {
+                                return text;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.GetSelectedText NetOffice failed: {0}", ex.Message));
             }
             return string.Empty;
         }

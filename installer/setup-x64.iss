@@ -2,7 +2,7 @@
 ; Target: 64-bit Microsoft Office (Word, Excel, PowerPoint)
 
 #define MyAppName "AI Assistant Office Add-in (64-bit)"
-#define MyAppVersion "0.0.0"
+#define MyAppVersion "0.3.0"
 #define MyAppPublisher "D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302"
 #define MyAppURL ""
 #define MyAppExeName "MistralOfficeAddin.dll"

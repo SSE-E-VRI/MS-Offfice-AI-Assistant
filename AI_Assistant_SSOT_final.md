@@ -91,7 +91,7 @@ All providers must be accessed through a common provider abstraction. The user s
 
 ### Current user-facing features
 
-- Mistral AI Ribbon tab
+- AI Assistant Ribbon tab
 - Chat pane
 - Multi-turn chat history
 - Optional current-document/workbook/presentation context

@@ -16,6 +16,7 @@ namespace MistralOfficeAddin.Attachments
     {
         public const long MaxPerFileSizeBytes = 20 * 1024 * 1024; // 20 MB
         public const long MaxTotalSizeBytes = 30 * 1024 * 1024;   // 30 MB
+        public const int MaxFileCount = 10;
         public const int MaxExtractedCharacters = 50000;
 
         private static readonly HashSet<string> ImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)

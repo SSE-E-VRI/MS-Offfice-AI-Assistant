@@ -22,6 +22,7 @@ namespace MistralOfficeAddin.UI
 
         private readonly ChatSidebar _sidebar;
         private readonly Panel _splitter;
+        private readonly ElementHost _elementHost;
         private IntPtr _parentHwnd = IntPtr.Zero;
         private IntPtr _documentViewHwnd = IntPtr.Zero;
         private Timer _layoutTimer;
@@ -41,7 +42,8 @@ namespace MistralOfficeAddin.UI
         {
             EnsureWpfApplication();
 
-            this.Text = "Mistral AI Assistant";
+            this.Text = "AI Assistant";
+
             this.FormBorderStyle = FormBorderStyle.None;
             this.ControlBox = false;
             this.ShowInTaskbar = false;
@@ -59,13 +61,56 @@ namespace MistralOfficeAddin.UI
             _splitter.MouseMove += Splitter_MouseMove;
             _splitter.MouseUp += Splitter_MouseUp;
 
-            var host = new ElementHost();
-            host.Dock = DockStyle.Fill;
+            _elementHost = new ElementHost();
+            _elementHost.Dock = DockStyle.Fill;
+            _elementHost.TabStop = true;
             _sidebar = new ChatSidebar();
-            host.Child = _sidebar;
+            _elementHost.Child = _sidebar;
 
-            this.Controls.Add(host);
+            this.Controls.Add(_elementHost);
             this.Controls.Add(_splitter);
+        }
+
+        private int _lastDocLeft = -1;
+        private int _lastDocTop = -1;
+        private int _lastDocWidth = -1;
+        private int _lastDocHeight = -1;
+        private int _lastPaneX = -1;
+        private int _lastPaneY = -1;
+        private int _lastPaneW = -1;
+        private int _lastPaneH = -1;
+
+        protected override void WndProc(ref Message m)
+        {
+            const int WM_MOUSEACTIVATE = 0x0021;
+            const int WM_SETFOCUS = 0x0007;
+            const int MA_ACTIVATE = 1;
+
+            if (m.Msg == WM_MOUSEACTIVATE)
+            {
+                m.Result = new IntPtr(MA_ACTIVATE);
+                if (_elementHost != null && _elementHost.IsHandleCreated)
+                {
+                    IntPtr curFocus = NativeWnd.GetFocus();
+                    if (curFocus != _elementHost.Handle && !NativeWnd.IsChild(_elementHost.Handle, curFocus))
+                    {
+                        NativeWnd.SetFocus(_elementHost.Handle);
+                    }
+                }
+                return;
+            }
+            if (m.Msg == WM_SETFOCUS)
+            {
+                if (_elementHost != null && _elementHost.IsHandleCreated)
+                {
+                    IntPtr curFocus = NativeWnd.GetFocus();
+                    if (curFocus != _elementHost.Handle && !NativeWnd.IsChild(_elementHost.Handle, curFocus))
+                    {
+                        NativeWnd.SetFocus(_elementHost.Handle);
+                    }
+                }
+            }
+            base.WndProc(ref m);
         }
 
         public void InitializeHost(object appObj, string hostType)
@@ -129,12 +174,15 @@ namespace MistralOfficeAddin.UI
             NativeWnd.SetWindowPos(this.Handle, NativeWnd.HWND_TOP, 0, 0, 0, 0,
                 NativeWnd.SWP_NOMOVE | NativeWnd.SWP_NOSIZE | NativeWnd.SWP_NOACTIVATE | NativeWnd.SWP_FRAMECHANGED | NativeWnd.SWP_SHOWWINDOW);
 
+            InstallKeyboardHook();
+
             Logger.Info("OfficeDockedPane attached to host window (right dock).");
             return true;
         }
 
         public void DetachAndRestore()
         {
+            UninstallKeyboardHook();
             try
             {
                 RestoreDocumentView();
@@ -149,6 +197,14 @@ namespace MistralOfficeAddin.UI
             _attached = false;
             _parentHwnd = IntPtr.Zero;
             _documentViewHwnd = IntPtr.Zero;
+            _lastDocLeft = -1;
+            _lastDocTop = -1;
+            _lastDocWidth = -1;
+            _lastDocHeight = -1;
+            _lastPaneX = -1;
+            _lastPaneY = -1;
+            _lastPaneW = -1;
+            _lastPaneH = -1;
         }
 
         private void ApplyLayout()
@@ -173,6 +229,8 @@ namespace MistralOfficeAddin.UI
             _paneWidth = paneW;
 
             int paneX = clientW - paneW;
+            int paneY = 0;
+            int paneH = clientH;
 
             if (_documentViewHwnd != IntPtr.Zero && NativeWnd.IsWindow(_documentViewHwnd)
                 && NativeWnd.GetParent(_documentViewHwnd) == _parentHwnd)
@@ -192,10 +250,29 @@ namespace MistralOfficeAddin.UI
                     docHeight = docBottom - docTop;
                 if (docWidth < 60) docWidth = 60;
                 if (docHeight < 60) docHeight = 60;
-                NativeWnd.MoveWindow(_documentViewHwnd, docLeft, docTop, docWidth, docHeight, true);
+
+                if (docLeft != _lastDocLeft || docTop != _lastDocTop || docWidth != _lastDocWidth || docHeight != _lastDocHeight)
+                {
+                    _lastDocLeft = docLeft;
+                    _lastDocTop = docTop;
+                    _lastDocWidth = docWidth;
+                    _lastDocHeight = docHeight;
+                    NativeWnd.MoveWindow(_documentViewHwnd, docLeft, docTop, docWidth, docHeight, true);
+                }
+
+                // Position docked assistant pane directly below the Ribbon / Formula Bar
+                paneY = docTop;
+                paneH = docHeight;
             }
 
-            NativeWnd.MoveWindow(this.Handle, paneX, 0, paneW, clientH, true);
+            if (paneX != _lastPaneX || paneY != _lastPaneY || paneW != _lastPaneW || paneH != _lastPaneH)
+            {
+                _lastPaneX = paneX;
+                _lastPaneY = paneY;
+                _lastPaneW = paneW;
+                _lastPaneH = paneH;
+                NativeWnd.MoveWindow(this.Handle, paneX, paneY, paneW, paneH, true);
+            }
         }
 
         private void RestoreDocumentView()
@@ -285,8 +362,80 @@ namespace MistralOfficeAddin.UI
             _splitter.Capture = false;
         }
 
+        private IntPtr _hookHandle = IntPtr.Zero;
+        private NativeWnd.HookProc _hookProc;
+
+        private void InstallKeyboardHook()
+        {
+            if (_hookHandle != IntPtr.Zero) return;
+            try
+            {
+                _hookProc = new NativeWnd.HookProc(GetMsgHookCallback);
+                uint threadId = NativeWnd.GetCurrentThreadId();
+                _hookHandle = NativeWnd.SetWindowsHookEx(NativeWnd.WH_GETMESSAGE, _hookProc, IntPtr.Zero, threadId);
+                Logger.Info(string.Format("OfficeDockedPane: WH_GETMESSAGE keyboard hook installed (Handle=0x{0:X}, ThreadId={1})", _hookHandle.ToInt64(), threadId));
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("OfficeDockedPane: Failed to install keyboard hook: {0}", ex.Message));
+            }
+        }
+
+        private void UninstallKeyboardHook()
+        {
+            if (_hookHandle != IntPtr.Zero)
+            {
+                try
+                {
+                    NativeWnd.UnhookWindowsHookEx(_hookHandle);
+                    Logger.Info("OfficeDockedPane: WH_GETMESSAGE keyboard hook uninstalled.");
+                }
+                catch { }
+                _hookHandle = IntPtr.Zero;
+                _hookProc = null;
+            }
+        }
+
+        private IntPtr GetMsgHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && wParam.ToInt32() == NativeWnd.PM_REMOVE)
+            {
+                try
+                {
+                    var msg = (NativeWnd.MSG)Marshal.PtrToStructure(lParam, typeof(NativeWnd.MSG));
+                    if (msg.message >= 0x0100 && msg.message <= 0x0109) // WM_KEYFIRST to WM_KEYLAST
+                    {
+                        if (this.IsHandleCreated && (msg.hwnd == this.Handle || NativeWnd.IsChild(this.Handle, msg.hwnd)))
+                        {
+                            var wpfMsg = new System.Windows.Interop.MSG
+                            {
+                                hwnd = msg.hwnd,
+                                message = (int)msg.message,
+                                wParam = msg.wParam,
+                                lParam = msg.lParam,
+                                time = (int)msg.time,
+                                pt_x = msg.pt.X,
+                                pt_y = msg.pt.Y
+                            };
+
+                            bool handled = System.Windows.Interop.ComponentDispatcher.RaiseThreadMessage(ref wpfMsg);
+                            if (handled)
+                            {
+                                // Nullify message so Excel's message pump never receives it or types into cells
+                                msg.message = 0x0000; // WM_NULL
+                                Marshal.StructureToPtr(msg, lParam, false);
+                            }
+                        }
+                    }
+                }
+                catch { }
+            }
+            return NativeWnd.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+        }
+
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            UninstallKeyboardHook();
             DetachAndRestore();
             base.OnFormClosing(e);
         }
@@ -294,7 +443,10 @@ namespace MistralOfficeAddin.UI
         protected override void Dispose(bool disposing)
         {
             if (disposing)
+            {
+                UninstallKeyboardHook();
                 DetachAndRestore();
+            }
             base.Dispose(disposing);
         }
 
@@ -343,7 +495,7 @@ namespace MistralOfficeAddin.UI
             return IntPtr.Zero;
         }
 
-        }
+    }
 
     internal static class NativeWnd
     {
@@ -371,16 +523,63 @@ namespace MistralOfficeAddin.UI
         public const int SWP_SHOWWINDOW = 0x0040;
         public static readonly IntPtr HWND_TOP = new IntPtr(0);
 
+        public const int WH_GETMESSAGE = 3;
+        public const int PM_REMOVE = 1;
+
+        public delegate IntPtr HookProc(int nCode, IntPtr wParam, IntPtr lParam);
         public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern IntPtr SetWindowsHookEx(int idHook, HookProc lpfn, IntPtr hMod, uint dwThreadId);
+
+        [DllImport("user32.dll", SetLastError = true)]
+        public static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+        [DllImport("kernel32.dll")]
+        public static extern uint GetCurrentThreadId();
+
+        [DllImport("user32.dll")]
+        public static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern bool TranslateMessage([In] ref MSG lpMsg);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr DispatchMessage([In] ref MSG lpmsg);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
+        public static IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex)
+        {
+            if (IntPtr.Size == 8)
+                return GetWindowLongPtr64(hWnd, nIndex);
+            else
+                return GetWindowLong32(hWnd, nIndex);
+        }
+
+        public static IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong)
+        {
+            if (IntPtr.Size == 8)
+                return SetWindowLongPtr64(hWnd, nIndex, dwNewLong);
+            else
+                return SetWindowLong32(hWnd, nIndex, dwNewLong);
+        }
+
+        [DllImport("user32.dll", EntryPoint = "GetWindowLong", SetLastError = true)]
+        private static extern IntPtr GetWindowLong32(IntPtr hWnd, int nIndex);
+
         [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr", SetLastError = true)]
-        public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+        private static extern IntPtr GetWindowLongPtr64(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLong", SetLastError = true)]
+        private static extern IntPtr SetWindowLong32(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
         [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr", SetLastError = true)]
-        public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+        private static extern IntPtr SetWindowLongPtr64(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
         [DllImport("user32.dll")]
         public static extern bool GetClientRect(IntPtr hWnd, out RECT lpRect);
@@ -409,6 +608,12 @@ namespace MistralOfficeAddin.UI
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         public static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
 
+        [DllImport("user32.dll")]
+        public static extern IntPtr SetFocus(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr GetFocus();
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -423,6 +628,17 @@ namespace MistralOfficeAddin.UI
         {
             public int X;
             public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        public struct MSG
+        {
+            public IntPtr hwnd;
+            public uint message;
+            public IntPtr wParam;
+            public IntPtr lParam;
+            public uint time;
+            public POINT pt;
         }
     }
 }

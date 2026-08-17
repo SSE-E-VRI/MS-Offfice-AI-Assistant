@@ -15,7 +15,7 @@ namespace MistralOfficeAddin.Providers
     {
         private readonly string _baseUrl;
         private readonly string _apiKey;
-        private readonly MistralClient _client;
+        private readonly OpenAICompatibleClient _client;
         private bool _disposed;
 
         public AIProviderType ProviderType
@@ -39,14 +39,14 @@ namespace MistralOfficeAddin.Providers
         {
             _baseUrl = !string.IsNullOrWhiteSpace(baseUrl) ? baseUrl.TrimEnd('/') : "https://api.mistral.ai/v1";
             _apiKey = apiKey ?? string.Empty;
-            _client = new MistralClient(_baseUrl, _apiKey);
+            _client = new OpenAICompatibleClient(_baseUrl, _apiKey, AIProviderType.Mistral);
         }
 
         public async Task<bool> TestConnectionAsync(CancellationToken ct = default(CancellationToken))
         {
             try
             {
-                return await _client.TestConnectionAsync(ct).ConfigureAwait(false);
+                return await _client.TestConnectionAsync("mistral-small-latest", ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -116,6 +116,7 @@ namespace MistralOfficeAddin.Providers
                     request.Messages,
                     request.Temperature,
                     request.MaxTokens,
+                    request.Attachments,
                     ct).ConfigureAwait(false);
 
                 return new AIResponse(text) { Model = request.Model };
@@ -140,6 +141,7 @@ namespace MistralOfficeAddin.Providers
                     request.Temperature,
                     request.MaxTokens,
                     onDeltaReceived,
+                    request.Attachments,
                     ct).ConfigureAwait(false);
             }
             catch (Exception ex)

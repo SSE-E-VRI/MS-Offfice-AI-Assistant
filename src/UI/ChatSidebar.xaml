@@ -46,7 +46,7 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" ToolTip="AI Assistant v0.3.0&#x0a;Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302">
                     <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="#F8FAFC" FontSize="14"/>
                     <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="#94A3B8"/>
                 </StackPanel>
@@ -67,7 +67,7 @@
                 </Grid.ColumnDefinitions>
 
                 <!-- Model Selector -->
-                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="True" SelectionChanged="CmbModel_SelectionChanged"/>
+                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="False" SelectionChanged="CmbModel_SelectionChanged"/>
 
                 <!-- Context Insertion Toggle -->
                 <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Include Selection" 
@@ -105,6 +105,60 @@
                                     <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}" 
                                                TextWrapping="Wrap" Foreground="#1E293B" FontSize="13"
                                                FontFamily="Segoe UI" LineHeight="20"/>
+
+                                    <!-- Spreadsheet Action Cards -->
+                                    <ItemsControl ItemsSource="{Binding Actions}" Visibility="{Binding HasActions, Converter={StaticResource BoolToVisConverter}}" Margin="0,8,0,4">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Margin="0,3" Padding="8,6">
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Target & Type Badge -->
+                                                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,3">
+                                                            <Border Background="#1E293B" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                                                <TextBlock Text="{Binding Target}" Foreground="#FFFFFF" FontSize="10" FontWeight="Bold"/>
+                                                            </Border>
+                                                            <Border Background="#E0E7FF" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                                                <TextBlock Text="{Binding TypeBadge}" Foreground="#3730A3" FontSize="10" FontWeight="Bold"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="#475569" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+
+                                                        <!-- Formula / Content Display -->
+                                                        <Border Grid.Row="1" Grid.Column="0" Background="#F1F5F9" CornerRadius="4" Padding="6,3" Margin="0,2,6,2">
+                                                            <TextBlock Text="{Binding Content}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="#0F172A" TextWrapping="Wrap"/>
+                                                        </Border>
+
+                                                        <!-- Apply Button -->
+                                                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Apply" 
+                                                                Background="#059669" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
+                                                                Padding="8,4" BorderBrush="#047857" BorderThickness="1" VerticalAlignment="Center"
+                                                                Click="BtnApplyAction_Click" Tag="{Binding}"
+                                                                ToolTip="Apply this formula/value directly to Excel"/>
+
+                                                        <!-- Status Display -->
+                                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding StatusDisplay}" 
+                                                                   FontSize="10" Foreground="#059669" FontWeight="Medium" Margin="0,2,0,0"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Apply All Actions Button -->
+                                    <Button Content="Apply All Spreadsheet Actions" Background="#047857" Foreground="#FFFFFF" 
+                                            FontSize="11" FontWeight="Bold" Padding="8,4" BorderThickness="0" Margin="0,4,0,4"
+                                            Visibility="{Binding HasActions, Converter={StaticResource BoolToVisConverter}}"
+                                            Click="BtnApplyAllActions_Click"/>
 
                                     <!-- Action Bar below AI message -->
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
@@ -186,7 +240,18 @@
                 <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
                          TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
                          BorderThickness="1" FontSize="13" KeyDown="TxtInput_KeyDown"
-                         ToolTip="Type your prompt here... (Ctrl+Enter to send)"/>
+                         PreviewMouseDown="TxtInput_PreviewMouseDown" GotFocus="TxtInput_GotFocus"
+                         ToolTip="Type your prompt here... (Ctrl+Enter to send)">
+                    <TextBox.ContextMenu>
+                        <ContextMenu Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" Padding="2">
+                            <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X"/>
+                            <MenuItem Command="ApplicationCommands.Copy" Header="Copy" InputGestureText="Ctrl+C"/>
+                            <MenuItem Command="ApplicationCommands.Paste" Header="Paste" InputGestureText="Ctrl+V"/>
+                            <Separator Background="#E2E8F0"/>
+                            <MenuItem Command="ApplicationCommands.SelectAll" Header="Select All" InputGestureText="Ctrl+A"/>
+                        </ContextMenu>
+                    </TextBox.ContextMenu>
+                </TextBox>
 
                 <!-- 3. Quick Action Buttons + Attach + Send -->
                 <Grid Grid.Row="3" Margin="0,8,0,0">

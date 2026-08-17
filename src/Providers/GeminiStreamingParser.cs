@@ -32,9 +32,27 @@ namespace MistralOfficeAddin.Providers
                 {
                     var firstCandidate = candidates[0];
                     var finishReason = (string)firstCandidate["finishReason"];
-                    if (!string.IsNullOrEmpty(finishReason) && finishReason != "MAX_TOKENS" && finishReason != "STOP")
+                    if (!string.IsNullOrEmpty(finishReason))
                     {
-                        // Some finish reasons like SAFETY etc.
+                        if (string.Equals(finishReason, "SAFETY", StringComparison.OrdinalIgnoreCase))
+                        {
+                            delta += "\n\n*(Generation stopped: safety policy)*";
+                            isDone = true;
+                        }
+                        else if (string.Equals(finishReason, "RECITATION", StringComparison.OrdinalIgnoreCase))
+                        {
+                            delta += "\n\n*(Generation stopped: recitation policy)*";
+                            isDone = true;
+                        }
+                        else if (string.Equals(finishReason, "STOP", StringComparison.OrdinalIgnoreCase) ||
+                                 string.Equals(finishReason, "MAX_TOKENS", StringComparison.OrdinalIgnoreCase))
+                        {
+                            isDone = true;
+                        }
+                        else
+                        {
+                            isDone = true;
+                        }
                     }
 
                     var content = firstCandidate["content"];
@@ -52,11 +70,6 @@ namespace MistralOfficeAddin.Providers
                                 }
                             }
                         }
-                    }
-
-                    if (!string.IsNullOrEmpty(finishReason) && finishReason == "STOP")
-                    {
-                        isDone = true;
                     }
 
                     return !string.IsNullOrEmpty(delta) || isDone;

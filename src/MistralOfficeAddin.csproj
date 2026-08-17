@@ -97,10 +97,7 @@
       <HintPath>..\packages\NetOfficeFw.PowerPoint.1.9.10\lib\net462\PowerPointApi.dll</HintPath>
       <Private>True</Private>
     </Reference>
-    <Reference Include="OutlookApi">
-      <HintPath>..\packages\NetOfficeFw.Outlook.1.9.10\lib\net462\OutlookApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
+
     <Reference Include="VBIDEApi">
       <HintPath>..\packages\NetOfficeFw.VBIDE.1.9.10\lib\net462\VBIDEApi.dll</HintPath>
       <Private>True</Private>
@@ -169,7 +166,6 @@
     <Compile Include="UI\OfficeDockedPane.cs" />
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
-    <Compile Include="API\MistralClient.cs" />
     <Compile Include="API\StreamingParser.cs" />
     <Compile Include="API\TokenCounter.cs" />
     <Compile Include="API\Models\ChatRequest.cs" />
@@ -189,11 +185,12 @@
     <Compile Include="Core\ConversationStore.cs" />
     <Compile Include="Core\VersionDetector.cs" />
     <Compile Include="Core\Logger.cs" />
+    <Compile Include="Core\SpreadsheetAction.cs" />
     <Compile Include="Hosts\WordController.cs" />
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />
     <Compile Include="Hosts\ExcelController.cs" />
     <Compile Include="Hosts\PowerPointController.cs" />
-    <Compile Include="Hosts\OutlookController.cs" />
+
   </ItemGroup>
 
   <ItemGroup>

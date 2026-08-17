@@ -89,6 +89,27 @@ namespace MistralOfficeAddin.API.Models
             get { return string.Equals(Role, "system", StringComparison.OrdinalIgnoreCase); }
         }
 
+        private System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> _actions;
+
+        [JsonIgnore]
+        public System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> Actions
+        {
+            get { return _actions; }
+            set { _actions = value; OnPropertyChanged("Actions"); OnPropertyChanged("HasActions"); }
+        }
+
+        [JsonIgnore]
+        public bool HasActions
+        {
+            get { return _actions != null && _actions.Count > 0; }
+        }
+
+        public void NotifyActionsChanged()
+        {
+            OnPropertyChanged("Actions");
+            OnPropertyChanged("HasActions");
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
@@ -102,6 +123,7 @@ namespace MistralOfficeAddin.API.Models
 
         public ChatMessage()
         {
+            _actions = new System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction>();
             _timestamp = DateTime.Now;
         }
 
@@ -109,6 +131,7 @@ namespace MistralOfficeAddin.API.Models
         {
             Role = role;
             Content = content;
+            _actions = new System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction>();
             _timestamp = DateTime.Now;
         }
     }

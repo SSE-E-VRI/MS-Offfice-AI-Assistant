@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
+using System.Windows.Navigation;
 using MistralOfficeAddin.Core;
 using MistralOfficeAddin.Providers;
 using Newtonsoft.Json;
@@ -22,8 +25,21 @@ namespace MistralOfficeAddin.UI
         // In-memory working copies per provider during dialog session
         private readonly Dictionary<AIProviderType, ProviderSettings> _workingSettings = new Dictionary<AIProviderType, ProviderSettings>();
 
+        private static void EnsureWpfApplication()
+        {
+            if (System.Windows.Application.Current != null) return;
+            try
+            {
+                var app = new System.Windows.Application();
+                app.ShutdownMode = System.Windows.ShutdownMode.OnExplicitShutdown;
+            }
+            catch { }
+        }
+
         public SettingsWindow()
         {
+            EnsureWpfApplication();
+            _isLoading = true;
             InitializeComponent();
             LoadCurrentSettings();
         }
@@ -43,24 +59,26 @@ namespace MistralOfficeAddin.UI
 
                 _selectedProviderType = config.ActiveProvider;
 
-                // Select matching provider in ComboBox
-                foreach (ComboBoxItem item in CmbProvider.Items)
+                if (CmbProvider != null)
                 {
-                    string tag = item.Tag as string;
-                    if (string.Equals(tag, _selectedProviderType.ToString(), StringComparison.OrdinalIgnoreCase))
+                    foreach (ComboBoxItem item in CmbProvider.Items)
                     {
-                        CmbProvider.SelectedItem = item;
-                        break;
+                        string tag = item.Tag as string;
+                        if (string.Equals(tag, _selectedProviderType.ToString(), StringComparison.OrdinalIgnoreCase))
+                        {
+                            CmbProvider.SelectedItem = item;
+                            break;
+                        }
                     }
                 }
 
-                SldTemp.Value = config.Temperature;
-                LblTemp.Text = config.Temperature.ToString("0.00");
+                if (SldTemp != null) SldTemp.Value = config.Temperature;
+                if (LblTemp != null) LblTemp.Text = config.Temperature.ToString("0.00");
 
-                SldMaxTokens.Value = config.MaxTokens;
-                LblMaxTokens.Text = config.MaxTokens.ToString();
+                if (SldMaxTokens != null) SldMaxTokens.Value = config.MaxTokens;
+                if (LblMaxTokens != null) LblMaxTokens.Text = config.MaxTokens.ToString();
 
-                TxtSystemPrompt.Text = config.SystemPrompt;
+                if (TxtSystemPrompt != null) TxtSystemPrompt.Text = config.SystemPrompt;
 
                 PopulateProviderFields(_selectedProviderType);
             }
@@ -93,10 +111,10 @@ namespace MistralOfficeAddin.UI
             if (_workingSettings.TryGetValue(_selectedProviderType, out current))
             {
                 current.ApiKey = GetCurrentApiKey();
-                current.BaseUrl = TxtBaseUrl.Text.Trim();
-                current.DefaultModel = CmbModel.Text.Trim();
+                if (TxtBaseUrl != null) current.BaseUrl = TxtBaseUrl.Text.Trim();
+                if (CmbModel != null) current.DefaultModel = CmbModel.Text.Trim();
 
-                if (_selectedProviderType == AIProviderType.Custom && !string.IsNullOrWhiteSpace(TxtCustomHeaders.Text))
+                if (_selectedProviderType == AIProviderType.Custom && TxtCustomHeaders != null && !string.IsNullOrWhiteSpace(TxtCustomHeaders.Text))
                 {
                     try
                     {
@@ -113,42 +131,57 @@ namespace MistralOfficeAddin.UI
             ProviderSettings settings;
             if (!_workingSettings.TryGetValue(providerType, out settings)) return;
 
-            TxtApiKey.Password = settings.ApiKey ?? string.Empty;
-            TxtApiKeyPlain.Text = settings.ApiKey ?? string.Empty;
-            TxtBaseUrl.Text = settings.BaseUrl ?? string.Empty;
+            if (TxtApiKey != null) TxtApiKey.Password = settings.ApiKey ?? string.Empty;
+            if (TxtApiKeyPlain != null) TxtApiKeyPlain.Text = settings.ApiKey ?? string.Empty;
+            if (TxtBaseUrl != null) TxtBaseUrl.Text = settings.BaseUrl ?? string.Empty;
 
-            PnlCustomHeaders.Visibility = (providerType == AIProviderType.Custom) ? Visibility.Visible : Visibility.Collapsed;
-            if (providerType == AIProviderType.Custom && settings.CustomHeaders != null && settings.CustomHeaders.Count > 0)
+            if (PnlCustomHeaders != null)
             {
-                TxtCustomHeaders.Text = JsonConvert.SerializeObject(settings.CustomHeaders, Formatting.Indented);
+                PnlCustomHeaders.Visibility = (providerType == AIProviderType.Custom) ? Visibility.Visible : Visibility.Collapsed;
             }
-            else
+            if (TxtCustomHeaders != null)
             {
-                TxtCustomHeaders.Text = string.Empty;
+                if (providerType == AIProviderType.Custom && settings.CustomHeaders != null && settings.CustomHeaders.Count > 0)
+                {
+                    TxtCustomHeaders.Text = JsonConvert.SerializeObject(settings.CustomHeaders, Formatting.Indented);
+                }
+                else
+                {
+                    TxtCustomHeaders.Text = string.Empty;
+                }
             }
 
             // Populate Model list options
-            CmbModel.Items.Clear();
-            List<AIModelInfo> defaultModels = GetDefaultModels(providerType);
-            foreach (var m in defaultModels)
+            if (CmbModel != null)
             {
-                CmbModel.Items.Add(m.Id);
-            }
+                CmbModel.Items.Clear();
+                List<AIModelInfo> defaultModels = GetDefaultModels(providerType);
+                foreach (var m in defaultModels)
+                {
+                    CmbModel.Items.Add(m.Id);
+                }
 
-            string modelToSelect = !string.IsNullOrWhiteSpace(settings.DefaultModel) ? settings.DefaultModel : (defaultModels.Count > 0 ? defaultModels[0].Id : "");
-            CmbModel.Text = modelToSelect;
+                string modelToSelect = !string.IsNullOrWhiteSpace(settings.DefaultModel) ? settings.DefaultModel : (defaultModels.Count > 0 ? defaultModels[0].Id : "");
+                CmbModel.Text = modelToSelect;
+            }
 
             // URL Read-only hints
-            if (providerType == AIProviderType.Groq || providerType == AIProviderType.Gemini)
+            if (TxtBaseUrl != null)
             {
-                TxtBaseUrl.IsReadOnly = true;
-                TxtBaseUrl.Background = new SolidColorBrush(Color.FromRgb(241, 245, 249));
+                if (providerType == AIProviderType.Groq || providerType == AIProviderType.Gemini)
+                {
+                    TxtBaseUrl.IsReadOnly = true;
+                    TxtBaseUrl.Background = new SolidColorBrush(Color.FromRgb(241, 245, 249));
+                }
+                else
+                {
+                    TxtBaseUrl.IsReadOnly = false;
+                    TxtBaseUrl.Background = new SolidColorBrush(Colors.White);
+                }
             }
-            else
-            {
-                TxtBaseUrl.IsReadOnly = false;
-                TxtBaseUrl.Background = new SolidColorBrush(Colors.White);
-            }
+
+            // Update API Key Help Link (contextual sign-up/key registration)
+            UpdateApiKeyRegistrationLink(providerType);
         }
 
         private List<AIModelInfo> GetDefaultModels(AIProviderType providerType)
@@ -194,7 +227,7 @@ namespace MistralOfficeAddin.UI
 
         private void CmbProvider_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (_isLoading || CmbProvider.SelectedItem == null) return;
+            if (_isLoading || CmbProvider == null || CmbProvider.SelectedItem == null) return;
 
             SaveCurrentFieldsToWorkingCopy();
 
@@ -206,14 +239,19 @@ namespace MistralOfficeAddin.UI
                 {
                     _selectedProviderType = parsed;
                     PopulateProviderFields(_selectedProviderType);
-                    LblStatus.Text = string.Empty;
+                    if (LblStatus != null)
+                    {
+                        LblStatus.Text = string.Empty;
+                    }
                 }
             }
         }
 
         private string GetCurrentApiKey()
         {
-            return _isKeyRevealed ? TxtApiKeyPlain.Text.Trim() : TxtApiKey.Password.Trim();
+            if (_isKeyRevealed && TxtApiKeyPlain != null) return TxtApiKeyPlain.Text.Trim();
+            if (TxtApiKey != null) return TxtApiKey.Password.Trim();
+            return string.Empty;
         }
 
         private void BtnToggleKey_Click(object sender, RoutedEventArgs e)
@@ -374,6 +412,76 @@ namespace MistralOfficeAddin.UI
             config.Save();
             this.DialogResult = true;
             this.Close();
+        }
+
+        public static string GetProviderRegistrationUrl(AIProviderType providerType)
+        {
+            switch (providerType)
+            {
+                case AIProviderType.Mistral:
+                    return "https://console.mistral.ai/api-keys/";
+                case AIProviderType.Groq:
+                    return "https://console.groq.com/keys";
+                case AIProviderType.Gemini:
+                    return "https://aistudio.google.com/app/apikey";
+                case AIProviderType.Custom:
+                default:
+                    return null;
+            }
+        }
+
+        private void UpdateApiKeyRegistrationLink(AIProviderType providerType)
+        {
+            if (PnlApiKeyHelp == null) return;
+
+            string url = GetProviderRegistrationUrl(providerType);
+            if (!string.IsNullOrWhiteSpace(url) && providerType != AIProviderType.Custom)
+            {
+                PnlApiKeyHelp.Visibility = Visibility.Visible;
+                if (LnkApiKey != null)
+                {
+                    try
+                    {
+                        LnkApiKey.NavigateUri = new Uri(url);
+                    }
+                    catch
+                    {
+                        LnkApiKey.NavigateUri = null;
+                    }
+                }
+            }
+            else
+            {
+                PnlApiKeyHelp.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void LnkApiKey_RequestNavigate(object sender, RequestNavigateEventArgs e)
+        {
+            try
+            {
+                string targetUrl = e.Uri != null ? e.Uri.AbsoluteUri : GetProviderRegistrationUrl(_selectedProviderType);
+                if (!string.IsNullOrWhiteSpace(targetUrl))
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = targetUrl,
+                        UseShellExecute = true
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                if (LblStatus != null)
+                {
+                    LblStatus.Foreground = new SolidColorBrush(Color.FromRgb(220, 38, 38));
+                    LblStatus.Text = string.Format("Could not open browser: {0}", ex.Message);
+                }
+            }
+            finally
+            {
+                e.Handled = true;
+            }
         }
 
         private void BtnCancel_Click(object sender, RoutedEventArgs e)

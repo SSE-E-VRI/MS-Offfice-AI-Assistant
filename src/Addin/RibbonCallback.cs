@@ -122,20 +122,27 @@ namespace MistralOfficeAddin.Addin
         {
             try
             {
-                string targetLang = "English";
+                string targetLang = "Tamil";
                 try
                 {
                     dynamic ctrl = control;
                     string id = Convert.ToString(ctrl.Id);
-                    if (id == "btnTransES") targetLang = "Spanish";
-                    else if (id == "btnTransFR") targetLang = "French";
-                    else if (id == "btnTransDE") targetLang = "German";
-                    else if (id == "btnTransZH") targetLang = "Chinese";
+                    if (id == "btnTransTA") targetLang = "Tamil";
+                    else if (id == "btnTransHI") targetLang = "Hindi";
+                    else if (id == "btnTransTE") targetLang = "Telugu";
+                    else if (id == "btnTransKN") targetLang = "Kannada";
+                    else if (id == "btnTransML") targetLang = "Malayalam";
+                    else if (id == "btnTransBN") targetLang = "Bengali";
+                    else if (id == "btnTransMR") targetLang = "Marathi";
+                    else if (id == "btnTransGU") targetLang = "Gujarati";
+                    else if (id == "btnTransEN") targetLang = "English";
                 }
                 catch { }
 
                 Logger.Info(string.Format("Ribbon Callback: OnTranslate ({0})", targetLang));
-                _taskPaneManager.ExecutePrompt(string.Format("Translate the following text accurately into {0}, preserving tone and nuance.", targetLang), string.Format("Translate ({0})", targetLang));
+                _taskPaneManager.ExecutePrompt(
+                    string.Format("Translate the following text into {0} accurately and naturally. Output ONLY the clean translated text in {0}, with no introductory remarks, conversation, or explanation.", targetLang),
+                    string.Format("Translate ({0})", targetLang));
             }
             catch (Exception ex)
             {
@@ -149,7 +156,10 @@ namespace MistralOfficeAddin.Addin
             {
                 Logger.Info("Ribbon Callback: OnOpenSettings");
                 var win = new SettingsWindow();
-                win.ShowDialog();
+                if (win.ShowDialog() == true && _taskPaneManager != null)
+                {
+                    _taskPaneManager.ReloadConfiguredProvider();
+                }
             }
             catch (Exception ex)
             {

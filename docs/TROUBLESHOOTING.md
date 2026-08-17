@@ -1,6 +1,6 @@
 # AI Assistant for Microsoft Office — Troubleshooting Guide
 
-**Version 0.0.0**  
+**Version 0.3.0**  
 *Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
 This guide covers common issues and resolutions for the AI Assistant Office Add-in.

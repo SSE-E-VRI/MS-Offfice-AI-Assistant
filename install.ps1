@@ -1,24 +1,69 @@
-# PowerShell script to register AI Assistant Add-in for current user
+# PowerShell script to Build and Install AI Assistant Office Add-in
 $ErrorActionPreference = "Stop"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  Registering AI Assistant Add-in (Current User)            " -ForegroundColor Cyan
-Write-Host "  Covers: Word, Excel, PowerPoint (2010 - 365)              " -ForegroundColor Cyan
+Write-Host "  AI Assistant Office Add-in - Build & Install              " -ForegroundColor Cyan
+Write-Host "  Targets: Word, Excel, PowerPoint (Office 2010 - 365)      " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+Set-Location $baseDir
+
+# --- 1. Locate MSBuild ---
+Write-Host "`n[1/5] Locating MSBuild..." -ForegroundColor Yellow
+$msbuildCandidates = @(
+    "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\MSBuild.exe",
+    "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"
+)
+$msbuild = $msbuildCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+if (-not $msbuild) {
+    Write-Error "MSBuild.exe not found under .NET Framework directory."
+    exit 1
+}
+Write-Host "      Found MSBuild: $msbuild" -ForegroundColor DarkGray
+
+# --- 2. Ensure NuGet CLI and Restore Packages ---
+Write-Host "`n[2/5] Restoring NuGet Packages..." -ForegroundColor Yellow
+$nugetPath = Join-Path $baseDir "nuget.exe"
+if (-not (Test-Path $nugetPath)) {
+    Write-Host "      Downloading nuget.exe..." -ForegroundColor DarkGray
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    (New-Object Net.WebClient).DownloadFile('https://dist.nuget.org/win-x86-commandline/latest/nuget.exe', $nugetPath)
+}
+
+& $nugetPath restore "$baseDir\src\packages.config" -PackagesDirectory "$baseDir\packages" | Out-Null
+Write-Host "      Packages restored." -ForegroundColor DarkGray
+
+# --- 3. Build x86 and x64 Release Configurations ---
+Write-Host "`n[3/5] Building x86 & x64 Release Configurations..." -ForegroundColor Yellow
+$projPath = Join-Path $baseDir "src\MistralOfficeAddin.csproj"
+
+& $msbuild $projPath /p:Configuration=Release /p:Platform=x86 /v:m /nologo
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "x86 Build failed."
+    exit 1
+}
+
+& $msbuild $projPath /p:Configuration=Release /p:Platform=x64 /v:m /nologo
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "x64 Build failed."
+    exit 1
+}
+Write-Host "      Built x86 and x64 Release assemblies." -ForegroundColor DarkGray
+
+# --- 4. Register COM Classes (Current User) ---
+Write-Host "`n[4/5] Registering COM classes for Current User..." -ForegroundColor Yellow
 $dll64 = Join-Path $baseDir "bin\x64\Release\MistralOfficeAddin.dll"
 $dll32 = Join-Path $baseDir "bin\x86\Release\MistralOfficeAddin.dll"
-
 $reg64 = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
 $reg32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
 
 $guidConnect = "{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}"
 $guidTaskPane = "{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}"
 
-# 1. 64-bit COM Registration
+# 64-bit COM Registration
 if (Test-Path $dll64) {
-    Write-Host "[1/4] Registering 64-bit COM classes..." -ForegroundColor Yellow
     $regFile64 = "$env:TEMP\MistralAI64.reg"
     & $reg64 $dll64 /nologo /codebase /regfile:$regFile64 | Out-Null
     if (Test-Path $regFile64) {
@@ -26,12 +71,12 @@ if (Test-Path $dll64) {
         $content = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes"
         Set-Content -Path $regFile64 -Value $content -Encoding Unicode
         reg import $regFile64 | Out-Null
+        Remove-Item -Path $regFile64 -Force -ErrorAction SilentlyContinue
     }
 }
 
-# 2. 32-bit COM Registration (for 32-bit Office)
+# 32-bit COM Registration (for 32-bit Office)
 if (Test-Path $dll32) {
-    Write-Host "[2/4] Registering 32-bit COM classes (Wow6432Node)..." -ForegroundColor Yellow
     $regFile32 = "$env:TEMP\MistralAI32.reg"
     & $reg32 $dll32 /nologo /codebase /regfile:$regFile32 | Out-Null
     if (Test-Path $regFile32) {
@@ -39,11 +84,11 @@ if (Test-Path $dll32) {
         $content = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes\Wow6432Node"
         Set-Content -Path $regFile32 -Value $content -Encoding Unicode
         reg import $regFile32 | Out-Null
+        Remove-Item -Path $regFile32 -Force -ErrorAction SilentlyContinue
     }
 }
 
-# 3. Setup CodeBase & ActiveX Task Pane Categories
-Write-Host "[3/4] Configuring CodeBase and ActiveX safety categories..." -ForegroundColor Yellow
+# Setup CodeBase & ActiveX Task Pane Categories
 $roots = @("HKCU:\Software\Classes")
 if (Test-Path "HKCU:\Software\Classes\Wow6432Node") {
     $roots += "HKCU:\Software\Classes\Wow6432Node"
@@ -64,7 +109,6 @@ foreach ($root in $roots) {
         }
     }
 
-    # ActiveX categories for TaskPaneControl
     $k = "$root\CLSID\$guidTaskPane"
     if (Test-Path $k) {
         New-Item -Path "$k\Control" -Force | Out-Null
@@ -77,24 +121,18 @@ foreach ($root in $roots) {
     }
 }
 
-# Office 2010 CreateCTP looks up ActiveX controls in HKLM, not per-user HKCU.
-Write-Host "      Mirroring TaskPaneControl ActiveX registration to HKLM (required to dock in Word)..." -ForegroundColor Yellow
-$hkcuClsid = "HKCU\Software\Classes\CLSID\$guidTaskPane"
-$hklmClsid = "HKLM\Software\Classes\CLSID\$guidTaskPane"
-$hkcuProg = "HKCU\Software\Classes\MistralAI.TaskPaneControl"
-$hklmProg = "HKLM\Software\Classes\MistralAI.TaskPaneControl"
-$copied = $false
-cmd /c "reg copy `"$hkcuClsid`" `"$hklmClsid`" /s /f" | Out-Null
-if ($LASTEXITCODE -eq 0) { $copied = $true }
-cmd /c "reg copy `"$hkcuProg`" `"$hklmProg`" /s /f" | Out-Null
-if ($copied) {
-    Write-Host "      HKLM ActiveX registration complete." -ForegroundColor Green
-} else {
-    Write-Host "      WARNING: Could not write HKLM. Re-run this script from an elevated PowerShell so Word can dock the pane." -ForegroundColor Red
-}
+# Optional mirror for Word 2010 ActiveX docking (if running elevated)
+try {
+    $hkcuClsid = "HKCU\Software\Classes\CLSID\$guidTaskPane"
+    $hklmClsid = "HKLM\Software\Classes\CLSID\$guidTaskPane"
+    $hkcuProg = "HKCU\Software\Classes\MistralAI.TaskPaneControl"
+    $hklmProg = "HKLM\Software\Classes\MistralAI.TaskPaneControl"
+    Start-Process reg.exe -ArgumentList "copy `"$hkcuClsid`" `"$hklmClsid`" /s /f" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+    Start-Process reg.exe -ArgumentList "copy `"$hkcuProg`" `"$hklmProg`" /s /f" -NoNewWindow -Wait -ErrorAction SilentlyContinue
+} catch { }
 
-# 4. Configure DoNotDisableAddinList & Enable Add-in in Office
-Write-Host "[4/4] Enabling Add-in in Word, Excel, PowerPoint..." -ForegroundColor Yellow
+# --- 5. Register Office Addin Keys & Enable ---
+Write-Host "`n[5/5] Configuring Office Add-in Registration..." -ForegroundColor Yellow
 $apps = @("Word", "Excel", "PowerPoint")
 $versions = @("14.0", "15.0", "16.0")
 
@@ -102,17 +140,17 @@ foreach ($ver in $versions) {
     foreach ($app in $apps) {
         $resiliencyBase = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency"
         if (Test-Path $resiliencyBase) {
-            # Add ONLY this add-in to DoNotDisableAddinList (do NOT erase unrelated add-in resiliency data)
             $doNotDisable = "$resiliencyBase\DoNotDisableAddinList"
             if (-not (Test-Path $doNotDisable)) {
                 New-Item -Path $doNotDisable -Force | Out-Null
             }
-            Set-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            if ((Get-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -ErrorAction SilentlyContinue) -eq $null) {
+                Set-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+            }
         }
     }
 }
 
-# Clean old duplicate Connect progid if present and configure MistralAI.Addin
 foreach ($app in $apps) {
     $oldKey = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Connect"
     if (Test-Path $oldKey) {
@@ -129,6 +167,6 @@ foreach ($app in $apps) {
 }
 
 Write-Host "`n============================================================" -ForegroundColor Green
-Write-Host "  [SUCCESS] AI Assistant Add-in registered and enabled!     " -ForegroundColor Green
-Write-Host "  Launch Word, Excel, or PowerPoint to start.               " -ForegroundColor Green
+Write-Host "  [SUCCESS] AI Assistant Add-in built & installed!          " -ForegroundColor Green
+Write-Host "  Launch Word, Excel, or PowerPoint to start using it.      " -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green

@@ -19,7 +19,8 @@ namespace MistralOfficeAddin.UI
 
         public ChatFloatingWindow()
         {
-            this.Title = "Mistral AI Assistant";
+            this.Title = "AI Assistant";
+
             this.Width = 420;
             this.Height = 720;
             this.MinWidth = 340;

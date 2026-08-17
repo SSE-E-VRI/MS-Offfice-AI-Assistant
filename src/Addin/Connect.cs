@@ -73,10 +73,10 @@ namespace MistralOfficeAddin.Addin
 
     #endregion
 
-    /// <summary>
-    /// The primary COM Add-in entry point for Microsoft Office (Word, Excel, PowerPoint, Outlook).
+    /// The primary COM Add-in entry point for Microsoft Office (Word, Excel, PowerPoint).
     /// AutoDual enables Office to discover ribbon callback methods (OnToggleSidebar, etc.) via IDispatch.
     /// </summary>
+
     [Guid("2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78")]
     [ProgId("MistralAI.Addin")]
     [ComVisible(true)]
@@ -128,6 +128,7 @@ namespace MistralOfficeAddin.Addin
                 _taskPaneManager = new CustomTaskPaneManager();
                 _ribbonCallback = new RibbonCallback(_taskPaneManager);
                 Logger.Info("Connect constructor completed.");
+                EnsureResiliencyEnabled();
             }
             catch (Exception ex)
             {
@@ -135,10 +136,38 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        private static void EnsureResiliencyEnabled()
+        {
+            try
+            {
+                string[] apps = new string[] { "Word", "Excel", "PowerPoint" };
+                string[] versions = new string[] { "14.0", "15.0", "16.0" };
+                using (var hkcu = Microsoft.Win32.Registry.CurrentUser)
+                {
+                    foreach (var ver in versions)
+                    {
+                        foreach (var app in apps)
+                        {
+                            string subPath = string.Format(@"Software\Microsoft\Office\{0}\{1}\Resiliency\DoNotDisableAddinList", ver, app);
+                            using (var dndKey = hkcu.OpenSubKey(subPath, true) ?? hkcu.CreateSubKey(subPath))
+                            {
+                                if (dndKey != null && dndKey.GetValue("MistralAI.Addin") == null)
+                                {
+                                    dndKey.SetValue("MistralAI.Addin", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+
         #region IDTExtensibility2 Implementation
 
         public void OnConnection(object Application, ext_ConnectMode ConnectMode, object AddInInst, ref Array custom)
         {
+            EnsureResiliencyEnabled();
             Logger.Info(string.Format("OnConnection ENTERED (Mode: {0})", ConnectMode));
             try
             {
@@ -162,8 +191,7 @@ namespace MistralOfficeAddin.Addin
                                 _hostType = "Excel";
                             else if (name.IndexOf("PowerPoint", StringComparison.OrdinalIgnoreCase) >= 0)
                                 _hostType = "PowerPoint";
-                            else if (name.IndexOf("Outlook", StringComparison.OrdinalIgnoreCase) >= 0)
-                                _hostType = "Outlook";
+
                         }
                     }
                     catch (Exception ex)
@@ -265,8 +293,8 @@ namespace MistralOfficeAddin.Addin
     <tabs>
       <tab id=""tabMistralAI"" label=""AI Assistant"">
         <group id=""grpChat"" label=""AI Chat"">
-          <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""HappyFace"" size=""large"" onAction=""OnToggleSidebar""/>
-          <button id=""btnSettings"" label=""Configure"" imageMso=""AdpDiagramTableRelationships"" size=""large"" onAction=""OnOpenSettings""/>
+          <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""ReviewNewComment"" size=""large"" onAction=""OnToggleSidebar""/>
+          <button id=""btnSettings"" label=""Configure"" imageMso=""PropertySheet"" size=""large"" onAction=""OnOpenSettings""/>
         </group>
       </tab>
     </tabs>

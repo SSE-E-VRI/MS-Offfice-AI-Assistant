@@ -1,6 +1,6 @@
 # AI Assistant for Microsoft Office — User Guide
 
-**Version 0.0.0**  
+**Version 0.3.0**  
 *Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
 Welcome to **AI Assistant**, a cross-version Microsoft Office add-in that brings multi-provider AI capabilities (Mistral, Groq, Gemini, and Custom OpenAI-compatible endpoints) to **Word, Excel, and PowerPoint** from **Office 2010 to Office 365**.
