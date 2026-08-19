@@ -94,8 +94,8 @@ namespace MistralOfficeAddin.Core
             ActiveProvider = AIProviderType.Mistral;
 
             Mistral = new ProviderSettings("https://api.mistral.ai/v1", "mistral-large-latest");
-            Groq = new ProviderSettings("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile");
-            Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-1.5-flash");
+            Groq = new ProviderSettings("https://api.groq.com/openai/v1", "openai/gpt-oss-20b");
+            Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-3.6-flash");
             Custom = new ProviderSettings("http://localhost:11434/v1", "llama3");
 
             Temperature = 0.7;
@@ -113,9 +113,9 @@ namespace MistralOfficeAddin.Core
             switch (ActiveProvider)
             {
                 case AIProviderType.Groq:
-                    return Groq ?? (Groq = new ProviderSettings("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile"));
+                    return Groq ?? (Groq = new ProviderSettings("https://api.groq.com/openai/v1", "openai/gpt-oss-20b"));
                 case AIProviderType.Gemini:
-                    return Gemini ?? (Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-1.5-flash"));
+                    return Gemini ?? (Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-3.6-flash"));
                 case AIProviderType.Custom:
                     return Custom ?? (Custom = new ProviderSettings("http://localhost:11434/v1", "llama3"));
                 case AIProviderType.Mistral:
@@ -223,8 +223,9 @@ namespace MistralOfficeAddin.Core
                         }
 
                         if (this.Mistral == null) this.Mistral = new ProviderSettings("https://api.mistral.ai/v1", "mistral-large-latest");
-                        if (this.Groq == null) this.Groq = new ProviderSettings("https://api.groq.com/openai/v1", "llama-3.3-70b-versatile");
-                        if (this.Gemini == null) this.Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-1.5-flash");
+                        if (this.Groq == null) this.Groq = new ProviderSettings("https://api.groq.com/openai/v1", "openai/gpt-oss-20b");
+                        if (this.Gemini == null) this.Gemini = new ProviderSettings("https://generativelanguage.googleapis.com", "gemini-3.6-flash");
+                        MigrateRetiredProviderModels();
                         if (this.Custom == null) this.Custom = new ProviderSettings("http://localhost:11434/v1", "llama3");
 
                         this.Temperature = dto.Temperature.HasValue ? dto.Temperature.Value : 0.7;
@@ -241,6 +242,36 @@ namespace MistralOfficeAddin.Core
                     Logger.Error("Failed to load configuration", ex);
                 }
             }
+        }
+
+        private void MigrateRetiredProviderModels()
+        {
+            if (Groq != null && IsOneOf(Groq.DefaultModel,
+                "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "llama-3.2-11b-vision-preview",
+                "llama-3.2-90b-vision-preview", "qwen/qwen3-32b", "deepseek-r1-distill-llama-70b",
+                "mixtral-8x7b-32768"))
+            {
+                Groq.DefaultModel = "openai/gpt-oss-20b";
+                Logger.Info("Migrated retired Groq default model to openai/gpt-oss-20b.");
+            }
+
+            if (Gemini != null && IsOneOf(Gemini.DefaultModel,
+                "gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-flash", "gemini-2.0-flash-lite",
+                "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"))
+            {
+                Gemini.DefaultModel = "gemini-3.6-flash";
+                Logger.Info("Migrated retired Gemini default model to gemini-3.6-flash.");
+            }
+        }
+
+        private static bool IsOneOf(string value, params string[] candidates)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            foreach (string candidate in candidates)
+            {
+                if (string.Equals(value, candidate, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
         }
 
         private class ConfigDto

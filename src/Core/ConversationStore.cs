@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
+using System.Text;
 using MistralOfficeAddin.API.Models;
 using Newtonsoft.Json;
 
@@ -42,7 +44,34 @@ namespace MistralOfficeAddin.Core
                     Directory.CreateDirectory(_storageDir);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ConversationStore could not create directory '{0}': {1}", _storageDir, ex.Message));
+            }
+        }
+
+        public ConversationStore(string customDir)
+        {
+            _storageDir = customDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MistralOfficeAddin", "Conversations");
+            try
+            {
+                if (!Directory.Exists(_storageDir))
+                {
+                    Directory.CreateDirectory(_storageDir);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ConversationStore could not create directory '{0}': {1}", _storageDir, ex.Message));
+            }
+        }
+
+        public void ClearMemoryCache()
+        {
+            lock (_lock)
+            {
+                _sessionHistories.Clear();
+            }
         }
 
         public List<ChatMessage> GetHistory(string documentKey)
@@ -93,13 +122,23 @@ namespace MistralOfficeAddin.Core
                 try
                 {
                     string safeKey = GetSafeFilename(documentKey);
-                    string filePath = Path.Combine(_storageDir, string.Format("{0}.json", safeKey));
+                    string filePath = Path.Combine(_storageDir, string.Format("{0}.dat", safeKey));
                     if (File.Exists(filePath))
                     {
                         File.Delete(filePath);
                     }
+
+                    // Clean up histories saved by releases before encrypted persistence.
+                    string legacyFilePath = Path.Combine(_storageDir, string.Format("{0}.json", safeKey));
+                    if (File.Exists(legacyFilePath))
+                    {
+                        File.Delete(legacyFilePath);
+                    }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    Logger.Warn(string.Format("ConversationStore could not delete history file for '{0}': {1}", documentKey, ex.Message));
+                }
             }
         }
 
@@ -108,12 +147,28 @@ namespace MistralOfficeAddin.Core
             try
             {
                 string safeKey = GetSafeFilename(documentKey);
-                string filePath = Path.Combine(_storageDir, string.Format("{0}.json", safeKey));
+                string filePath = Path.Combine(_storageDir, string.Format("{0}.dat", safeKey));
                 if (File.Exists(filePath))
                 {
-                    string json = File.ReadAllText(filePath);
+                    byte[] encryptedBytes = File.ReadAllBytes(filePath);
+                    byte[] plainBytes = ProtectedData.Unprotect(encryptedBytes, null, DataProtectionScope.CurrentUser);
+                    string json = Encoding.UTF8.GetString(plainBytes);
                     var list = JsonConvert.DeserializeObject<List<ChatMessage>>(json);
                     if (list != null) return list;
+                }
+
+                // One-time, best-effort migration of plaintext histories created by v0.3.
+                string legacyFilePath = Path.Combine(_storageDir, string.Format("{0}.json", safeKey));
+                if (File.Exists(legacyFilePath))
+                {
+                    string legacyJson = File.ReadAllText(legacyFilePath);
+                    var legacyList = JsonConvert.DeserializeObject<List<ChatMessage>>(legacyJson);
+                    if (legacyList != null)
+                    {
+                        SaveToDisk(documentKey, legacyList);
+                        try { File.Delete(legacyFilePath); } catch { }
+                        return legacyList;
+                    }
                 }
             }
             catch (Exception ex)
@@ -128,9 +183,11 @@ namespace MistralOfficeAddin.Core
             try
             {
                 string safeKey = GetSafeFilename(documentKey);
-                string filePath = Path.Combine(_storageDir, string.Format("{0}.json", safeKey));
+                string filePath = Path.Combine(_storageDir, string.Format("{0}.dat", safeKey));
                 string json = JsonConvert.SerializeObject(history, Formatting.Indented);
-                File.WriteAllText(filePath, json);
+                byte[] plainBytes = Encoding.UTF8.GetBytes(json);
+                byte[] encryptedBytes = ProtectedData.Protect(plainBytes, null, DataProtectionScope.CurrentUser);
+                File.WriteAllBytes(filePath, encryptedBytes);
             }
             catch (Exception ex)
             {

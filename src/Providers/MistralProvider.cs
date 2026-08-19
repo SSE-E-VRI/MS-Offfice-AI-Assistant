@@ -15,6 +15,7 @@ namespace MistralOfficeAddin.Providers
     {
         private readonly string _baseUrl;
         private readonly string _apiKey;
+        private readonly string _testModel;
         private readonly OpenAICompatibleClient _client;
         private bool _disposed;
 
@@ -35,10 +36,11 @@ namespace MistralOfficeAddin.Providers
             }
         }
 
-        public MistralProvider(string baseUrl, string apiKey)
+        public MistralProvider(string baseUrl, string apiKey, string testModel = null)
         {
             _baseUrl = !string.IsNullOrWhiteSpace(baseUrl) ? baseUrl.TrimEnd('/') : "https://api.mistral.ai/v1";
             _apiKey = apiKey ?? string.Empty;
+            _testModel = !string.IsNullOrWhiteSpace(testModel) ? testModel.Trim() : "mistral-small-latest";
             _client = new OpenAICompatibleClient(_baseUrl, _apiKey, AIProviderType.Mistral);
         }
 
@@ -46,7 +48,7 @@ namespace MistralOfficeAddin.Providers
         {
             try
             {
-                return await _client.TestConnectionAsync("mistral-small-latest", ct).ConfigureAwait(false);
+                return await _client.TestConnectionAsync(_testModel, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -117,7 +119,8 @@ namespace MistralOfficeAddin.Providers
                     request.Temperature,
                     request.MaxTokens,
                     request.Attachments,
-                    ct).ConfigureAwait(false);
+                    ct,
+                    request.SystemPrompt).ConfigureAwait(false);
 
                 return new AIResponse(text) { Model = request.Model };
             }
@@ -142,7 +145,8 @@ namespace MistralOfficeAddin.Providers
                     request.MaxTokens,
                     onDeltaReceived,
                     request.Attachments,
-                    ct).ConfigureAwait(false);
+                    ct,
+                    request.SystemPrompt).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

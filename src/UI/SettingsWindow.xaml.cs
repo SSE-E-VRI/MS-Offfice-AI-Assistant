@@ -53,8 +53,8 @@ namespace MistralOfficeAddin.UI
 
                 // Clone settings into working copies
                 _workingSettings[AIProviderType.Mistral] = CloneSettings(config.Mistral, "https://api.mistral.ai/v1", "mistral-large-latest");
-                _workingSettings[AIProviderType.Groq] = CloneSettings(config.Groq, "https://api.groq.com/openai/v1", "llama-3.3-70b-versatile");
-                _workingSettings[AIProviderType.Gemini] = CloneSettings(config.Gemini, "https://generativelanguage.googleapis.com", "gemini-1.5-flash");
+                _workingSettings[AIProviderType.Groq] = CloneSettings(config.Groq, "https://api.groq.com/openai/v1", "openai/gpt-oss-20b");
+                _workingSettings[AIProviderType.Gemini] = CloneSettings(config.Gemini, "https://generativelanguage.googleapis.com", "gemini-3.6-flash");
                 _workingSettings[AIProviderType.Custom] = CloneSettings(config.Custom, "http://localhost:11434/v1", "llama3");
 
                 _selectedProviderType = config.ActiveProvider;
@@ -191,19 +191,14 @@ namespace MistralOfficeAddin.UI
                 case AIProviderType.Groq:
                     return new List<AIModelInfo>
                     {
-                        new AIModelInfo("llama-3.3-70b-versatile"),
-                        new AIModelInfo("llama-3.1-8b-instant"),
-                        new AIModelInfo("llama-3.2-11b-vision-preview"),
-                        new AIModelInfo("llama-3.2-90b-vision-preview"),
-                        new AIModelInfo("mixtral-8x7b-32768")
+                        new AIModelInfo("openai/gpt-oss-20b"),
+                        new AIModelInfo("openai/gpt-oss-120b"),
+                        new AIModelInfo("qwen/qwen3.6-27b")
                     };
                 case AIProviderType.Gemini:
                     return new List<AIModelInfo>
                     {
-                        new AIModelInfo("gemini-2.5-flash"),
-                        new AIModelInfo("gemini-2.5-pro"),
-                        new AIModelInfo("gemini-1.5-flash"),
-                        new AIModelInfo("gemini-1.5-pro")
+                        new AIModelInfo("gemini-3.6-flash")
                     };
                 case AIProviderType.Custom:
                     return new List<AIModelInfo>
@@ -278,10 +273,13 @@ namespace MistralOfficeAddin.UI
             SaveCurrentFieldsToWorkingCopy();
             string apiKey = GetCurrentApiKey();
             string baseUrl = TxtBaseUrl.Text.Trim();
+            bool verifyGeminiModels = _selectedProviderType == AIProviderType.Gemini;
 
             BtnDiscoverModels.IsEnabled = false;
             LblStatus.Foreground = new SolidColorBrush(Color.FromRgb(37, 99, 235));
-            LblStatus.Text = "Discovering models from provider...";
+            LblStatus.Text = verifyGeminiModels
+                ? "Checking Gemini models available to this API key..."
+                : "Discovering models from provider...";
 
             if (_discoverCts != null) _discoverCts.Cancel();
             _discoverCts = new CancellationTokenSource();
@@ -290,7 +288,16 @@ namespace MistralOfficeAddin.UI
             {
                 using (var provider = ProviderFactory.CreateForTesting(_selectedProviderType, apiKey, baseUrl))
                 {
-                    var models = await provider.ListModelsAsync(_discoverCts.Token);
+                    List<AIModelInfo> models;
+                    var geminiProvider = provider as GeminiProvider;
+                    if (geminiProvider != null)
+                    {
+                        models = await geminiProvider.FindWorkingModelsAsync(_discoverCts.Token);
+                    }
+                    else
+                    {
+                        models = await provider.ListModelsAsync(_discoverCts.Token);
+                    }
                     if (models != null && models.Count > 0)
                     {
                         string currentText = CmbModel.Text;
@@ -304,6 +311,10 @@ namespace MistralOfficeAddin.UI
                             CmbModel.Text = currentText;
                         }
                         else if (CmbModel.Items.Count > 0)
+                        {
+                            CmbModel.SelectedIndex = 0;
+                        }
+                        if (verifyGeminiModels)
                         {
                             CmbModel.SelectedIndex = 0;
                         }

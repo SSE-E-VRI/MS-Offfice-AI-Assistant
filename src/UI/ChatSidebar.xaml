@@ -43,6 +43,10 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -51,9 +55,17 @@
                     <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="#94A3B8"/>
                 </StackPanel>
 
-                <Button x:Name="BtnNewChat" Grid.Column="2" Content="&#x1F504;" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnAcceptRevisions" Grid.Column="2" Content="Accept" Background="Transparent" Foreground="#86EFAC"
+                        ToolTip="Accept tracked AI edits in the selection, or all tracked edits" Click="BtnAcceptRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
+                <Button x:Name="BtnRejectRevisions" Grid.Column="3" Content="Reject" Background="Transparent" Foreground="#FCA5A5"
+                        ToolTip="Reject tracked AI edits in the selection, or all tracked edits" Click="BtnRejectRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
+                <Button x:Name="BtnUndoChange" Grid.Column="4" Content="Undo" Background="Transparent" Foreground="#CBD5E1"
+                        ToolTip="Undo the last Office change made by the assistant" Click="BtnUndoChange_Click" Margin="0,0,4,0" FontSize="11"/>
+                <Button x:Name="BtnActionHistory" Grid.Column="5" Content="Log" Background="Transparent" Foreground="#CBD5E1"
+                        ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"/>
+                <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="#CBD5E1"
                         ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"/>
-                <Button x:Name="BtnSettings" Grid.Column="3" Content="&#x2699;" Background="Transparent" Foreground="#CBD5E1" 
+                <Button x:Name="BtnSettings" Grid.Column="7" Content="&#x2699;" Background="Transparent" Foreground="#CBD5E1"
                         ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"/>
             </Grid>
         </Border>
@@ -64,15 +76,24 @@
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Model Selector -->
                 <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="False" SelectionChanged="CmbModel_SelectionChanged"/>
 
-                <!-- Context Insertion Toggle -->
-                <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Include Selection" 
+                <!-- Explicit context scope keeps users in control of what leaves Office. -->
+                <ComboBox x:Name="CmbContextScope" Grid.Column="1" Margin="0,0,6,0" Padding="4,2" FontSize="11" SelectedIndex="0"
+                          ToolTip="Choose exactly which Office context is sent with this prompt">
+                    <ComboBoxItem Tag="Selection">Selection</ComboBoxItem>
+                    <ComboBoxItem Tag="CurrentFile">Current file</ComboBoxItem>
+                    <ComboBoxItem Tag="SelectionAndFile">Selection + file</ComboBoxItem>
+                    <ComboBoxItem Tag="AttachmentsOnly">Attachments only</ComboBoxItem>
+                </ComboBox>
+
+                <CheckBox x:Name="ChkTrackChanges" Grid.Column="2" Content="Track edits"
                           VerticalAlignment="Center" FontSize="11" Foreground="#475569" IsChecked="True"
-                          ToolTip="When checked, only highlighted text is sent as context. Ribbon actions still use the full document if nothing is selected."/>
+                          ToolTip="When in Word, insert/rewrite responses as Track Changes."/>
             </Grid>
         </Border>
 
@@ -138,12 +159,12 @@
                                                             <TextBlock Text="{Binding Content}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="#0F172A" TextWrapping="Wrap"/>
                                                         </Border>
 
-                                                        <!-- Apply Button -->
-                                                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Apply" 
+                                                        <!-- The card is the action preview; applying always requires confirmation. -->
+                                                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Review &amp; Apply"
                                                                 Background="#059669" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
                                                                 Padding="8,4" BorderBrush="#047857" BorderThickness="1" VerticalAlignment="Center"
                                                                 Click="BtnApplyAction_Click" Tag="{Binding}"
-                                                                ToolTip="Apply this formula/value directly to Excel"/>
+                                                                ToolTip="Review the proposed native Excel change before applying"/>
 
                                                         <!-- Status Display -->
                                                         <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding StatusDisplay}" 
@@ -155,7 +176,7 @@
                                     </ItemsControl>
 
                                     <!-- Apply All Actions Button -->
-                                    <Button Content="Apply All Spreadsheet Actions" Background="#047857" Foreground="#FFFFFF" 
+                                    <Button Content="Review &amp; Apply All Spreadsheet Actions" Background="#047857" Foreground="#FFFFFF"
                                             FontSize="11" FontWeight="Bold" Padding="8,4" BorderThickness="0" Margin="0,4,0,4"
                                             Visibility="{Binding HasActions, Converter={StaticResource BoolToVisConverter}}"
                                             Click="BtnApplyAllActions_Click"/>
@@ -165,9 +186,12 @@
                                         <Button Content="Copy" Background="#DBEAFE" Foreground="#1E3A8A" FontSize="11" FontWeight="SemiBold"
                                                 Padding="8,3" BorderBrush="#93C5FD" BorderThickness="1"
                                                 Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                                        <Button Content="Preview" Background="#F1F5F9" Foreground="#334155" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="#CBD5E1" BorderThickness="1" Margin="6,0,0,0"
+                                                Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
                                         <Button Content="Insert" Background="#1D4ED8" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
                                                 Padding="8,3" BorderBrush="#1E40AF" BorderThickness="1"
-                                                Click="BtnInsertMessage_Click" ToolTip="Insert at document cursor" Margin="6,0,0,0"/>
+                                                Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -239,8 +263,7 @@
                 <!-- 2. Message Input Box -->
                 <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
                          TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
-                         BorderThickness="1" FontSize="13" KeyDown="TxtInput_KeyDown"
-                         PreviewMouseDown="TxtInput_PreviewMouseDown" GotFocus="TxtInput_GotFocus"
+                         BorderThickness="1" FontSize="13" Focusable="True" IsTabStop="True" KeyDown="TxtInput_KeyDown"
                          ToolTip="Type your prompt here... (Ctrl+Enter to send)">
                     <TextBox.ContextMenu>
                         <ContextMenu Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" Padding="2">
@@ -261,14 +284,24 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <WrapPanel Grid.Column="0" Orientation="Horizontal">
                         <Button x:Name="BtnAttach" Content="📎 Attach" Background="#F1F5F9" Foreground="#334155" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"/>
                         <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="#F1F5F9" Foreground="#334155" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Summarize the selected text or document clearly."/>
                         <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="#F1F5F9" Foreground="#334155" 
-                                FontSize="11" Padding="6,4" Click="BtnQuickAction_Click" Tag="Rewrite the selected text for improved clarity and tone."/>
-                    </StackPanel>
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Rewrite the selected text for improved clarity and tone."/>
+                        <Button x:Name="BtnQuickOutline" Content="Outline" Background="#F1F5F9" Foreground="#334155"
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow."/>
+                        <Button x:Name="BtnQuickActions" Content="Actions" Background="#F1F5F9" Foreground="#334155"
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Extract decisions, action items, owners where stated, deadlines where stated, and risks. Do not invent owners or dates."/>
+                        <Button x:Name="BtnQuickReview" Content="Review" Background="#F1F5F9" Foreground="#334155"
+                                FontSize="11" Padding="6,4" Click="BtnQuickAction_Click" Tag="Review this content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, also assess story flow and weak slides."/>
+                        <Button x:Name="BtnQuickDeck" Content="Build deck" Background="#F1F5F9" Foreground="#334155"
+                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnQuickAction_Click" Tag="Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide."/>
+                        <Button x:Name="BtnInsertVisual" Content="Insert image" Background="#F1F5F9" Foreground="#334155"
+                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"/>
+                    </WrapPanel>
 
                     <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="#2563EB" Foreground="#FFFFFF" 
                             FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"/>

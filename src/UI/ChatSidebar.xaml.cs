@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
@@ -39,6 +40,14 @@ namespace MistralOfficeAddin.UI
 
     public partial class ChatSidebar : UserControl
     {
+        private enum PromptContextScope
+        {
+            Selection,
+            CurrentFile,
+            SelectionAndFile,
+            AttachmentsOnly
+        }
+
         private readonly ObservableCollection<ChatMessage> _messages = new ObservableCollection<ChatMessage>();
         private readonly ObservableCollection<AttachmentItemViewModel> _pendingAttachments = new ObservableCollection<AttachmentItemViewModel>();
         private readonly ChatOrchestrator _orchestrator;
@@ -132,19 +141,14 @@ namespace MistralOfficeAddin.UI
                 case AIProviderType.Groq:
                     return new List<AIModelInfo>
                     {
-                        new AIModelInfo("llama-3.3-70b-versatile"),
-                        new AIModelInfo("llama-3.1-8b-instant"),
-                        new AIModelInfo("llama-3.2-11b-vision-preview"),
-                        new AIModelInfo("llama-3.2-90b-vision-preview"),
-                        new AIModelInfo("mixtral-8x7b-32768")
+                        new AIModelInfo("openai/gpt-oss-20b"),
+                        new AIModelInfo("openai/gpt-oss-120b"),
+                        new AIModelInfo("qwen/qwen3.6-27b")
                     };
                 case AIProviderType.Gemini:
                     return new List<AIModelInfo>
                     {
-                        new AIModelInfo("gemini-2.5-flash"),
-                        new AIModelInfo("gemini-2.5-pro"),
-                        new AIModelInfo("gemini-1.5-flash"),
-                        new AIModelInfo("gemini-1.5-pro")
+                        new AIModelInfo("gemini-3.6-flash")
                     };
                 case AIProviderType.Custom:
                     return new List<AIModelInfo>
@@ -209,11 +213,33 @@ namespace MistralOfficeAddin.UI
                 _currentDocumentKey = string.IsNullOrWhiteSpace(docName) ? "Document" : docName;
                 _hostInitialized = true;
                 TxtDocumentBadge.Text = string.Format("{0}: {1}", _hostType, _currentDocumentKey);
+                UpdateHostSpecificControls();
                 LoadConversationHistory();
             }
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("ChatSidebar.InitializeHostOnUiThread failed: {0}", ex.Message));
+            }
+        }
+
+        private void UpdateHostSpecificControls()
+        {
+            if (ChkTrackChanges == null) return;
+            bool isWord = _wordCtrl != null;
+            bool isPowerPoint = _pptCtrl != null;
+            ChkTrackChanges.IsEnabled = isWord;
+            if (BtnAcceptRevisions != null) BtnAcceptRevisions.Visibility = isWord ? Visibility.Visible : Visibility.Collapsed;
+            if (BtnRejectRevisions != null) BtnRejectRevisions.Visibility = isWord ? Visibility.Visible : Visibility.Collapsed;
+            if (BtnQuickDeck != null) BtnQuickDeck.Visibility = isPowerPoint ? Visibility.Visible : Visibility.Collapsed;
+            if (BtnInsertVisual != null) BtnInsertVisual.Visibility = isPowerPoint ? Visibility.Visible : Visibility.Collapsed;
+            if (!isWord)
+            {
+                ChkTrackChanges.IsChecked = false;
+                ChkTrackChanges.ToolTip = "Track edits is available when Word is the active host.";
+            }
+            else
+            {
+                ChkTrackChanges.ToolTip = "Insert/rewrite the response as Word Track Changes.";
             }
         }
 
@@ -257,6 +283,11 @@ namespace MistralOfficeAddin.UI
 
         public async void ExecuteExternalPrompt(string prompt, string promptTitle)
         {
+            await ExecuteExternalPromptAsync(prompt, promptTitle, GetPromptContextScope());
+        }
+
+        private async Task ExecuteExternalPromptAsync(string prompt, string promptTitle, PromptContextScope scope)
+        {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
             if (_isSending && _streamingCts != null)
@@ -264,31 +295,29 @@ namespace MistralOfficeAddin.UI
                 try { _streamingCts.Cancel(); } catch { }
             }
 
-            string selectedText = GetSelectedTextOnly();
-            string fullPrompt;
+            string selectedText = IncludesSelection(scope) ? GetSelectedTextOnly() : string.Empty;
+            string documentContext = IncludesCurrentFile(scope) ? GetCurrentFileContext(prompt) : string.Empty;
+            string fullPrompt = prompt;
             string displayTitle = promptTitle;
 
             if (!string.IsNullOrWhiteSpace(selectedText))
             {
                 if (promptTitle != null && promptTitle.StartsWith("Translate", StringComparison.OrdinalIgnoreCase))
                 {
-                    fullPrompt = string.Format("{0}\n\nText to translate:\n\"\"\"\n{1}\n\"\"\"", prompt, selectedText);
+                    fullPrompt = string.Format("{0}\n\nText to translate:\n\"\"\"\n{1}\n\"\"\"", fullPrompt, selectedText);
                 }
                 else
                 {
-                    fullPrompt = string.Format("{0}\n\n[Selected Text]:\n{1}", prompt, selectedText);
+                    fullPrompt = string.Format("{0}\n\n[Selected Context]:\n{1}", fullPrompt, selectedText);
                 }
 
                 string snippet = selectedText.Trim().Replace('\r', ' ').Replace('\n', ' ');
                 if (snippet.Length > 80) snippet = snippet.Substring(0, 77) + "...";
                 displayTitle = string.Format("{0}:\n\"{1}\"", promptTitle, snippet);
             }
-            else
+            if (!string.IsNullOrWhiteSpace(documentContext))
             {
-                string contextText = GetCurrentContextText(false);
-                fullPrompt = string.IsNullOrEmpty(contextText)
-                    ? prompt
-                    : string.Format("{0}\n\n[Context]:\n{1}", prompt, contextText);
+                fullPrompt = string.Format("{0}\n\n[Current File Context]:\n{1}", fullPrompt, documentContext);
             }
 
             await SendMessageAsync(fullPrompt, displayTitle);
@@ -328,10 +357,7 @@ namespace MistralOfficeAddin.UI
             if (string.IsNullOrWhiteSpace(text)) return;
             TxtInput.Clear();
 
-            string contextText = (ChkIncludeSelection.IsChecked == true) ? GetCurrentContextText(true) : string.Empty;
-            string fullPrompt = string.IsNullOrEmpty(contextText)
-                ? text
-                : string.Format("{0}\n\n[Context]:\n{1}", text, contextText);
+            string fullPrompt = ComposePromptWithContext(text, GetPromptContextScope());
 
             await SendMessageAsync(fullPrompt, null);
         }
@@ -404,7 +430,10 @@ namespace MistralOfficeAddin.UI
                             }
                             else
                             {
-                                textAttachmentContext.AppendLine(string.Format("\n[Attachment: {0}]\n{1}\n[End Attachment]", block.FileName, block.ExtractedText));
+                                textAttachmentContext.AppendLine(string.Format(
+                                    "\n[Source: {0}]\n{1}\n[End Source: {0}]",
+                                    block.FileName,
+                                    block.ExtractedText));
                             }
                         }
                         catch (Exception ex)
@@ -431,7 +460,8 @@ namespace MistralOfficeAddin.UI
                     var lastUser = historyForApi.LastOrDefault(m => m.IsUser);
                     if (lastUser != null)
                     {
-                        lastUser.Content = lastUser.Content + "\n\n" + textAttachmentContext.ToString();
+                        lastUser.Content = lastUser.Content + "\n\n" + textAttachmentContext.ToString() +
+                            "\nWhen you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.";
                     }
                 }
 
@@ -650,46 +680,88 @@ namespace MistralOfficeAddin.UI
             if (_hostType == "Excel" || _excelCtrl != null)
             {
                 hostContext = "\n\nYou are embedded inside Microsoft Excel.\n" +
-                    "When generating calculations, formulas, or spreadsheet changes:\n" +
+                    "When generating calculations, formulas, analysis, or spreadsheet changes:\n" +
                     "1. Inspect the provided Worksheet Context with its explicit Column Letters (Col A, Col B, Col C, etc.) and Header names.\n" +
                     "2. When matching category/text columns with prefixes (e.g. '0001-non ferrous items'), use wildcard criteria (e.g. \"*non ferrous*\") in SUMIF/COUNTIF.\n" +
                     "3. Start row-level data formulas at Row 2 (e.g. F2, G2) rather than header Row 1.\n" +
-                    "4. ALWAYS return executable spreadsheet actions in a structured <excel_actions> XML block:\n" +
+                    "4. Propose only bounded A1 cell/range changes (e.g. B2:B100, not unbounded full columns like B:B). Every change is previewed and requires user confirmation.\n" +
+                    "5. ALWAYS return executable spreadsheet actions in a structured <excel_actions> XML block when a native change is requested:\n" +
                     "   <excel_actions>\n" +
-                    "     <excel_action target=\"K20\" type=\"formula\" formula=\"=SUMIF(B:B, &quot;*non ferrous*&quot;, F:F)\" description=\"Total non-ferrous value\" />\n" +
-                    "     <excel_action target=\"K21\" type=\"formula\" formula=\"=COUNTIF(E:E, 0)\" description=\"Count of zero-quantity items\" />\n" +
-                    "     <excel_action target=\"K22\" type=\"formula\" formula=\"=AVERAGEIF(E:E, 0, F:F)\" description=\"Average value of zero-quantity items\" />\n" +
+                    "     <excel_action target=\"K20\" type=\"formula\" formula=\"=SUMIF(B2:B100, &quot;*non ferrous*&quot;, F2:F100)\" description=\"Total non-ferrous value\" />\n" +
+                    "     <excel_action target=\"K21\" type=\"formula\" formula=\"=COUNTIF(E2:E100, 0)\" description=\"Count of zero-quantity items\" />\n" +
+                    "     <excel_action target=\"K22\" type=\"formula\" formula=\"=AVERAGEIF(E2:E100, 0, F2:F100)\" description=\"Average value of zero-quantity items\" />\n" +
                     "     <excel_action target=\"G2:G27\" type=\"filldown\" formula=\"=IF(F2&gt;50000, &quot;High Value&quot;, &quot;&quot;)\" description=\"High value flag (&gt;50,000)\" />\n" +
                     "   </excel_actions>\n" +
-                    "5. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
+                    "6. Supported action types are formula, value, filldown, table, create_table, conditional_format, sort, filter, data_validation, chart, pivot_table, named_range, and remove_duplicates. " +
+                    "Use the value attribute for each action's concise option (for example value=\"descending\", value=\"list:Open,Closed\", or value=\"columns:1,2\") and state any assumptions in the description.\n" +
+                    "7. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
             }
             else if (_hostType == "Word" || _wordCtrl != null)
             {
-                hostContext = "\n\nYou are embedded inside Microsoft Word. When the user asks to write, edit, rewrite, summarize, or translate text, provide the polished text directly without tutorial meta-commentary.";
+                hostContext = "\n\nYou are embedded inside Microsoft Word. The provided document context may include prompt-relevant excerpts, a live outline, and action items. " +
+                    "When the user asks to write, edit, rewrite, summarize, translate, or review text, provide polished text directly without tutorial meta-commentary. " +
+                    "Preserve factual meaning unless the user requests a substantive change. Use a Markdown table when a table is the clearest result. " +
+                    "If sources are attached, cite only supplied sources using [Source: filename, page/section]; do not invent citations.";
             }
             else if (_hostType == "PowerPoint" || _pptCtrl != null)
             {
-                hostContext = "\n\nYou are embedded inside Microsoft PowerPoint. When the user asks for slides or bullet points, provide structured slides with Slide titles, concise bullet points, and speaker notes.";
+                hostContext = "\n\nYou are embedded inside Microsoft PowerPoint. The supplied context can include the full deck, sections, slide text, and speaker notes. " +
+                    "When the user asks for slides or bullet points, provide structured slides with Slide titles, concise bullets, speaker notes, and a one-line Visual suggestion. " +
+                    "Preserve the presentation's existing style and structure where possible. For a requested deck reorganization, use only an optional <powerpoint_actions> block with safe action types move_slide, create_section, rename_section, or set_notes; use numbered existing slides and include no other commands.";
             }
             return (basePrompt ?? "You are an expert AI assistant embedded inside Microsoft Office.") + hostContext;
         }
 
-        private string GetCurrentContextText(bool selectionOnly)
+        private PromptContextScope GetPromptContextScope()
+        {
+            try
+            {
+                var item = CmbContextScope != null ? CmbContextScope.SelectedItem as ComboBoxItem : null;
+                string tag = item != null ? Convert.ToString(item.Tag) : "Selection";
+                if (string.Equals(tag, "CurrentFile", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.CurrentFile;
+                if (string.Equals(tag, "SelectionAndFile", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.SelectionAndFile;
+                if (string.Equals(tag, "AttachmentsOnly", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.AttachmentsOnly;
+            }
+            catch { }
+            return PromptContextScope.Selection;
+        }
+
+        private static bool IncludesSelection(PromptContextScope scope)
+        {
+            return scope == PromptContextScope.Selection || scope == PromptContextScope.SelectionAndFile;
+        }
+
+        private static bool IncludesCurrentFile(PromptContextScope scope)
+        {
+            return scope == PromptContextScope.CurrentFile || scope == PromptContextScope.SelectionAndFile;
+        }
+
+        private string ComposePromptWithContext(string prompt, PromptContextScope scope)
+        {
+            if (string.IsNullOrWhiteSpace(prompt)) return prompt;
+            var builder = new StringBuilder(prompt);
+            if (IncludesSelection(scope))
+            {
+                string selected = GetSelectedTextOnly();
+                if (!string.IsNullOrWhiteSpace(selected))
+                    builder.AppendFormat("\n\n[Selected Context]:\n{0}", selected);
+            }
+            if (IncludesCurrentFile(scope))
+            {
+                string currentFileContext = GetCurrentFileContext(prompt);
+                if (!string.IsNullOrWhiteSpace(currentFileContext))
+                    builder.AppendFormat("\n\n[Current File Context]:\n{0}", currentFileContext);
+            }
+            return builder.ToString();
+        }
+
+        private string GetCurrentFileContext(string prompt)
         {
             try
             {
                 if (_wordCtrl != null)
                 {
-                    string sel = _wordCtrl.GetSelectedText();
-                    if (!string.IsNullOrWhiteSpace(sel))
-                    {
-                        return string.Format("[Selected Text]:\n{0}", sel);
-                    }
-                    if (selectionOnly)
-                    {
-                        return string.Empty;
-                    }
-                    string docText = _wordCtrl.GetDocumentText(24000);
+                    string docText = _wordCtrl.GetRelevantDocumentContext(prompt, 24000);
                     if (!string.IsNullOrWhiteSpace(docText))
                     {
                         return string.Format("[Document Content: {0}]:\n{1}", _currentDocumentKey, docText);
@@ -697,25 +769,24 @@ namespace MistralOfficeAddin.UI
                 }
                 if (_excelCtrl != null)
                 {
-                    if (selectionOnly)
-                    {
-                        string sel = _excelCtrl.GetSelectedRangeValues();
-                        if (!string.IsNullOrWhiteSpace(sel))
-                        {
-                            return sel;
-                        }
-                    }
                     string snapshot = _excelCtrl.GetWorksheetSnapshot(70, 26);
                     if (!string.IsNullOrWhiteSpace(snapshot))
                     {
                         return snapshot;
                     }
                 }
-                if (_pptCtrl != null) return _pptCtrl.GetSlideText();
+                if (_pptCtrl != null)
+                {
+                    string reviewContext = _pptCtrl.GetPresentationReviewContext(7000);
+                    string deckText = _pptCtrl.GetPresentationText(41000);
+                    if (string.IsNullOrWhiteSpace(reviewContext)) return deckText;
+                    if (string.IsNullOrWhiteSpace(deckText)) return reviewContext;
+                    return reviewContext + "\n\n" + deckText;
+                }
             }
             catch (Exception ex)
             {
-                Logger.Warn(string.Format("GetCurrentContextText failed: {0}", ex.Message));
+                Logger.Warn(string.Format("GetCurrentFileContext failed: {0}", ex.Message));
             }
             return string.Empty;
         }
@@ -753,6 +824,39 @@ namespace MistralOfficeAddin.UI
             StartNewChat(true);
         }
 
+        private void BtnActionHistory_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var entries = ActionAuditStore.Instance.GetRecent(30);
+                if (entries == null || entries.Count == 0)
+                {
+                    MessageBox.Show("No approved AI actions have been recorded on this Windows account yet.",
+                        "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                var log = new StringBuilder();
+                log.AppendLine("Recent approved AI actions (stored locally and encrypted):");
+                log.AppendLine();
+                foreach (var entry in entries)
+                {
+                    log.AppendFormat("{0:u} | {1} | {2}", entry.TimestampUtc, entry.Host, entry.ActionType);
+                    if (!string.IsNullOrWhiteSpace(entry.Target)) log.AppendFormat(" | {0}", entry.Target);
+                    log.AppendLine();
+                    if (!string.IsNullOrWhiteSpace(entry.Summary)) log.AppendLine(entry.Summary);
+                    log.AppendLine();
+                }
+
+                MessageBox.Show(log.ToString(), "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not show action history: {0}", ex.Message));
+                MessageBox.Show("The local AI action log could not be opened.", "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
         private void BtnSettings_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -766,6 +870,32 @@ namespace MistralOfficeAddin.UI
             catch (Exception ex)
             {
                 MessageBox.Show(string.Format("Could not open settings: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private string GetSelectedModelName()
+        {
+            try
+            {
+                string text = CmbModel != null ? (!string.IsNullOrWhiteSpace(CmbModel.Text) ? CmbModel.Text : (CmbModel.SelectedItem as string)) : null;
+                return !string.IsNullOrWhiteSpace(text) ? text.Trim() : (ConfigManager.Instance.DefaultModel ?? "default");
+            }
+            catch
+            {
+                return ConfigManager.Instance.DefaultModel ?? "default";
+            }
+        }
+
+        private string GetLastUserPrompt()
+        {
+            try
+            {
+                var lastUser = _messages.LastOrDefault(m => m.IsUser);
+                return lastUser != null ? lastUser.Content : string.Empty;
+            }
+            catch
+            {
+                return string.Empty;
             }
         }
 
@@ -784,10 +914,25 @@ namespace MistralOfficeAddin.UI
 
             if (_excelCtrl != null)
             {
+                if (!ConfirmSpreadsheetAction(action)) return;
                 bool ok = _excelCtrl.ApplySpreadsheetAction(action);
                 if (!ok && !string.IsNullOrEmpty(action.ErrorMessage))
                 {
                     MessageBox.Show(action.ErrorMessage, "Spreadsheet Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+                else if (ok)
+                {
+                    ActionAuditStore.Instance.Record(
+                        "Excel",
+                        action.Type.ToString(),
+                        action.Target,
+                        DescribeSpreadsheetAction(action),
+                        action.IsUndoable,
+                        GetLastUserPrompt(),
+                        _currentDocumentKey,
+                        GetSelectedModelName(),
+                        action.Content,
+                        !string.IsNullOrEmpty(action.ResultText) ? action.ResultText : "Applied successfully");
                 }
             }
             else
@@ -807,6 +952,25 @@ namespace MistralOfficeAddin.UI
                 return;
             }
 
+            var preview = new StringBuilder();
+            preview.AppendLine("Review the following Excel changes before applying:");
+            bool hasNonUndoable = false;
+            foreach (var pendingAction in msg.Actions)
+            {
+                if (pendingAction.Status == SpreadsheetActionStatus.Pending || pendingAction.Status == SpreadsheetActionStatus.Error)
+                {
+                    preview.AppendLine(DescribeSpreadsheetAction(pendingAction));
+                    if (!pendingAction.IsUndoable) hasNonUndoable = true;
+                }
+            }
+            if (hasNonUndoable)
+            {
+                preview.AppendLine("\n⚠ Note: One or more actions cannot be undone by Excel Undo.");
+            }
+            if (MessageBox.Show(preview.ToString(), "Review Spreadsheet Actions", MessageBoxButton.YesNo,
+                hasNonUndoable ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
             int appliedCount = 0;
             foreach (var act in msg.Actions)
             {
@@ -815,6 +979,17 @@ namespace MistralOfficeAddin.UI
                     if (_excelCtrl.ApplySpreadsheetAction(act))
                     {
                         appliedCount++;
+                        ActionAuditStore.Instance.Record(
+                            "Excel",
+                            act.Type.ToString(),
+                            act.Target,
+                            DescribeSpreadsheetAction(act),
+                            act.IsUndoable,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            act.Content,
+                            !string.IsNullOrEmpty(act.ResultText) ? act.ResultText : "Applied successfully");
                     }
                 }
             }
@@ -827,6 +1002,13 @@ namespace MistralOfficeAddin.UI
             try { Clipboard.SetText(msg.Content); } catch { }
         }
 
+        private void BtnPreviewMessage_Click(object sender, RoutedEventArgs e)
+        {
+            var msg = GetMessageFromSender(sender);
+            if (msg == null || string.IsNullOrWhiteSpace(msg.Content)) return;
+            MessageBox.Show(msg.Content, "AI Response Preview", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
         private void BtnInsertMessage_Click(object sender, RoutedEventArgs e)
         {
             var msg = GetMessageFromSender(sender);
@@ -834,12 +1016,73 @@ namespace MistralOfficeAddin.UI
             string content = msg.Content;
             try
             {
+                if (!ConfirmInsert(content)) return;
                 if (_wordCtrl != null)
-                    _wordCtrl.InsertTextAtCursor(content);
+                {
+                    if (ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
+                    {
+                        if (!string.IsNullOrWhiteSpace(_wordCtrl.GetSelectedText()))
+                            _wordCtrl.ReplaceSelectionWithTrackChanges(content);
+                        else
+                            _wordCtrl.InsertTextAtCursorWithTrackChanges(content);
+                        ActionAuditStore.Instance.Record(
+                            "Word",
+                            "Tracked edit",
+                            "Selection / cursor",
+                            content,
+                            true,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            content,
+                            "Inserted with Track Changes");
+                    }
+                    else
+                    {
+                        _wordCtrl.InsertTextAtCursor(content);
+                        ActionAuditStore.Instance.Record(
+                            "Word",
+                            "Insert",
+                            "Selection / cursor",
+                            content,
+                            true,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            content,
+                            "Inserted at cursor");
+                    }
+                }
                 else if (_excelCtrl != null)
+                {
                     _excelCtrl.InsertText(content);
+                    ActionAuditStore.Instance.Record(
+                        "Excel",
+                        "Insert",
+                        "Selection",
+                        content,
+                        true,
+                        GetLastUserPrompt(),
+                        _currentDocumentKey,
+                        GetSelectedModelName(),
+                        content,
+                        "Inserted into Excel");
+                }
                 else if (_pptCtrl != null)
-                    _pptCtrl.InsertText(content);
+                {
+                    _pptCtrl.CreateOrUpdateDeckFromOutline(content);
+                    ActionAuditStore.Instance.Record(
+                        "PowerPoint",
+                        "Create or update slides",
+                        "Active deck",
+                        content,
+                        true,
+                        GetLastUserPrompt(),
+                        _currentDocumentKey,
+                        GetSelectedModelName(),
+                        content,
+                        "Created or updated slides");
+                }
                 else
                     MessageBox.Show("No Office document is active. Open a document and try again.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -849,54 +1092,213 @@ namespace MistralOfficeAddin.UI
             }
         }
 
-        private void BtnQuickAction_Click(object sender, RoutedEventArgs e)
+        private bool ConfirmSpreadsheetAction(SpreadsheetAction action)
+        {
+            return MessageBox.Show(DescribeSpreadsheetAction(action), "Review Spreadsheet Action", MessageBoxButton.YesNo,
+                action.IsUndoable ? MessageBoxImage.Question : MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        }
+
+        private static string DescribeSpreadsheetAction(SpreadsheetAction action)
+        {
+            if (action == null) return "No spreadsheet action is available.";
+            string description = string.IsNullOrWhiteSpace(action.Description) ? "No additional description provided." : action.Description;
+            string undoWarning = action.IsUndoable
+                ? string.Empty
+                : "\n\n⚠ WARNING: This action cannot be reliably undone by Excel Undo.";
+            return string.Format("Excel will apply a {0} action to {1}.\n\nDescription: {2}\n\nProposed change:\n{3}{4}",
+                action.Type, action.Target, description, action.Content, undoWarning);
+        }
+
+        private bool ConfirmInsert(string content)
+        {
+            string host = _wordCtrl != null ? "Word" : (_excelCtrl != null ? "Excel" : (_pptCtrl != null ? "PowerPoint" : "Office"));
+            string operation;
+            if (_wordCtrl != null && ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
+                operation = "apply the response as Word Track Changes";
+            else if (_pptCtrl != null)
+                operation = "create or update slides from the response";
+            else if (_excelCtrl != null)
+            {
+                string cellTarget;
+                string cleanContent = ExcelController.ExtractCleanExcelContent(content, out cellTarget);
+                string targetLabel = !string.IsNullOrEmpty(cellTarget) ? ("cell " + cellTarget) : "the active selection";
+
+                var tableLines = new List<string>();
+                var lines = cleanContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                foreach (var l in lines)
+                {
+                    string tl = l.Trim();
+                    if (tl.StartsWith("|") && tl.EndsWith("|") && !Regex.IsMatch(tl, @"^\|?\s*[-:]+\s*\|[\s-:|]*$"))
+                        tableLines.Add(tl);
+                }
+
+                if (tableLines.Count > 0)
+                {
+                    int cols = tableLines[0].Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                    operation = string.Format("write a {0} row × {1} column table into {2}", tableLines.Count, cols, targetLabel);
+                }
+                else
+                {
+                    operation = string.Format("write the response into {0}", targetLabel);
+                }
+            }
+            else
+                operation = "insert the response";
+
+            string preview = content.Length > 3000 ? content.Substring(0, 3000) + "\n...[preview truncated]" : content;
+            return MessageBox.Show(string.Format("{0} will {1}. Review the preview before continuing:\n\n{2}", host, operation, preview),
+                "Review AI Change", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+        }
+
+        private void BtnUndoChange_Click(object sender, RoutedEventArgs e)
+        {
+            bool undone = false;
+            try
+            {
+                if (_wordCtrl != null) undone = _wordCtrl.UndoLastChange();
+                else if (_excelCtrl != null) undone = _excelCtrl.UndoLastAction();
+                else if (_pptCtrl != null) undone = _pptCtrl.UndoLastChange();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Undo AI change failed: {0}", ex.Message));
+            }
+
+            if (undone)
+            {
+                ActionAuditStore.Instance.Record(
+                    _hostType,
+                    "Undo",
+                    "Last Office action",
+                    "User requested undo of the most recent Office action.",
+                    false,
+                    "Undo",
+                    _currentDocumentKey,
+                    GetSelectedModelName(),
+                    "Undo last action",
+                    "Undone");
+            }
+            else
+            {
+                MessageBox.Show("Office could not undo the last change. The native undo stack may be empty or a non-AI edit may be the latest action.",
+                    "Undo Unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void BtnAcceptRevisions_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyRevisionDecision(true);
+        }
+
+        private void BtnRejectRevisions_Click(object sender, RoutedEventArgs e)
+        {
+            ApplyRevisionDecision(false);
+        }
+
+        private void ApplyRevisionDecision(bool accept)
+        {
+            if (_wordCtrl == null) return;
+            int pending = _wordCtrl.GetPendingRevisionCount();
+            if (pending <= 0)
+            {
+                MessageBox.Show("There are no pending tracked revisions in the active Word document.", "No Tracked Edits", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            bool hasSelection = !string.IsNullOrWhiteSpace(_wordCtrl.GetSelectedText());
+            string operation = accept ? "accept" : "reject";
+            string scope = hasSelection ? "the tracked changes in the selected text" : "all tracked changes in this document";
+            if (MessageBox.Show(string.Format("This will {0} {1}.", operation, scope), "Review Tracked Changes",
+                MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            bool applied = false;
+            try
+            {
+                if (hasSelection)
+                    applied = accept ? _wordCtrl.AcceptRevisionsInSelection() : _wordCtrl.RejectRevisionsInSelection();
+                else
+                    applied = accept ? _wordCtrl.AcceptAllRevisions() : _wordCtrl.RejectAllRevisions();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Tracked revision decision failed: {0}", ex.Message));
+            }
+
+            if (applied)
+            {
+                ActionAuditStore.Instance.Record(
+                    "Word",
+                    accept ? "Accept tracked edits" : "Reject tracked edits",
+                    hasSelection ? "Selection" : "Document",
+                    string.Format("User chose to {0} tracked revisions.", operation),
+                    true,
+                    operation + " revisions",
+                    _currentDocumentKey,
+                    GetSelectedModelName(),
+                    operation,
+                    applied ? "Success" : "Failed");
+            }
+            else
+            {
+                MessageBox.Show("Word could not apply the tracked revision decision. Try selecting the revision or using Word's Review tab.",
+                    "Tracked Changes", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private async void BtnQuickAction_Click(object sender, RoutedEventArgs e)
         {
             var btn = sender as Button;
             if (btn != null && btn.Tag is string)
             {
                 string prompt = (string)btn.Tag;
                 string title = btn.Content != null ? btn.Content.ToString() : null;
-                ExecuteExternalPrompt(prompt, title);
+                PromptContextScope scope = GetPromptContextScope();
+                if (_pptCtrl != null && (btn.Name == "BtnQuickReview" || btn.Name == "BtnQuickDeck"))
+                    scope = PromptContextScope.SelectionAndFile;
+                await ExecuteExternalPromptAsync(prompt, title, scope);
             }
         }
 
-        private void TxtInput_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        private void BtnInsertVisual_Click(object sender, RoutedEventArgs e)
         {
-            if (e.ChangedButton == MouseButton.Left)
+            if (_pptCtrl == null)
             {
-                TxtInput.Focus();
-                Keyboard.Focus(TxtInput);
-                try
-                {
-                    var source = System.Windows.PresentationSource.FromVisual(TxtInput) as System.Windows.Interop.HwndSource;
-                    if (source != null && source.Handle != IntPtr.Zero)
-                    {
-                        IntPtr curFocus = NativeWnd.GetFocus();
-                        if (curFocus != source.Handle && !NativeWnd.IsChild(source.Handle, curFocus))
-                        {
-                            NativeWnd.SetFocus(source.Handle);
-                        }
-                    }
-                }
-                catch { }
+                MessageBox.Show("Open PowerPoint and select a slide before inserting a visual.", "Insert Image", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
             }
-        }
 
-        private void TxtInput_GotFocus(object sender, RoutedEventArgs e)
-        {
-            try
+            var dialog = new Microsoft.Win32.OpenFileDialog
             {
-                var source = System.Windows.PresentationSource.FromVisual(TxtInput) as System.Windows.Interop.HwndSource;
-                if (source != null && source.Handle != IntPtr.Zero)
-                {
-                    IntPtr curFocus = NativeWnd.GetFocus();
-                    if (curFocus != source.Handle && !NativeWnd.IsChild(source.Handle, curFocus))
-                    {
-                        NativeWnd.SetFocus(source.Handle);
-                    }
-                }
+                Title = "Insert Image into Active Slide",
+                Multiselect = false,
+                Filter = "Image files (*.png;*.jpg;*.jpeg;*.webp;*.bmp)|*.png;*.jpg;*.jpeg;*.webp;*.bmp|All files (*.*)|*.*"
+            };
+            if (dialog.ShowDialog() != true || string.IsNullOrWhiteSpace(dialog.FileName)) return;
+
+            string altText = Path.GetFileNameWithoutExtension(dialog.FileName);
+            if (MessageBox.Show(string.Format("Insert '{0}' into the active slide?\n\nAlt text: {1}", Path.GetFileName(dialog.FileName), altText),
+                "Review Image Insertion", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            if (_pptCtrl.InsertImageFromFile(dialog.FileName, altText))
+            {
+                ActionAuditStore.Instance.Record(
+                    "PowerPoint",
+                    "Insert image",
+                    "Active slide",
+                    Path.GetFileName(dialog.FileName),
+                    true,
+                    "Insert image",
+                    _currentDocumentKey,
+                    GetSelectedModelName(),
+                    dialog.FileName,
+                    "Image inserted");
             }
-            catch { }
+            else
+            {
+                MessageBox.Show("PowerPoint could not insert the selected image.", "Insert Image", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void TxtInput_KeyDown(object sender, KeyEventArgs e)
@@ -905,6 +1307,23 @@ namespace MistralOfficeAddin.UI
             {
                 e.Handled = true;
                 BtnSend_Click(sender, e);
+            }
+        }
+
+        public void FocusPromptInput()
+        {
+            try
+            {
+                if (TxtInput == null) return;
+                Dispatcher.BeginInvoke(new Action(delegate
+                {
+                    TxtInput.Focus();
+                    Keyboard.Focus(TxtInput);
+                }), DispatcherPriority.Input);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ChatSidebar.FocusPromptInput failed: {0}", ex.Message));
             }
         }
 

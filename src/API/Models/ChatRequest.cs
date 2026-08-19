@@ -57,7 +57,7 @@ namespace MistralOfficeAddin.API.Models
             }
         }
 
-        [JsonIgnore]
+        [JsonProperty("timestamp", NullValueHandling = NullValueHandling.Ignore)]
         public DateTime Timestamp
         {
             get { return _timestamp; }
@@ -91,7 +91,7 @@ namespace MistralOfficeAddin.API.Models
 
         private System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> _actions;
 
-        [JsonIgnore]
+        [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]
         public System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> Actions
         {
             get { return _actions; }

@@ -1,54 +1,40 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<customUI xmlns="http://schemas.microsoft.com/office/2009/07/customui">
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnRibbonLoad">
   <ribbon>
     <tabs>
       <tab id="tabMistralAI" label="AI Assistant">
         <group id="grpChat" label="Chat">
-          <button id="btnToggleSidebar" label="Open AI Chat" 
-                  imageMso="ReviewNewComment" size="large"
+          <button id="btnToggleSidebar" label="Open AI Chat"
+                  imageMso="FileOpen" size="large"
                   onAction="OnToggleSidebar"/>
-          <button id="btnNewChat" label="New Chat" 
+          <button id="btnNewChat" label="New Chat"
                   imageMso="FileNew" size="large"
                   onAction="OnNewChat"/>
+          <button id="btnSettings" label="Configure"
+                  imageMso="FileSave" size="large"
+                  onAction="OnOpenSettings"/>
         </group>
         <group id="grpDraft" label="Draft">
-          <button id="btnGenerate" label="Generate" 
-                  imageMso="AutoFormat" size="large"
+          <button id="btnGenerate" label="Generate"
+                  imageMso="Copy" size="large"
                   onAction="OnGenerate"/>
-          <button id="btnContinue" label="Continue Writing" 
-                  imageMso="ReviewNextChange" size="large"
+          <button id="btnContinue" label="Continue"
+                  imageMso="Paste" size="large"
                   onAction="OnContinueWriting"/>
-        </group>
-        <group id="grpEdit" label="Edit">
-          <button id="btnSummarize" label="Summarize" 
-                  imageMso="ViewOutlineView" size="large"
+          <button id="btnSummarize" label="Summarize"
+                  imageMso="Cut" size="large"
                   onAction="OnSummarize"/>
-          <button id="btnRewrite" label="Rewrite" 
-                  imageMso="ReviewTrackChanges" size="large"
+          <button id="btnRewrite" label="Rewrite"
+                  imageMso="Undo" size="large"
                   onAction="OnRewrite"/>
-          <button id="btnExpand" label="Expand" 
-                  imageMso="FontSizeIncrease" size="normal"
-                  onAction="OnExpand"/>
-          <button id="btnShorten" label="Shorten" 
-                  imageMso="FontSizeDecrease" size="normal"
-                  onAction="OnShorten"/>
-          <menu id="menuTranslate" label="Translate" 
-                imageMso="Translate" size="large">
-            <button id="btnTransTA" label="Tamil (தமிழ்)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransHI" label="Hindi (हिन्दी)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransTE" label="Telugu (తెలుగు)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransKN" label="Kannada (ಕನ್ನಡ)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransML" label="Malayalam (മലയാളം)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransBN" label="Bengali (বাংলা)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransMR" label="Marathi (मराठी)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransGU" label="Gujarati (ગુજરાતી)" imageMso="SetLanguage" onAction="OnTranslate"/>
-            <button id="btnTransEN" label="English" imageMso="SetLanguage" onAction="OnTranslate"/>
-          </menu>
         </group>
-        <group id="grpSettings" label="Settings">
-          <button id="btnSettings" label="Configure" 
-                  imageMso="PropertySheet" size="large"
-                  onAction="OnOpenSettings"/>
+        <group id="grpMore" label="More">
+          <button id="btnExpand" label="Expand" imageMso="Bold" size="normal" onAction="OnExpand"/>
+          <button id="btnShorten" label="Shorten" imageMso="Italic" size="normal" onAction="OnShorten"/>
+          <button id="btnOutline" label="Outline" imageMso="Redo" size="normal" onAction="OnOutline"/>
+          <button id="btnActionItems" label="Actions" imageMso="FileOpen" size="normal" onAction="OnActionItems"/>
+          <button id="btnReviewContent" label="Review" imageMso="FileNew" size="normal" onAction="OnReviewContent"/>
+          <button id="btnBuildDeck" label="Slides" imageMso="FileSave" size="normal" onAction="OnBuildSlides"/>
         </group>
       </tab>
     </tabs>

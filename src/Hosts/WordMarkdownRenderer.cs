@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
@@ -30,33 +29,9 @@ namespace MistralOfficeAddin.Hosts
 
             try
             {
-                // 1. Detect base font name and size from current selection or document Normal style
-                string docFont = "Calibri";
-                float docSize = 11.0f;
-
-                try
-                {
-                    if (app.Selection != null && app.Selection.Font != null)
-                    {
-                        string selFont = app.Selection.Font.Name;
-                        if (!string.IsNullOrWhiteSpace(selFont)) docFont = selFont;
-                        float selSize = app.Selection.Font.Size;
-                        if (selSize >= 4.0f && selSize <= 100.0f) docSize = selSize;
-                    }
-                    else if (app.ActiveDocument != null && app.ActiveDocument.Styles != null)
-                    {
-                        var normalStyle = app.ActiveDocument.Styles[Word.Enums.WdBuiltinStyle.wdStyleNormal];
-                        if (normalStyle != null && normalStyle.Font != null)
-                        {
-                            if (!string.IsNullOrWhiteSpace(normalStyle.Font.Name)) docFont = normalStyle.Font.Name;
-                            if (normalStyle.Font.Size >= 4.0f && normalStyle.Font.Size <= 100.0f) docSize = normalStyle.Font.Size;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warn(string.Format("Could not detect active font properties: {0}", ex.Message));
-                }
+                string docFont;
+                float docSize;
+                GetDocumentFont(app, out docFont, out docSize);
 
                 // 2. Parse markdown into AST using Markdig with advanced extensions (tables, etc.)
                 var pipeline = new MarkdownPipelineBuilder()
@@ -105,6 +80,236 @@ namespace MistralOfficeAddin.Hosts
                     app.ScreenUpdating = oldScreenUpdating;
                 }
                 catch { }
+            }
+        }
+
+        /// <summary>
+        /// True when Markdig recognizes at least one GitHub-flavored Markdown table.  This is a
+        /// pure parsing operation and can be used to decide whether a generated response should
+        /// be inserted as native Word table content.
+        /// </summary>
+        public static bool ContainsMarkdownTable(string markdown)
+        {
+            if (string.IsNullOrWhiteSpace(markdown)) return false;
+            try
+            {
+                var document = ParseMarkdown(markdown);
+                return FindFirstTable(document) != null;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Inserts the first Markdown table in <paramref name="markdown"/> as a real Word table.
+        /// When <paramref name="replaceSelection"/> is true, a selected source table is replaced;
+        /// an insertion point is always preserved.  Non-table surrounding prose is deliberately
+        /// not inserted by this helper.
+        /// </summary>
+        public static bool RenderFirstMarkdownTable(Word.Application app, string markdown, bool replaceSelection)
+        {
+            if (app == null || string.IsNullOrWhiteSpace(markdown)) return false;
+
+            try
+            {
+                var document = ParseMarkdown(markdown);
+                Table table = FindFirstTable(document);
+                if (table == null) return false;
+
+                string docFont;
+                float docSize;
+                GetDocumentFont(app, out docFont, out docSize);
+                Word.Range range = PrepareInsertionRange(app, replaceSelection);
+                if (range == null) return false;
+
+                bool rendered = RenderTable(app, range, table, docFont, docSize);
+                if (rendered) MoveSelectionToRangeEnd(app, range);
+                return rendered;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordMarkdownRenderer.RenderFirstMarkdownTable failed", ex);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Parses a tab-delimited plain-text grid without touching Word.  Pipe-delimited input
+        /// is also supported when it is not a Markdown table.  This gives the Word controller a
+        /// safe native-table path for selected text.
+        /// </summary>
+        public static bool TryParseDelimitedTable(string text, out List<string[]> rows)
+        {
+            rows = new List<string[]>();
+            if (string.IsNullOrWhiteSpace(text)) return false;
+
+            string normalized = text.Replace("\r\n", "\n").Replace('\r', '\n').Trim();
+            bool useTabs = normalized.IndexOf('\t') >= 0;
+            bool usePipes = !useTabs && normalized.IndexOf('|') >= 0;
+            if (!useTabs && !usePipes) return false;
+
+            string[] lines = normalized.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            int maxColumns = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string[] cells = useTabs
+                    ? lines[i].Split(new[] { '\t' })
+                    : SplitPipeDelimitedRow(lines[i]);
+                if (cells.Length < 2) return false;
+
+                for (int c = 0; c < cells.Length; c++) cells[c] = cells[c].Trim();
+                rows.Add(cells);
+                if (cells.Length > maxColumns) maxColumns = cells.Length;
+            }
+            return rows.Count > 0 && maxColumns > 1;
+        }
+
+        /// <summary>
+        /// Renders a tab- or pipe-delimited selection as a native Word table.  The parser is
+        /// intentionally separate so callers can preview/validate before mutating the document.
+        /// </summary>
+        public static bool RenderDelimitedTable(Word.Application app, string text, bool replaceSelection)
+        {
+            List<string[]> rows;
+            if (app == null || !TryParseDelimitedTable(text, out rows)) return false;
+
+            try
+            {
+                string docFont;
+                float docSize;
+                GetDocumentFont(app, out docFont, out docSize);
+                Word.Range range = PrepareInsertionRange(app, replaceSelection);
+                if (range == null) return false;
+
+                bool rendered = RenderStringTable(app, range, rows, docFont, docSize, true);
+                if (rendered) MoveSelectionToRangeEnd(app, range);
+                return rendered;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordMarkdownRenderer.RenderDelimitedTable failed", ex);
+                return false;
+            }
+        }
+
+        private static MarkdownDocument ParseMarkdown(string markdown)
+        {
+            var pipeline = new MarkdownPipelineBuilder()
+                .UseAdvancedExtensions()
+                .Build();
+            return Markdown.Parse(markdown ?? string.Empty, pipeline);
+        }
+
+        private static Table FindFirstTable(ContainerBlock container)
+        {
+            if (container == null) return null;
+            foreach (var block in container)
+            {
+                Table table = block as Table;
+                if (table != null) return table;
+
+                ContainerBlock childContainer = block as ContainerBlock;
+                if (childContainer != null)
+                {
+                    table = FindFirstTable(childContainer);
+                    if (table != null) return table;
+                }
+            }
+            return null;
+        }
+
+        private static string[] SplitPipeDelimitedRow(string line)
+        {
+            string working = (line ?? string.Empty).Trim();
+            if (working.StartsWith("|", StringComparison.Ordinal)) working = working.Substring(1);
+            if (working.EndsWith("|", StringComparison.Ordinal) && working.Length > 0)
+                working = working.Substring(0, working.Length - 1);
+
+            List<string> cells = new List<string>();
+            System.Text.StringBuilder current = new System.Text.StringBuilder();
+            bool escaped = false;
+            for (int i = 0; i < working.Length; i++)
+            {
+                char character = working[i];
+                if (escaped)
+                {
+                    current.Append(character);
+                    escaped = false;
+                }
+                else if (character == '\\')
+                {
+                    escaped = true;
+                }
+                else if (character == '|')
+                {
+                    cells.Add(current.ToString());
+                    current.Length = 0;
+                }
+                else
+                {
+                    current.Append(character);
+                }
+            }
+            if (escaped) current.Append('\\');
+            cells.Add(current.ToString());
+            return cells.ToArray();
+        }
+
+        private static Word.Range PrepareInsertionRange(Word.Application app, bool replaceSelection)
+        {
+            if (app == null || app.Selection == null || app.Selection.Range == null) return null;
+            Word.Range range = app.Selection.Range;
+            if (replaceSelection && app.Selection.Type != Word.Enums.WdSelectionType.wdSelectionIP)
+            {
+                range.Text = string.Empty;
+            }
+            else if (!replaceSelection && app.Selection.Type != Word.Enums.WdSelectionType.wdSelectionIP)
+            {
+                range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+            }
+            range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+            return range;
+        }
+
+        private static void MoveSelectionToRangeEnd(Word.Application app, Word.Range range)
+        {
+            try
+            {
+                if (app != null && app.Selection != null && range != null)
+                    app.Selection.SetRange(range.End, range.End);
+            }
+            catch { }
+        }
+
+        private static void GetDocumentFont(Word.Application app, out string docFont, out float docSize)
+        {
+            docFont = "Calibri";
+            docSize = 11.0f;
+            try
+            {
+                if (app != null && app.Selection != null && app.Selection.Font != null)
+                {
+                    string selFont = app.Selection.Font.Name;
+                    if (!string.IsNullOrWhiteSpace(selFont)) docFont = selFont;
+                    float selSize = app.Selection.Font.Size;
+                    if (selSize >= 4.0f && selSize <= 100.0f) docSize = selSize;
+                }
+                else if (app != null && app.ActiveDocument != null && app.ActiveDocument.Styles != null)
+                {
+                    var normalStyle = app.ActiveDocument.Styles[Word.Enums.WdBuiltinStyle.wdStyleNormal];
+                    if (normalStyle != null && normalStyle.Font != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(normalStyle.Font.Name)) docFont = normalStyle.Font.Name;
+                        if (normalStyle.Font.Size >= 4.0f && normalStyle.Font.Size <= 100.0f)
+                            docSize = normalStyle.Font.Size;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not detect active font properties: {0}", ex.Message));
             }
         }
 
@@ -277,7 +482,7 @@ namespace MistralOfficeAddin.Hosts
             catch { }
         }
 
-        private static void RenderTable(Word.Application app, Word.Range range, Table table, string docFont, float docSize)
+        private static bool RenderTable(Word.Application app, Word.Range range, Table table, string docFont, float docSize)
         {
             var rows = new List<TableRow>();
             int maxCols = 0;
@@ -291,10 +496,10 @@ namespace MistralOfficeAddin.Hosts
                 }
             }
 
-            if (rows.Count == 0 || maxCols == 0) return;
+            if (rows.Count == 0 || maxCols == 0) return false;
 
             var wordDoc = app.ActiveDocument;
-            if (wordDoc == null) return;
+            if (wordDoc == null) return false;
 
             Word.Table wordTable = null;
             try
@@ -305,7 +510,7 @@ namespace MistralOfficeAddin.Hosts
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("Failed to add Word table: {0}", ex.Message));
-                return;
+                return false;
             }
 
             for (int r = 0; r < rows.Count; r++)
@@ -331,6 +536,12 @@ namespace MistralOfficeAddin.Hosts
                         try
                         {
                             var cellRange = wordTable.Cell(r + 1, c + 1).Range;
+                            // A cell range includes Word's end-of-cell marker.  Do not render
+                            // into that marker or it can result in an extra paragraph/cell.
+                            if (cellRange.End > cellRange.Start)
+                                cellRange.End = cellRange.End - 1;
+                            cellRange.Text = string.Empty;
+                            cellRange.Collapse(Word.Enums.WdCollapseDirection.wdCollapseStart);
                             cellRange.Font.Name = docFont;
                             cellRange.Font.Size = docSize;
                             cellRange.Font.Bold = isHeader ? 1 : 0;
@@ -356,6 +567,70 @@ namespace MistralOfficeAddin.Hosts
                 range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
             }
             catch { }
+            return true;
+        }
+
+        private static bool RenderStringTable(Word.Application app, Word.Range range, List<string[]> rows,
+            string docFont, float docSize, bool firstRowIsHeader)
+        {
+            if (app == null || app.ActiveDocument == null || rows == null || rows.Count == 0) return false;
+
+            int maxColumns = 0;
+            for (int i = 0; i < rows.Count; i++)
+            {
+                if (rows[i] != null && rows[i].Length > maxColumns) maxColumns = rows[i].Length;
+            }
+            if (maxColumns <= 0) return false;
+
+            Word.Table wordTable;
+            try
+            {
+                wordTable = app.ActiveDocument.Tables.Add(range, rows.Count, maxColumns);
+                wordTable.Borders.Enable = 1;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Failed to add delimited Word table: {0}", ex.Message));
+                return false;
+            }
+
+            for (int r = 0; r < rows.Count; r++)
+            {
+                bool isHeader = firstRowIsHeader && r == 0;
+                if (isHeader)
+                {
+                    try
+                    {
+                        wordTable.Rows[r + 1].HeadingFormat = -1;
+                        wordTable.Rows[r + 1].Range.Font.Bold = 1;
+                    }
+                    catch { }
+                }
+
+                for (int c = 0; c < maxColumns; c++)
+                {
+                    string value = rows[r] != null && c < rows[r].Length ? rows[r][c] : string.Empty;
+                    try
+                    {
+                        Word.Range cellRange = wordTable.Cell(r + 1, c + 1).Range;
+                        if (cellRange.End > cellRange.Start) cellRange.End = cellRange.End - 1;
+                        cellRange.Text = value ?? string.Empty;
+                        cellRange.Font.Name = docFont;
+                        cellRange.Font.Size = docSize;
+                        cellRange.Font.Bold = isHeader ? 1 : 0;
+                    }
+                    catch { }
+                }
+            }
+
+            try
+            {
+                range.SetRange(wordTable.Range.End, wordTable.Range.End);
+                range.InsertParagraphAfter();
+                range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+            }
+            catch { }
+            return true;
         }
 
         private static void RenderCodeBlock(Word.Application app, Word.Range range, CodeBlock codeBlock, float docSize)

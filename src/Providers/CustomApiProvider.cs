@@ -68,7 +68,8 @@ namespace MistralOfficeAddin.Providers
                 request.Temperature,
                 request.MaxTokens,
                 request.Attachments,
-                ct).ConfigureAwait(false);
+                ct,
+                request.SystemPrompt).ConfigureAwait(false);
 
             return new AIResponse(content) { Model = request.Model };
         }
@@ -83,7 +84,8 @@ namespace MistralOfficeAddin.Providers
                 request.MaxTokens,
                 onDeltaReceived,
                 request.Attachments,
-                ct).ConfigureAwait(false);
+                ct,
+                request.SystemPrompt).ConfigureAwait(false);
         }
 
         public bool CheckVisionSupport(string model)

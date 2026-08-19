@@ -150,6 +150,62 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        public void OnOutline(object control)
+        {
+            try
+            {
+                _taskPaneManager.ExecutePrompt(
+                    "Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow.",
+                    "Outline");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnOutline error", ex);
+            }
+        }
+
+        public void OnActionItems(object control)
+        {
+            try
+            {
+                _taskPaneManager.ExecutePrompt(
+                    "Extract decisions, action items, owners where explicitly stated, deadlines where explicitly stated, and risks. Do not invent people or dates.",
+                    "Action Items");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnActionItems error", ex);
+            }
+        }
+
+        public void OnReviewContent(object control)
+        {
+            try
+            {
+                _taskPaneManager.ExecutePrompt(
+                    "Review the supplied content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, assess story flow and weak slides.",
+                    "Review Content");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnReviewContent error", ex);
+            }
+        }
+
+        public void OnBuildSlides(object control)
+        {
+            try
+            {
+                _taskPaneManager.ExecutePrompt(
+                    "Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide.",
+                    "Build Slides");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnBuildSlides error", ex);
+            }
+        }
+
         public void OnOpenSettings(object control)
         {
             try

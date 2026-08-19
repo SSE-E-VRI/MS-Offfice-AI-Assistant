@@ -136,7 +136,7 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
-        private static void EnsureResiliencyEnabled()
+        private static void ForceAddinConnected()
         {
             try
             {
@@ -144,17 +144,64 @@ namespace MistralOfficeAddin.Addin
                 string[] versions = new string[] { "14.0", "15.0", "16.0" };
                 using (var hkcu = Microsoft.Win32.Registry.CurrentUser)
                 {
-                    foreach (var ver in versions)
+                    foreach (var app in apps)
                     {
-                        foreach (var app in apps)
+                        WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\Addins\MistralAI.Addin", app));
+                        foreach (var ver in versions)
                         {
-                            string subPath = string.Format(@"Software\Microsoft\Office\{0}\{1}\Resiliency\DoNotDisableAddinList", ver, app);
-                            using (var dndKey = hkcu.OpenSubKey(subPath, true) ?? hkcu.CreateSubKey(subPath))
+                            WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\{1}\Addins\MistralAI.Addin", ver, app));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ForceAddinConnected failed: {0}", ex.Message));
+            }
+        }
+
+        private static void WriteAddinKey(Microsoft.Win32.RegistryKey hkcu, string path)
+        {
+            using (var addinKey = hkcu.CreateSubKey(path))
+            {
+                if (addinKey == null) return;
+                addinKey.SetValue("LoadBehavior", 3, Microsoft.Win32.RegistryValueKind.DWord);
+                addinKey.SetValue("FriendlyName", "MS Office AI Assistant");
+                addinKey.SetValue("Description", "MS Office AI Assistant for Word, Excel, and PowerPoint");
+                addinKey.SetValue("CommandLineSafe", 0, Microsoft.Win32.RegistryValueKind.DWord);
+            }
+        }
+
+        private static void EnsureResiliencyEnabled()
+        {
+            try
+            {
+                ForceAddinConnected();
+                string[] apps = new string[] { "Word", "Excel", "PowerPoint" };
+                string[] versions = new string[] { "14.0", "15.0", "16.0" };
+                using (var hkcu = Microsoft.Win32.Registry.CurrentUser)
+                {
+                    foreach (var app in apps)
+                    {
+                        foreach (var ver in versions)
+                        {
+                            string dndPath = string.Format(@"Software\Microsoft\Office\{0}\{1}\Resiliency\DoNotDisableAddinList", ver, app);
+                            using (var dndKey = hkcu.CreateSubKey(dndPath))
                             {
-                                if (dndKey != null && dndKey.GetValue("MistralAI.Addin") == null)
-                                {
+                                if (dndKey != null)
                                     dndKey.SetValue("MistralAI.Addin", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                            }
+
+                            string[] wipe = new string[] { "DisabledItems", "CrashingAddinList" };
+                            foreach (var sub in wipe)
+                            {
+                                try
+                                {
+                                    hkcu.DeleteSubKeyTree(
+                                        string.Format(@"Software\Microsoft\Office\{0}\{1}\Resiliency\{2}", ver, app, sub),
+                                        false);
                                 }
+                                catch { }
                             }
                         }
                     }
@@ -229,6 +276,10 @@ namespace MistralOfficeAddin.Addin
             }
             finally
             {
+                // Office soft-disables (LoadBehavior=2) after some failures. Keep the add-in
+                // connected for the next launch unless the user explicitly removed it.
+                if (RemoveMode != ext_DisconnectMode.ext_dm_UserClosed)
+                    ForceAddinConnected();
                 _appObj = null;
             }
         }
@@ -273,7 +324,7 @@ namespace MistralOfficeAddin.Addin
             try
             {
                 var assembly = Assembly.GetExecutingAssembly();
-                using (var stream = assembly.GetManifestResourceStream("MistralOfficeAddin.Addin.Ribbon.xml"))
+                using (var stream = assembly.GetManifestResourceStream("MSOfficeAIAssistant.Addin.Ribbon.xml"))
                 {
                     if (stream != null)
                     {
@@ -288,13 +339,13 @@ namespace MistralOfficeAddin.Addin
             }
 
             return @"<?xml version=""1.0"" encoding=""UTF-8""?>
-<customUI xmlns=""http://schemas.microsoft.com/office/2009/07/customui"">
+<customUI xmlns=""http://schemas.microsoft.com/office/2006/01/customui"" onLoad=""OnRibbonLoad"">
   <ribbon>
     <tabs>
       <tab id=""tabMistralAI"" label=""AI Assistant"">
         <group id=""grpChat"" label=""AI Chat"">
-          <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""ReviewNewComment"" size=""large"" onAction=""OnToggleSidebar""/>
-          <button id=""btnSettings"" label=""Configure"" imageMso=""PropertySheet"" size=""large"" onAction=""OnOpenSettings""/>
+          <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""FileOpen"" size=""large"" onAction=""OnToggleSidebar""/>
+          <button id=""btnSettings"" label=""Configure"" imageMso=""FileSave"" size=""large"" onAction=""OnOpenSettings""/>
         </group>
       </tab>
     </tabs>
@@ -329,6 +380,22 @@ namespace MistralOfficeAddin.Addin
         #endregion
 
         #region Ribbon Callback Dispatchers (called by Office via IDispatch)
+
+        /// <summary>
+        /// Ribbon onLoad callback. Confirms Office successfully parsed and loaded Ribbon.xml.
+        /// </summary>
+        public void OnRibbonLoad(object ribbonUI)
+        {
+            try
+            {
+                Logger.Info("OnRibbonLoad: AI Assistant ribbon UI loaded successfully.");
+                ForceAddinConnected();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnRibbonLoad error", ex);
+            }
+        }
 
         public void OnToggleSidebar(object control)
         {
@@ -382,6 +449,30 @@ namespace MistralOfficeAddin.Addin
         {
             try { if (_ribbonCallback != null) _ribbonCallback.OnTranslate(control); }
             catch (Exception ex) { Logger.Error("OnTranslate error", ex); }
+        }
+
+        public void OnOutline(object control)
+        {
+            try { if (_ribbonCallback != null) _ribbonCallback.OnOutline(control); }
+            catch (Exception ex) { Logger.Error("OnOutline error", ex); }
+        }
+
+        public void OnActionItems(object control)
+        {
+            try { if (_ribbonCallback != null) _ribbonCallback.OnActionItems(control); }
+            catch (Exception ex) { Logger.Error("OnActionItems error", ex); }
+        }
+
+        public void OnReviewContent(object control)
+        {
+            try { if (_ribbonCallback != null) _ribbonCallback.OnReviewContent(control); }
+            catch (Exception ex) { Logger.Error("OnReviewContent error", ex); }
+        }
+
+        public void OnBuildSlides(object control)
+        {
+            try { if (_ribbonCallback != null) _ribbonCallback.OnBuildSlides(control); }
+            catch (Exception ex) { Logger.Error("OnBuildSlides error", ex); }
         }
 
         public void OnOpenSettings(object control)

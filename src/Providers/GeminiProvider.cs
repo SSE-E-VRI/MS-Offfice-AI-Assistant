@@ -14,11 +14,73 @@ using Newtonsoft.Json.Linq;
 
 namespace MistralOfficeAddin.Providers
 {
+    public class GeminiPart
+    {
+        [JsonProperty("text", NullValueHandling = NullValueHandling.Ignore)]
+        public string Text { get; set; }
+
+        [JsonProperty("inlineData", NullValueHandling = NullValueHandling.Ignore)]
+        public GeminiInlineData InlineData { get; set; }
+    }
+
+    public class GeminiInlineData
+    {
+        [JsonProperty("mimeType")]
+        public string MimeType { get; set; }
+
+        [JsonProperty("data")]
+        public string Data { get; set; }
+    }
+
+    public class GeminiContent
+    {
+        [JsonProperty("role")]
+        public string Role { get; set; }
+
+        [JsonProperty("parts")]
+        public List<GeminiPart> Parts { get; set; }
+
+        public GeminiContent()
+        {
+            Parts = new List<GeminiPart>();
+        }
+    }
+
+    public class GeminiGenerationConfig
+    {
+        [JsonProperty("maxOutputTokens")]
+        public int MaxOutputTokens { get; set; }
+    }
+
+    public class GeminiSystemInstruction
+    {
+        [JsonProperty("parts")]
+        public List<GeminiPart> Parts { get; set; }
+
+        public GeminiSystemInstruction()
+        {
+            Parts = new List<GeminiPart>();
+        }
+    }
+
+    public class GeminiRequestPayload
+    {
+        [JsonProperty("contents")]
+        public List<GeminiContent> Contents { get; set; }
+
+        [JsonProperty("generationConfig", NullValueHandling = NullValueHandling.Ignore)]
+        public GeminiGenerationConfig GenerationConfig { get; set; }
+
+        [JsonProperty("systemInstruction", NullValueHandling = NullValueHandling.Ignore)]
+        public GeminiSystemInstruction SystemInstruction { get; set; }
+    }
+
     public class GeminiProvider : IAIProvider
     {
         private const string DefaultBaseUrl = "https://generativelanguage.googleapis.com";
         private readonly string _apiKey;
         private readonly string _baseUrl;
+        private readonly string _testModel;
         private readonly HttpClient _httpClient;
         private bool _disposed;
 
@@ -39,10 +101,11 @@ namespace MistralOfficeAddin.Providers
             }
         }
 
-        public GeminiProvider(string apiKey, string baseUrl = null)
+        public GeminiProvider(string apiKey, string baseUrl = null, string testModel = null)
         {
             _apiKey = apiKey ?? string.Empty;
             _baseUrl = !string.IsNullOrWhiteSpace(baseUrl) ? baseUrl.TrimEnd('/') : DefaultBaseUrl;
+            _testModel = CleanModelId(testModel);
 
             var handler = new HttpClientHandler
             {
@@ -54,27 +117,17 @@ namespace MistralOfficeAddin.Providers
                 Timeout = TimeSpan.FromSeconds(120)
             };
             _httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            if (!string.IsNullOrWhiteSpace(_apiKey))
+            {
+                _httpClient.DefaultRequestHeaders.TryAddWithoutValidation("x-goog-api-key", _apiKey);
+            }
         }
 
         public async Task<bool> TestConnectionAsync(CancellationToken ct = default(CancellationToken))
         {
             try
             {
-                string url = string.Format("{0}/v1beta/models?key={1}", _baseUrl, Uri.EscapeDataString(_apiKey));
-                using (var resp = await _httpClient.GetAsync(url, ct).ConfigureAwait(false))
-                {
-                    if (resp.IsSuccessStatusCode)
-                    {
-                        return true;
-                    }
-
-                    string errBody = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
-                    Logger.Warn(string.Format("GeminiProvider: TestConnection failed HTTP {0}: {1}", (int)resp.StatusCode, errBody));
-                    throw new AIException(
-                        string.Format("HTTP {0} ({1}): {2}", (int)resp.StatusCode, resp.ReasonPhrase, errBody),
-                        AIProviderType.Gemini,
-                        (int)resp.StatusCode);
-                }
+                return await CanGenerateWithModelAsync(_testModel, ct).ConfigureAwait(false);
             }
             catch (AIException)
             {
@@ -85,6 +138,34 @@ namespace MistralOfficeAddin.Providers
                 Logger.Error("GeminiProvider: TestConnection exception", ex);
                 throw new AIException(ex.Message, AIProviderType.Gemini, 0, ex);
             }
+        }
+
+        /// <summary>
+        /// Returns only models this API key can actually call. Model listing alone does not
+        /// guarantee free-tier or project-level generation access.
+        /// </summary>
+        public async Task<List<AIModelInfo>> FindWorkingModelsAsync(CancellationToken ct = default(CancellationToken))
+        {
+            var available = await ListModelsAsync(ct).ConfigureAwait(false);
+            var working = new List<AIModelInfo>();
+
+            foreach (var model in available)
+            {
+                ct.ThrowIfCancellationRequested();
+                try
+                {
+                    if (await CanGenerateWithModelAsync(model.Id, ct).ConfigureAwait(false))
+                    {
+                        working.Add(model);
+                    }
+                }
+                catch (AIException)
+                {
+                    // Try the next model; access and free-tier availability are key-specific.
+                }
+            }
+
+            return working;
         }
 
         public async Task<List<AIModelInfo>> ListModelsAsync(CancellationToken ct = default(CancellationToken))
@@ -118,7 +199,7 @@ namespace MistralOfficeAddin.Providers
                                             if ((string)method == "generateContent") canGenerate = true;
                                         }
                                     }
-                                    if (canGenerate)
+                                    if (canGenerate && modelId.StartsWith("gemini", StringComparison.OrdinalIgnoreCase))
                                     {
                                         list.Add(new AIModelInfo(modelId, dispName, CheckVisionSupport(modelId)));
                                     }
@@ -135,10 +216,7 @@ namespace MistralOfficeAddin.Providers
 
             if (list.Count == 0)
             {
-                list.Add(new AIModelInfo("gemini-2.5-flash", "gemini-2.5-flash", true));
-                list.Add(new AIModelInfo("gemini-2.5-pro", "gemini-2.5-pro", true));
-                list.Add(new AIModelInfo("gemini-1.5-flash", "gemini-1.5-flash", true));
-                list.Add(new AIModelInfo("gemini-1.5-pro", "gemini-1.5-pro", true));
+                list.Add(new AIModelInfo("gemini-3.6-flash", "gemini-3.6-flash (Recommended)", true));
             }
 
             return list;
@@ -153,7 +231,7 @@ namespace MistralOfficeAddin.Providers
                 _baseUrl, Uri.EscapeDataString(modelId), Uri.EscapeDataString(_apiKey));
 
             var payload = BuildGeminiPayload(request);
-            string json = JsonConvert.SerializeObject(payload);
+            string json = JsonConvert.SerializeObject(payload, Formatting.None);
 
             using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
             using (var resp = await _httpClient.PostAsync(url, content, ct).ConfigureAwait(false))
@@ -168,11 +246,26 @@ namespace MistralOfficeAddin.Providers
                 int code = (int)resp.StatusCode;
                 string err = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
                 Logger.Warn(string.Format("Gemini API error (HTTP {0}): {1}", code, err));
-                throw new AIException(string.Format("Gemini API returned HTTP {0} ({1}). Check log for details.", code, resp.ReasonPhrase), AIProviderType.Gemini, code);
+                throw new AIException(string.Format("Gemini API returned HTTP {0}: {1}", code, err), AIProviderType.Gemini, code);
             }
         }
 
         public async Task StreamChatAsync(AIRequest request, Action<string> onDeltaReceived, CancellationToken ct = default(CancellationToken))
+        {
+            if (request == null) throw new ArgumentNullException("request");
+            if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
+
+            // Gemini's SSE connection can remain open without a terminal event on some
+            // free-tier models. Use the standard generateContent endpoint so the Office UI
+            // always receives a completed response instead of waiting indefinitely.
+            var completeResponse = await ChatAsync(request, ct).ConfigureAwait(false);
+            if (completeResponse != null && !string.IsNullOrEmpty(completeResponse.Content))
+            {
+                onDeltaReceived(completeResponse.Content);
+            }
+        }
+
+        private async Task StreamChatViaSseAsync(AIRequest request, Action<string> onDeltaReceived, CancellationToken ct)
         {
             if (request == null) throw new ArgumentNullException("request");
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
@@ -182,7 +275,7 @@ namespace MistralOfficeAddin.Providers
                 _baseUrl, Uri.EscapeDataString(modelId), Uri.EscapeDataString(_apiKey));
 
             var payload = BuildGeminiPayload(request);
-            string json = JsonConvert.SerializeObject(payload);
+            string json = JsonConvert.SerializeObject(payload, Formatting.None);
 
             var reqMessage = new HttpRequestMessage(HttpMethod.Post, url)
             {
@@ -196,7 +289,7 @@ namespace MistralOfficeAddin.Providers
                     int statusCode = (int)response.StatusCode;
                     string errorBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                     Logger.Warn(string.Format("Gemini streaming error (HTTP {0}): {1}", statusCode, errorBody));
-                    throw new AIException(string.Format("Gemini streaming returned HTTP {0} ({1}). Check log for details.", statusCode, response.ReasonPhrase), AIProviderType.Gemini, statusCode);
+                    throw new AIException(string.Format("Gemini streaming returned HTTP {0}: {1}", statusCode, errorBody), AIProviderType.Gemini, statusCode);
                 }
 
                 using (var stream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false))
@@ -231,88 +324,146 @@ namespace MistralOfficeAddin.Providers
 
         private static string CleanModelId(string model)
         {
-            if (string.IsNullOrWhiteSpace(model)) return "gemini-1.5-flash";
+            if (string.IsNullOrWhiteSpace(model)) return "gemini-3.6-flash";
             model = model.Trim();
             if (model.StartsWith("models/")) return model.Substring(7);
             return model;
         }
 
-        private object BuildGeminiPayload(AIRequest request)
+        private async Task<bool> CanGenerateWithModelAsync(string model, CancellationToken ct)
         {
-            var contents = new List<object>();
+            string modelId = CleanModelId(model);
+            string url = string.Format("{0}/v1beta/models/{1}:generateContent?key={2}",
+                _baseUrl, Uri.EscapeDataString(modelId), Uri.EscapeDataString(_apiKey));
 
-            foreach (var m in request.Messages)
+            var payload = new GeminiRequestPayload
             {
-                if (m.IsSystem) continue; // Passed via systemInstruction
-
-                string role = m.IsUser ? "user" : "model";
-                var parts = new List<object>();
-
-                if (!string.IsNullOrEmpty(m.Content))
+                Contents = new List<GeminiContent>
                 {
-                    parts.Add(new { text = m.Content });
+                    new GeminiContent
+                    {
+                        Role = "user",
+                        Parts = new List<GeminiPart> { new GeminiPart { Text = "Reply with OK." } }
+                    }
+                },
+                GenerationConfig = new GeminiGenerationConfig { MaxOutputTokens = 16 }
+            };
+
+            string json = JsonConvert.SerializeObject(payload, Formatting.None);
+            using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
+            using (var resp = await _httpClient.PostAsync(url, content, ct).ConfigureAwait(false))
+            {
+                if (resp.IsSuccessStatusCode) return true;
+
+                string error = await resp.Content.ReadAsStringAsync().ConfigureAwait(false);
+                Logger.Warn(string.Format("GeminiProvider: Model {0} cannot generate (HTTP {1}): {2}", modelId, (int)resp.StatusCode, error));
+                throw new AIException(
+                    string.Format("Gemini model {0} returned HTTP {1}: {2}", modelId, (int)resp.StatusCode, error),
+                    AIProviderType.Gemini,
+                    (int)resp.StatusCode);
+            }
+        }
+
+        private GeminiRequestPayload BuildGeminiPayload(AIRequest request)
+        {
+            var contents = new List<GeminiContent>();
+            string systemPrompt = request.SystemPrompt;
+
+            if (request.Messages != null)
+            {
+                foreach (var m in request.Messages)
+                {
+                    if (m.IsSystem)
+                    {
+                        if (string.IsNullOrWhiteSpace(systemPrompt))
+                        {
+                            systemPrompt = m.Content;
+                        }
+                        continue;
+                    }
+
+                    string role = m.IsUser ? "user" : "model";
+                    var parts = new List<GeminiPart>();
+
+                    if (!string.IsNullOrEmpty(m.Content))
+                    {
+                        parts.Add(new GeminiPart { Text = m.Content });
+                    }
+
+                    contents.Add(new GeminiContent
+                    {
+                        Role = role,
+                        Parts = parts
+                    });
+                }
+            }
+
+            // Append active image attachments to last user content block
+            if (request.Attachments != null && request.Attachments.Count > 0)
+            {
+                var lastUserBlock = contents.FindLast(c => c.Role == "user");
+                if (lastUserBlock == null)
+                {
+                    lastUserBlock = new GeminiContent { Role = "user" };
+                    contents.Add(lastUserBlock);
                 }
 
-                contents.Add(new
+                foreach (var att in request.Attachments)
                 {
-                    role = role,
-                    parts = parts
+                    if (att.IsImage && att.RawBytes != null && att.RawBytes.Length > 0)
+                    {
+                        lastUserBlock.Parts.Add(new GeminiPart
+                        {
+                            InlineData = new GeminiInlineData
+                            {
+                                MimeType = !string.IsNullOrWhiteSpace(att.ContentType) ? att.ContentType : "image/jpeg",
+                                Data = Convert.ToBase64String(att.RawBytes)
+                            }
+                        });
+                    }
+                }
+            }
+
+            // Ensure every content block has at least one part (Gemini API requires non-empty parts)
+            foreach (var c in contents)
+            {
+                if (c.Parts.Count == 0)
+                {
+                    c.Parts.Add(new GeminiPart { Text = " " });
+                }
+            }
+
+            // If contents is completely empty, add a default user message
+            if (contents.Count == 0)
+            {
+                contents.Add(new GeminiContent
+                {
+                    Role = "user",
+                    Parts = new List<GeminiPart> { new GeminiPart { Text = "Hello" } }
                 });
             }
 
-            // Append active image attachments to last user content block if present
-            if (request.Attachments != null && request.Attachments.Count > 0)
+            var payload = new GeminiRequestPayload
             {
-                var lastUserBlock = contents.FindLast(c => ((dynamic)c).role == "user");
-                if (lastUserBlock != null)
+                Contents = contents,
+                GenerationConfig = new GeminiGenerationConfig
                 {
-                    var partsList = (List<object>)((dynamic)lastUserBlock).parts;
-                    foreach (var att in request.Attachments)
-                    {
-                        if (att.IsImage && att.RawBytes != null && att.RawBytes.Length > 0)
-                        {
-                            partsList.Add(new
-                            {
-                                inlineData = new
-                                {
-                                    mimeType = !string.IsNullOrWhiteSpace(att.ContentType) ? att.ContentType : "image/jpeg",
-                                    data = Convert.ToBase64String(att.RawBytes)
-                                }
-                            });
-                        }
-                    }
+                    MaxOutputTokens = request.MaxTokens > 0 ? request.MaxTokens : 4096
                 }
-            }
-
-            var generationConfig = new
-            {
-                temperature = request.Temperature,
-                maxOutputTokens = request.MaxTokens > 0 ? request.MaxTokens : 4096
             };
 
-            if (!string.IsNullOrWhiteSpace(request.SystemPrompt))
+            if (!string.IsNullOrWhiteSpace(systemPrompt))
             {
-                var systemInstruction = new
+                payload.SystemInstruction = new GeminiSystemInstruction
                 {
-                    parts = new object[]
+                    Parts = new List<GeminiPart>
                     {
-                        new { text = request.SystemPrompt }
+                        new GeminiPart { Text = systemPrompt }
                     }
                 };
-
-                return new
-                {
-                    contents = contents,
-                    generationConfig = generationConfig,
-                    systemInstruction = systemInstruction
-                };
             }
 
-            return new
-            {
-                contents = contents,
-                generationConfig = generationConfig
-            };
+            return payload;
         }
 
         private static string ExtractTextFromGeminiResponse(string json)

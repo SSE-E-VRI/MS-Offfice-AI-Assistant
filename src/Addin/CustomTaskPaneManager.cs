@@ -127,6 +127,7 @@ namespace MistralOfficeAddin.Addin
             this.Name = "TaskPaneControl";
             this.Size = new System.Drawing.Size(380, 700);
             this.BackColor = System.Drawing.Color.FromArgb(0xFA, 0xFA, 0xFA);
+            this.TabStop = true;
             this.ResumeLayout(false);
 
             // Schedule sidebar creation on the UI message pump once the handle is created
@@ -217,6 +218,7 @@ namespace MistralOfficeAddin.Addin
                     _elementHost = new ElementHost();
                     _elementHost.Dock = DockStyle.Fill;
                     _elementHost.Name = "elementHost";
+                    _elementHost.TabStop = true;
 
                     _wpfSidebar = new ChatSidebar();
                     _elementHost.Child = _wpfSidebar;
@@ -245,34 +247,9 @@ namespace MistralOfficeAddin.Addin
 
         protected override void WndProc(ref Message m)
         {
-            const int WM_MOUSEACTIVATE = 0x0021;
-            const int WM_SETFOCUS = 0x0007;
-            const int MA_ACTIVATE = 1;
-
-            if (m.Msg == WM_MOUSEACTIVATE)
-            {
-                m.Result = new IntPtr(MA_ACTIVATE);
-                if (_elementHost != null && _elementHost.IsHandleCreated)
-                {
-                    IntPtr curFocus = MistralOfficeAddin.UI.NativeWnd.GetFocus();
-                    if (curFocus != _elementHost.Handle && !MistralOfficeAddin.UI.NativeWnd.IsChild(_elementHost.Handle, curFocus))
-                    {
-                        MistralOfficeAddin.UI.NativeWnd.SetFocus(_elementHost.Handle);
-                    }
-                }
-                return;
-            }
-            if (m.Msg == WM_SETFOCUS)
-            {
-                if (_elementHost != null && _elementHost.IsHandleCreated)
-                {
-                    IntPtr curFocus = MistralOfficeAddin.UI.NativeWnd.GetFocus();
-                    if (curFocus != _elementHost.Handle && !MistralOfficeAddin.UI.NativeWnd.IsChild(_elementHost.Handle, curFocus))
-                    {
-                        MistralOfficeAddin.UI.NativeWnd.SetFocus(_elementHost.Handle);
-                    }
-                }
-            }
+            // Let Windows Forms and ElementHost forward focus and keyboard messages to the
+            // hosted WPF controls. Forcing focus to ElementHost here prevents Excel from
+            // giving the WPF TextBox a real editable keyboard focus.
             base.WndProc(ref m);
         }
 
@@ -373,8 +350,10 @@ namespace MistralOfficeAddin.Addin
             {
                 try
                 {
+                    _wpfSidebar = null;
                     if (_elementHost != null)
                     {
+                        _elementHost.Child = null;
                         _elementHost.Dispose();
                         _elementHost = null;
                     }
@@ -482,6 +461,7 @@ namespace MistralOfficeAddin.Addin
                 {
                     _floatingWindow.Show();
                     _floatingWindow.Activate();
+                    _floatingWindow.FocusPromptInput();
                 }
                 return;
             }
@@ -514,6 +494,7 @@ namespace MistralOfficeAddin.Addin
             {
                 _floatingWindow.Show();
                 _floatingWindow.Activate();
+                _floatingWindow.FocusPromptInput();
                 return;
             }
 
@@ -579,11 +560,24 @@ namespace MistralOfficeAddin.Addin
 
         private void CreateAndShowPane()
         {
-            // Word 2010 cannot CoCreate the .NET ActiveX CTP control. Dock as a
-            // child of the document window on the right (Navigation-pane style).
-            if (ShowDockedPane())
-                return;
+            // Excel 2010 hosts the managed ActiveX task-pane control but does not reliably
+            // paint the ElementHost child (it appears as a blank white pane). Use the native
+            // child-window docked host first so Excel retains a right-side assistant pane.
+            // A top-level WPF window remains only as the final fallback.
+            if (RequiresFloatingExcel2010Host())
+            {
+                Logger.Info("Using manually docked AI chat host for Excel 2010 compatibility.");
+                if (ShowDockedPane())
+                    return;
 
+                Logger.Warn("Excel 2010 docked host was unavailable; using floating AI chat fallback.");
+                ShowFloatingWindowFallback();
+                return;
+            }
+
+            // Prefer Office's native Custom Task Pane whenever its factory is available.
+            // Excel supplies this factory and its native pane correctly routes keyboard focus
+            // into ElementHost. The manually parented docked pane is a fallback only.
             TryHealActiveXRegistration();
 
             if (_ctpFactoryObj != null)
@@ -635,11 +629,32 @@ namespace MistralOfficeAddin.Addin
             }
             else
             {
-                Logger.Warn("CTP Factory is null; using floating window fallback.");
+                Logger.Warn("CTP Factory is null; trying docked-pane fallback.");
             }
 
-            // Graceful fallback to floating window
+            // Use the manually docked pane only when Office cannot create a native CTP.
+            if (ShowDockedPane())
+                return;
+
+            // Final fallback to a standalone WPF window.
             ShowFloatingWindowFallback();
+        }
+
+        private bool RequiresFloatingExcel2010Host()
+        {
+            if (!string.Equals(_hostType, "Excel", StringComparison.OrdinalIgnoreCase)) return false;
+            try
+            {
+                dynamic app = _appObj;
+                string version = app != null ? Convert.ToString(app.Version) : string.Empty;
+                return version != null && version.StartsWith("14.", StringComparison.Ordinal);
+            }
+            catch
+            {
+                // The compatibility fallback is limited to an explicitly identified Excel host;
+                // if the version cannot be read, keep the normal native-pane path.
+                return false;
+            }
         }
 
         private bool ShowDockedPane()
@@ -674,6 +689,7 @@ namespace MistralOfficeAddin.Addin
                     _dockedPane.AttachToHostWindow(hwnd);
                 }
 
+                _dockedPane.FocusPromptInput();
                 Logger.Info("Docked assistant pane shown on the right of the document window.");
                 return true;
             }
@@ -778,6 +794,7 @@ namespace MistralOfficeAddin.Addin
                 }
                 _floatingWindow.Show();
                 _floatingWindow.Activate();
+                _floatingWindow.FocusPromptInput();
             }
             catch (Exception ex)
             {

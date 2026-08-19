@@ -58,3 +58,4 @@ foreach ($ver in $versions) {
 Write-Host "`n============================================================" -ForegroundColor Green
 Write-Host "  [SUCCESS] AI Assistant Add-in completely uninstalled.     " -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+exit 0

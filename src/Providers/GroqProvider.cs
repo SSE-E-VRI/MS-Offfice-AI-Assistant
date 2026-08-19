@@ -8,8 +8,9 @@ namespace MistralOfficeAddin.Providers
 {
     public class GroqProvider : IAIProvider
     {
-        private const string GroqBaseUrl = "https://api.groq.com/openai/v1";
+        private const string DefaultBaseUrl = "https://api.groq.com/openai/v1";
         private readonly string _apiKey;
+        private readonly string _testModel;
         private readonly OpenAICompatibleClient _client;
         private bool _disposed;
 
@@ -30,33 +31,44 @@ namespace MistralOfficeAddin.Providers
             }
         }
 
-        public GroqProvider(string apiKey)
+        public GroqProvider(string apiKey, string baseUrl = null, string testModel = null)
         {
             _apiKey = apiKey ?? string.Empty;
-            _client = new OpenAICompatibleClient(GroqBaseUrl, _apiKey, AIProviderType.Groq);
+            _testModel = !string.IsNullOrWhiteSpace(testModel) ? testModel.Trim() : "openai/gpt-oss-20b";
+            string endpoint = !string.IsNullOrWhiteSpace(baseUrl) ? baseUrl.TrimEnd('/') : DefaultBaseUrl;
+            _client = new OpenAICompatibleClient(endpoint, _apiKey, AIProviderType.Groq);
         }
 
         public async Task<bool> TestConnectionAsync(CancellationToken ct = default(CancellationToken))
         {
-            return await _client.TestConnectionAsync("llama-3.1-8b-instant", ct).ConfigureAwait(false);
+            return await _client.TestConnectionAsync(_testModel, ct).ConfigureAwait(false);
         }
 
         public async Task<List<AIModelInfo>> ListModelsAsync(CancellationToken ct = default(CancellationToken))
         {
             var list = await _client.ListModelsAsync(ct).ConfigureAwait(false);
-            if (list == null || list.Count == 0)
+            if (list != null && list.Count > 0)
             {
-                list = new List<AIModelInfo>
+                var filtered = new List<AIModelInfo>();
+                foreach (var m in list)
                 {
-                    new AIModelInfo("llama-3.3-70b-versatile", "llama-3.3-70b-versatile (Recommended)", false),
-                    new AIModelInfo("llama-3.1-8b-instant", "llama-3.1-8b-instant (Fast)", false),
-                    new AIModelInfo("llama-3.2-11b-vision-preview", "llama-3.2-11b-vision-preview (Vision)", true),
-                    new AIModelInfo("llama-3.2-90b-vision-preview", "llama-3.2-90b-vision-preview (Vision)", true),
-                    new AIModelInfo("mixtral-8x7b-32768", "mixtral-8x7b-32768", false),
-                    new AIModelInfo("gemma2-9b-it", "gemma2-9b-it", false)
-                };
+                    if (m.Id.IndexOf("whisper", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        m.Id.IndexOf("tts", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                        m.Id.IndexOf("embed", StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        continue;
+                    }
+                    filtered.Add(m);
+                }
+                if (filtered.Count > 0) return filtered;
             }
-            return list;
+
+            return new List<AIModelInfo>
+            {
+                new AIModelInfo("openai/gpt-oss-20b", "openai/gpt-oss-20b (Fast)", false),
+                new AIModelInfo("openai/gpt-oss-120b", "openai/gpt-oss-120b (Recommended)", false),
+                new AIModelInfo("qwen/qwen3.6-27b", "qwen/qwen3.6-27b", false)
+            };
         }
 
         public async Task<AIResponse> ChatAsync(AIRequest request, CancellationToken ct = default(CancellationToken))
@@ -68,7 +80,8 @@ namespace MistralOfficeAddin.Providers
                 request.Temperature,
                 request.MaxTokens,
                 request.Attachments,
-                ct).ConfigureAwait(false);
+                ct,
+                request.SystemPrompt).ConfigureAwait(false);
 
             return new AIResponse(content) { Model = request.Model };
         }
@@ -83,7 +96,8 @@ namespace MistralOfficeAddin.Providers
                 request.MaxTokens,
                 onDeltaReceived,
                 request.Attachments,
-                ct).ConfigureAwait(false);
+                ct,
+                request.SystemPrompt).ConfigureAwait(false);
         }
 
         public bool CheckVisionSupport(string model)

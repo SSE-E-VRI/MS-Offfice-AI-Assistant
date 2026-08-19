@@ -9,6 +9,7 @@ namespace MistralOfficeAddin.Hosts
     public class ExcelController
     {
         private readonly object _rawAppObj;
+        private static readonly Regex ExcelNameRegex = new Regex(@"^[A-Za-z_][A-Za-z0-9_]{0,249}$", RegexOptions.Compiled);
 
         public ExcelController(object appObj)
         {
@@ -17,16 +18,7 @@ namespace MistralOfficeAddin.Hosts
 
         public static string IndexToColumnLetter(int colIndex)
         {
-            if (colIndex <= 0) return "A";
-            int div = colIndex;
-            string colLetter = string.Empty;
-            while (div > 0)
-            {
-                int mod = (div - 1) % 26;
-                colLetter = (char)(65 + mod) + colLetter;
-                div = (div - mod) / 26;
-            }
-            return colLetter;
+            return SpreadsheetActionParser.IndexToColumnLetter(colIndex);
         }
 
         public string GetSelectedRangeValues()
@@ -217,21 +209,32 @@ namespace MistralOfficeAddin.Hosts
 
         public bool ApplySpreadsheetAction(SpreadsheetAction action)
         {
-            if (action == null || string.IsNullOrWhiteSpace(action.Target))
+            if (action == null || !SpreadsheetActionParser.IsSafeTarget(action.Target))
                 return false;
 
             try
             {
                 dynamic app = _rawAppObj;
-                if (app == null || app.ActiveSheet == null)
+                if (app == null)
                 {
                     action.Status = SpreadsheetActionStatus.Error;
                     action.ErrorMessage = "No active Excel worksheet found.";
                     return false;
                 }
 
-                dynamic ws = app.ActiveSheet;
-                dynamic targetRange = ws.Range(action.Target);
+                dynamic ws = null;
+                try { ws = app.ActiveSheet; } catch { }
+                if (ws == null)
+                {
+                    action.Status = SpreadsheetActionStatus.Error;
+                    action.ErrorMessage = "No active Excel worksheet found.";
+                    return false;
+                }
+
+                EnsureWorksheetEditable(ws);
+
+                dynamic targetRange = null;
+                try { targetRange = ws.Range(action.Target); } catch { }
                 if (targetRange == null)
                 {
                     action.Status = SpreadsheetActionStatus.Error;
@@ -240,67 +243,76 @@ namespace MistralOfficeAddin.Hosts
                 }
 
                 action.Status = SpreadsheetActionStatus.Applying;
+                action.ErrorMessage = string.Empty;
+                action.ResultText = string.Empty;
+                string result;
 
                 switch (action.Type)
                 {
                     case SpreadsheetActionType.Formula:
-                        string formula = action.Content.Trim();
-                        if (!formula.StartsWith("=")) formula = "=" + formula;
-                        targetRange.Formula = formula;
-
-                        // Read evaluated calculation result
-                        string evalResult = "";
-                        try
-                        {
-                            evalResult = Convert.ToString(targetRange.Text) ?? Convert.ToString(targetRange.Value2);
-                        }
-                        catch { }
-
-                        action.ResultText = !string.IsNullOrEmpty(evalResult) ? evalResult : "OK";
-                        action.Status = SpreadsheetActionStatus.Applied;
-                        Logger.Info(string.Format("Applied formula '{0}' to {1}. Evaluated value: {2}", formula, action.Target, evalResult));
-                        return true;
+                        targetRange.Formula = EnsureFormula(action.Content);
+                        result = ReadRangeResult(targetRange);
+                        break;
 
                     case SpreadsheetActionType.FillDown:
-                        string fillFormula = action.Content.Trim();
-                        if (!fillFormula.StartsWith("=")) fillFormula = "=" + fillFormula;
-                        targetRange.Formula = fillFormula;
-
-                        action.ResultText = string.Format("Filled {0}", action.Target);
-                        action.Status = SpreadsheetActionStatus.Applied;
-                        Logger.Info(string.Format("Applied filldown formula '{0}' to range {1}", fillFormula, action.Target));
-                        return true;
+                        ApplyFillDown(targetRange, action.Content);
+                        result = string.Format("Filled {0}", action.Target);
+                        break;
 
                     case SpreadsheetActionType.Table:
-                        var tableRows = ParseMarkdownOrCsvTable(action.Content);
-                        if (tableRows.Count > 0)
-                        {
-                            int startRow = Convert.ToInt32(targetRange.Row);
-                            int startCol = Convert.ToInt32(targetRange.Column);
+                        WriteTable(ws, targetRange, action.Content);
+                        result = "Table written";
+                        break;
 
-                            for (int r = 0; r < tableRows.Count; r++)
-                            {
-                                var row = tableRows[r];
-                                for (int c = 0; c < row.Count; c++)
-                                {
-                                    try
-                                    {
-                                        ws.Cells[startRow + r, startCol + c].Value2 = row[c];
-                                    }
-                                    catch { }
-                                }
-                            }
-                        }
-                        action.ResultText = "Table Written";
-                        action.Status = SpreadsheetActionStatus.Applied;
-                        return true;
-
-                    default: // Value
+                    case SpreadsheetActionType.Value:
                         targetRange.Value2 = action.Content;
-                        action.ResultText = action.Content;
-                        action.Status = SpreadsheetActionStatus.Applied;
-                        return true;
+                        result = "Value written";
+                        break;
+
+                    case SpreadsheetActionType.CreateTable:
+                        result = CreateExcelTable(ws, targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.ConditionalFormat:
+                        result = ApplyConditionalFormatting(targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.Sort:
+                        result = ApplySort(ws, targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.Filter:
+                        result = ApplyFilter(targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.DataValidation:
+                        result = ApplyDataValidation(targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.Chart:
+                        result = CreateChart(ws, targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.PivotTable:
+                        result = CreatePivotTable(app, ws, targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.NamedRange:
+                        result = CreateNamedRange(app, ws, targetRange, action.Content);
+                        break;
+
+                    case SpreadsheetActionType.RemoveDuplicates:
+                        result = RemoveDuplicates(targetRange, action.Content);
+                        break;
+
+                    default:
+                        throw new InvalidOperationException("Unsupported spreadsheet action type.");
                 }
+
+                action.ResultText = result;
+                action.Status = SpreadsheetActionStatus.Applied;
+                Logger.Info(string.Format("Applied {0} to {1}: {2}", action.Type, action.Target, result));
+                return true;
             }
             catch (Exception ex)
             {
@@ -311,6 +323,405 @@ namespace MistralOfficeAddin.Hosts
             }
         }
 
+        public bool UndoLastAction()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null) return false;
+                app.Undo();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ExcelController.UndoLastAction failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public string CreatePreviewDescription(SpreadsheetAction action)
+        {
+            if (action == null) return "No spreadsheet action is available.";
+            string description = string.IsNullOrWhiteSpace(action.Description) ? "No additional description provided." : action.Description;
+            return string.Format("Excel will apply {0} to {1}.\n\nDescription: {2}\n\nConfiguration:\n{3}",
+                action.Type, action.Target, description, action.Content ?? string.Empty);
+        }
+
+        private static string EnsureFormula(string content)
+        {
+            string formula = (content ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(formula)) throw new InvalidOperationException("A formula is required.");
+            return formula.StartsWith("=") ? formula : "=" + formula;
+        }
+
+        private static void EnsureWorksheetEditable(dynamic worksheet)
+        {
+            try
+            {
+                if (worksheet != null && Convert.ToBoolean(worksheet.ProtectContents))
+                    throw new InvalidOperationException("The active worksheet is protected. Unprotect it before applying AI changes.");
+            }
+            catch (InvalidOperationException) { throw; }
+            catch { }
+        }
+
+        private static int GetRangeRows(dynamic range)
+        {
+            try { return Convert.ToInt32(range.Rows.Count); } catch { return 0; }
+        }
+
+        private static int GetRangeColumns(dynamic range)
+        {
+            try { return Convert.ToInt32(range.Columns.Count); } catch { return 0; }
+        }
+
+        private static string ReadRangeResult(dynamic range)
+        {
+            try
+            {
+                string result = Convert.ToString(range.Text);
+                if (!string.IsNullOrWhiteSpace(result)) return result;
+                result = Convert.ToString(range.Value2);
+                return string.IsNullOrWhiteSpace(result) ? "Formula applied" : result;
+            }
+            catch { return "Formula applied"; }
+        }
+
+        private static void ApplyFillDown(dynamic targetRange, string content)
+        {
+            if (GetRangeRows(targetRange) < 1) throw new InvalidOperationException("Fill-down requires a valid range.");
+            dynamic firstRow = targetRange.Rows[1];
+            firstRow.Formula = EnsureFormula(content);
+            if (GetRangeRows(targetRange) > 1) targetRange.FillDown();
+        }
+
+        private void WriteTable(dynamic worksheet, dynamic targetRange, string content)
+        {
+            var tableRows = ParseMarkdownOrCsvTable(content);
+            if (tableRows.Count == 0) throw new InvalidOperationException("The table action did not contain a Markdown table.");
+
+            int startRow = Convert.ToInt32(targetRange.Row);
+            int startCol = Convert.ToInt32(targetRange.Column);
+            int targetRows = GetRangeRows(targetRange);
+            int targetCols = GetRangeColumns(targetRange);
+
+            // If target is a single cell (1x1), reject multi-cell table writes without explicit multi-cell range
+            if (targetRows == 1 && targetCols == 1 && (tableRows.Count > 1 || (tableRows.Count > 0 && tableRows[0].Count > 1)))
+            {
+                int endRowAdvised = startRow + tableRows.Count - 1;
+                int endColAdvised = startCol + tableRows[0].Count - 1;
+                throw new InvalidOperationException(string.Format(
+                    "Target is a single cell, but the table contains {0} rows × {1} columns. Declare a bounded multi-cell range (for example {2}) to apply this table.",
+                    tableRows.Count,
+                    tableRows[0].Count,
+                    SpreadsheetActionParser.BuildRangeAddress(startCol, startRow, endColAdvised, endRowAdvised)));
+            }
+
+            // If a multi-cell range was explicitly declared (e.g. A1:B2), clip write to that extent.
+            bool isExplicitBoundedRange = targetRows > 1 || targetCols > 1;
+            int maxRowsToWrite = isExplicitBoundedRange ? Math.Min(tableRows.Count, targetRows) : tableRows.Count;
+            int maxColsToWrite = isExplicitBoundedRange ? targetCols : 0;
+            if (!isExplicitBoundedRange)
+            {
+                for (int r = 0; r < maxRowsToWrite; r++)
+                {
+                    if (tableRows[r].Count > maxColsToWrite) maxColsToWrite = tableRows[r].Count;
+                }
+            }
+
+            int endRow = startRow + maxRowsToWrite - 1;
+            int endCol = startCol + Math.Max(1, maxColsToWrite) - 1;
+
+            if (!SpreadsheetActionParser.IsSafeRangeBounds(startCol, startRow, endCol, endRow))
+            {
+                throw new InvalidOperationException(string.Format(
+                    "The generated table extent ({0}) exceeds Excel safe bounds or cell count limits.",
+                    SpreadsheetActionParser.BuildRangeAddress(startCol, startRow, endCol, endRow)));
+            }
+
+            int totalCells = 0;
+            for (int r = 0; r < maxRowsToWrite; r++)
+            {
+                var row = tableRows[r];
+                int colsInRow = isExplicitBoundedRange ? Math.Min(row.Count, targetCols) : row.Count;
+                for (int c = 0; c < colsInRow; c++)
+                {
+                    totalCells++;
+                    if (totalCells > 100000) throw new InvalidOperationException("The generated table is too large to apply safely.");
+                    worksheet.Cells[startRow + r, startCol + c].Value2 = row[c];
+                }
+            }
+        }
+
+        private static string CreateExcelTable(dynamic worksheet, dynamic targetRange, string content)
+        {
+            int rows = GetRangeRows(targetRange);
+            int columns = GetRangeColumns(targetRange);
+            if (rows < 2 || columns < 1) throw new InvalidOperationException("An Excel Table requires a header row and at least one data row.");
+            EnsureUniqueNonBlankHeaders(targetRange, columns);
+
+            dynamic tables = worksheet.ListObjects;
+            dynamic table = tables.Add(1, targetRange, Type.Missing, 1, Type.Missing, Type.Missing);
+            string requestedName = GetNamedOption(content, "name");
+            if (!string.IsNullOrWhiteSpace(requestedName))
+            {
+                if (!IsSafeExcelName(requestedName)) throw new InvalidOperationException("The requested Excel Table name is invalid.");
+                table.Name = requestedName;
+            }
+            return string.IsNullOrWhiteSpace(requestedName) ? "Excel Table created" : "Excel Table created: " + requestedName;
+        }
+
+        private static void EnsureUniqueNonBlankHeaders(dynamic targetRange, int columns)
+        {
+            var headers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int column = 1; column <= columns; column++)
+            {
+                string header = Convert.ToString(targetRange.Cells[1, column].Value2);
+                if (string.IsNullOrWhiteSpace(header)) throw new InvalidOperationException("Excel Table headers cannot be blank.");
+                if (!headers.Add(header.Trim())) throw new InvalidOperationException("Excel Table headers must be unique.");
+            }
+        }
+
+        private static string ApplyConditionalFormatting(dynamic targetRange, string content)
+        {
+            string rule = (content ?? string.Empty).Trim().ToLowerInvariant();
+            dynamic formats = targetRange.FormatConditions;
+            if (rule == "" || rule == "color_scale" || rule == "colorscale")
+            {
+                formats.AddColorScale(3);
+                return "Three-color scale added";
+            }
+            if (rule == "data_bar" || rule == "databar")
+            {
+                formats.AddDatabar();
+                return "Data bar added";
+            }
+
+            string criterion = GetValueAfterPrefix(content, "greater_than");
+            int comparison = 5; // xlGreater
+            if (string.IsNullOrWhiteSpace(criterion))
+            {
+                criterion = GetValueAfterPrefix(content, "less_than");
+                comparison = 6; // xlLess
+            }
+            if (string.IsNullOrWhiteSpace(criterion))
+            {
+                criterion = GetValueAfterPrefix(content, "equal_to");
+                comparison = 3; // xlEqual
+            }
+            if (string.IsNullOrWhiteSpace(criterion))
+                throw new InvalidOperationException("Use color_scale, data_bar, greater_than:value, less_than:value, or equal_to:value for conditional formatting.");
+
+            dynamic condition = formats.Add(1, comparison, criterion);
+            try { condition.Interior.Color = 13551615; } catch { }
+            return "Conditional formatting rule added";
+        }
+
+        private static string ApplySort(dynamic worksheet, dynamic targetRange, string content)
+        {
+            int rows = GetRangeRows(targetRange);
+            int columns = GetRangeColumns(targetRange);
+            if (rows < 2 || columns < 1) throw new InvalidOperationException("Sort requires a header row and at least one data row.");
+
+            int field = GetIntegerOption(content, "field", 1);
+            if (field < 1 || field > columns) throw new InvalidOperationException("The requested sort field is outside the target range.");
+            bool descending = string.Equals(GetNamedOption(content, "direction"), "descending", StringComparison.OrdinalIgnoreCase) ||
+                              string.Equals((content ?? string.Empty).Trim(), "descending", StringComparison.OrdinalIgnoreCase);
+            dynamic sort = worksheet.Sort;
+            sort.SortFields.Clear();
+            sort.SortFields.Add(targetRange.Columns[field], 0, descending ? 2 : 1, Type.Missing, 0);
+            sort.SetRange(targetRange);
+            sort.Header = 1; // xlYes
+            sort.MatchCase = false;
+            sort.Orientation = 1; // xlTopToBottom
+            sort.Apply();
+            return descending ? "Sorted descending" : "Sorted ascending";
+        }
+
+        private static string ApplyFilter(dynamic targetRange, string content)
+        {
+            int rows = GetRangeRows(targetRange);
+            int columns = GetRangeColumns(targetRange);
+            if (rows < 2 || columns < 1) throw new InvalidOperationException("Filter requires a header row and at least one data row.");
+
+            int field = GetIntegerOption(content, "field", 1);
+            string criteria = GetNamedOption(content, "criteria");
+            if (field < 1 || field > columns || string.IsNullOrWhiteSpace(criteria))
+                throw new InvalidOperationException("Filter requires a valid field number and criteria (for example field:2;criteria:Open).");
+            targetRange.AutoFilter(field, criteria, Type.Missing, Type.Missing, true);
+            return string.Format("Filter applied to field {0}", field);
+        }
+
+        private static string ApplyDataValidation(dynamic targetRange, string content)
+        {
+            string specification = (content ?? string.Empty).Trim();
+            string listValues = GetValueAfterPrefix(specification, "list");
+            dynamic validation = targetRange.Validation;
+            validation.Delete();
+            if (!string.IsNullOrWhiteSpace(listValues))
+            {
+                if (listValues.Length > 255) throw new InvalidOperationException("An inline validation list cannot exceed 255 characters.");
+                validation.Add(3, 1, 1, listValues, Type.Missing); // list, stop, between
+                return "List validation applied";
+            }
+
+            string wholeNumbers = GetValueAfterPrefix(specification, "whole_number");
+            string decimals = GetValueAfterPrefix(specification, "decimal");
+            string dates = GetValueAfterPrefix(specification, "date");
+            string rangeValues = !string.IsNullOrWhiteSpace(wholeNumbers) ? wholeNumbers : (!string.IsNullOrWhiteSpace(decimals) ? decimals : dates);
+            if (string.IsNullOrWhiteSpace(rangeValues))
+                throw new InvalidOperationException("Use list:values, whole_number:min,max, decimal:min,max, or date:start,end for data validation.");
+            string[] bounds = rangeValues.Split(',');
+            if (bounds.Length != 2) throw new InvalidOperationException("Range validation requires a minimum and maximum value.");
+            int validationType = !string.IsNullOrWhiteSpace(wholeNumbers) ? 1 : (!string.IsNullOrWhiteSpace(decimals) ? 2 : 4);
+            validation.Add(validationType, 1, 1, bounds[0].Trim(), bounds[1].Trim());
+            return "Data validation applied";
+        }
+
+        private static string CreateChart(dynamic worksheet, dynamic targetRange, string content)
+        {
+            if (GetRangeRows(targetRange) < 2 || GetRangeColumns(targetRange) < 1)
+                throw new InvalidOperationException("A chart requires a header row and data.");
+            string chartType = (content ?? string.Empty).Trim().ToLowerInvariant();
+            int excelChartType = chartType == "line" ? 4 : (chartType == "pie" ? 5 : (chartType == "bar" ? 57 : 51));
+            double left = Convert.ToDouble(targetRange.Left) + Convert.ToDouble(targetRange.Width) + 18;
+            double top = Convert.ToDouble(targetRange.Top);
+            dynamic chartObject = worksheet.ChartObjects().Add(left, top, 420, 260);
+            chartObject.Chart.SetSourceData(targetRange);
+            chartObject.Chart.ChartType = excelChartType;
+            return "Chart created";
+        }
+
+        private static string CreatePivotTable(dynamic app, dynamic worksheet, dynamic targetRange, string content)
+        {
+            if (GetRangeRows(targetRange) < 2 || GetRangeColumns(targetRange) < 2)
+                throw new InvalidOperationException("A PivotTable requires a tabular source with headers and data.");
+            EnsureUniqueNonBlankHeaders(targetRange, GetRangeColumns(targetRange));
+            string destinationAddress = GetNamedOption(content, "destination");
+            if (!SpreadsheetActionParser.IsSafeTarget(destinationAddress) || destinationAddress.IndexOf(':') >= 0)
+                throw new InvalidOperationException("PivotTable requires a single, bounded destination cell (for example destination:H2).");
+            dynamic destination = worksheet.Range(destinationAddress);
+            if (!string.IsNullOrWhiteSpace(Convert.ToString(destination.Value2)))
+                throw new InvalidOperationException("The PivotTable destination cell must be empty.");
+            if (RangesOverlap(targetRange, destination))
+                throw new InvalidOperationException("The PivotTable destination cannot overlap its source data.");
+
+            string sourceAddress = string.Format("'{0}'!{1}", Convert.ToString(worksheet.Name).Replace("'", "''"), Convert.ToString(targetRange.Address));
+            dynamic workbook = app.ActiveWorkbook;
+            dynamic cache = workbook.PivotCaches().Create(1, sourceAddress);
+            string pivotName = GetNamedOption(content, "name");
+            if (!IsSafeExcelName(pivotName)) pivotName = "AIPivot" + DateTime.UtcNow.Ticks.ToString();
+            cache.CreatePivotTable(destination, pivotName);
+            return "PivotTable created: " + pivotName;
+        }
+
+        private static string CreateNamedRange(dynamic app, dynamic worksheet, dynamic targetRange, string content)
+        {
+            string name = GetNamedOption(content, "name");
+            if (!IsSafeExcelName(name)) throw new InvalidOperationException("Named ranges must start with a letter or underscore and cannot look like a cell address.");
+            dynamic workbook = app.ActiveWorkbook;
+            try
+            {
+                dynamic existing = workbook.Names.Item(name);
+                if (existing != null) throw new InvalidOperationException("A workbook name with that name already exists.");
+            }
+            catch (InvalidOperationException) { throw; }
+            catch { }
+            workbook.Names.Add(name, targetRange);
+            return "Named range created: " + name;
+        }
+
+        private static string RemoveDuplicates(dynamic targetRange, string content)
+        {
+            int columns = GetRangeColumns(targetRange);
+            int rows = GetRangeRows(targetRange);
+            if (rows < 2 || columns < 1) throw new InvalidOperationException("Remove duplicates requires a header row and at least one data row.");
+            List<int> selectedColumns = ParseColumnList(GetNamedOption(content, "columns"), columns);
+            if (selectedColumns.Count == 0) selectedColumns.Add(1);
+            object[] fields = new object[selectedColumns.Count];
+            for (int i = 0; i < selectedColumns.Count; i++) fields[i] = selectedColumns[i];
+            bool noHeader = string.Equals(GetNamedOption(content, "header"), "no", StringComparison.OrdinalIgnoreCase);
+            targetRange.RemoveDuplicates(fields, noHeader ? 2 : 1);
+            return "Duplicate rows removed";
+        }
+
+        private static bool RangesOverlap(dynamic first, dynamic second)
+        {
+            int firstTop = Convert.ToInt32(first.Row);
+            int firstLeft = Convert.ToInt32(first.Column);
+            int firstBottom = firstTop + GetRangeRows(first) - 1;
+            int firstRight = firstLeft + GetRangeColumns(first) - 1;
+            int secondTop = Convert.ToInt32(second.Row);
+            int secondLeft = Convert.ToInt32(second.Column);
+            int secondBottom = secondTop + GetRangeRows(second) - 1;
+            int secondRight = secondLeft + GetRangeColumns(second) - 1;
+            return firstTop <= secondBottom && secondTop <= firstBottom && firstLeft <= secondRight && secondLeft <= firstRight;
+        }
+
+        private static Dictionary<string, string> ParseOptions(string content)
+        {
+            var options = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            string text = (content ?? string.Empty).Trim();
+            if (text.Length == 0) return options;
+            string[] segments = text.Split(new[] { ';', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string rawSegment in segments)
+            {
+                string segment = rawSegment.Trim();
+                int separator = segment.IndexOf(':');
+                if (separator < 0) separator = segment.IndexOf('=');
+                if (separator > 0)
+                    options[segment.Substring(0, separator).Trim()] = segment.Substring(separator + 1).Trim();
+                else if (!options.ContainsKey("value"))
+                    options["value"] = segment;
+            }
+            return options;
+        }
+
+        private static string GetNamedOption(string content, string key)
+        {
+            Dictionary<string, string> options = ParseOptions(content);
+            string value;
+            if (options.TryGetValue(key, out value)) return value;
+            if (options.TryGetValue("value", out value)) return value;
+            return string.Empty;
+        }
+
+        private static int GetIntegerOption(string content, string key, int fallback)
+        {
+            int result;
+            return int.TryParse(GetNamedOption(content, key), out result) ? result : fallback;
+        }
+
+        private static string GetValueAfterPrefix(string content, string prefix)
+        {
+            Dictionary<string, string> options = ParseOptions(content);
+            string value;
+            return options.TryGetValue(prefix, out value) ? value : string.Empty;
+        }
+
+        private static bool IsSafeExcelName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || !ExcelNameRegex.IsMatch(value.Trim())) return false;
+            return !SpreadsheetActionParser.IsSafeTarget(value.Trim()) &&
+                   !string.Equals(value.Trim(), "R", StringComparison.OrdinalIgnoreCase) &&
+                   !string.Equals(value.Trim(), "C", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static List<int> ParseColumnList(string value, int maximum)
+        {
+            var columns = new List<int>();
+            if (string.IsNullOrWhiteSpace(value)) return columns;
+            string[] pieces = value.Split(',');
+            foreach (string piece in pieces)
+            {
+                int number;
+                if (!int.TryParse(piece.Trim(), out number) || number < 1 || number > maximum)
+                    throw new InvalidOperationException("Each duplicate-removal column must be inside the target range.");
+                if (!columns.Contains(number)) columns.Add(number);
+            }
+            return columns;
+        }
+
         public void InsertText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
@@ -318,6 +729,7 @@ namespace MistralOfficeAddin.Hosts
             {
                 dynamic app = _rawAppObj;
                 if (app == null) return;
+                EnsureWorksheetEditable(app.ActiveSheet);
 
                 string targetCellAddress;
                 string valueToInsert = ExtractCleanExcelContent(text, out targetCellAddress);
@@ -325,6 +737,8 @@ namespace MistralOfficeAddin.Hosts
                 dynamic targetRange = null;
                 if (!string.IsNullOrEmpty(targetCellAddress))
                 {
+                    if (!SpreadsheetActionParser.IsSafeTarget(targetCellAddress))
+                        throw new InvalidOperationException(string.Format("Target address '{0}' is unsafe or outside Excel boundaries.", targetCellAddress));
                     try { targetRange = app.ActiveSheet.Range(targetCellAddress); } catch { }
                 }
 
@@ -342,30 +756,29 @@ namespace MistralOfficeAddin.Hosts
                 // 1. If value is an Excel formula, write Formula property
                 if (valueToInsert.StartsWith("=") && !valueToInsert.Contains("\n"))
                 {
+                    // Guard against filling an entire multi-cell selection with a single formula
+                    if (GetRangeRows(targetRange) > 1 || GetRangeColumns(targetRange) > 1)
+                    {
+                        try
+                        {
+                            if (app.ActiveCell != null) targetRange = app.ActiveCell;
+                            else targetRange = targetRange.Cells[1, 1];
+                        }
+                        catch
+                        {
+                            targetRange = targetRange.Cells[1, 1];
+                        }
+                    }
                     targetRange.Formula = valueToInsert;
                     return;
                 }
 
-                // 2. If text contains a markdown table (| Col 1 | Col 2 |), parse into cells
+                // 2. If text contains a markdown table (| Col 1 | Col 2 |), route through WriteTable
                 var tableRows = ParseMarkdownOrCsvTable(valueToInsert);
                 if (tableRows.Count > 0)
                 {
-                    int startRow = Convert.ToInt32(targetRange.Row);
-                    int startCol = Convert.ToInt32(targetRange.Column);
                     dynamic ws = targetRange.Worksheet;
-
-                    for (int r = 0; r < tableRows.Count; r++)
-                    {
-                        var row = tableRows[r];
-                        for (int c = 0; c < row.Count; c++)
-                        {
-                            try
-                            {
-                                ws.Cells[startRow + r, startCol + c].Value2 = row[c];
-                            }
-                            catch { }
-                        }
-                    }
+                    WriteTable(ws, targetRange, valueToInsert);
                     return;
                 }
 

@@ -99,7 +99,7 @@
                             <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="6,5" IsEditable="True"/>
                             <Button x:Name="BtnDiscoverModels" Grid.Column="1" Content="Discover" 
                                     Background="#E0E7FF" Foreground="#3730A3" Click="BtnDiscoverModels_Click"
-                                    ToolTip="Fetch supported models from provider API"/>
+                                    ToolTip="For Gemini, verifies which models this API key can use"/>
                         </Grid>
 
                         <!-- Custom Headers Panel (Visible only for Custom API) -->

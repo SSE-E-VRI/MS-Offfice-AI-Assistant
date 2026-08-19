@@ -1,11 +1,11 @@
 ; Inno Setup 6 Script for AI Assistant Office Add-in (32-bit / x86)
 ; Target: 32-bit Microsoft Office (Word, Excel, PowerPoint)
 
-#define MyAppName "AI Assistant Office Add-in (32-bit)"
-#define MyAppVersion "0.3.0"
+#define MyAppName "MS Office AI Assistant (32-bit)"
+#define MyAppVersion "0.4.0"
 #define MyAppPublisher "D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302"
 #define MyAppURL ""
-#define MyAppExeName "MistralOfficeAddin.dll"
+#define MyAppExeName "MSOfficeAIAssistant.dll"
 
 [Setup]
 AppId={{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}
@@ -35,18 +35,18 @@ Source: "..\bin\x86\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Registry]
 ; Word Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Excel Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; PowerPoint Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Task pane ActiveX (Office CreateCTP requires HKLM CLSID + Control categories)
@@ -58,11 +58,11 @@ Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B
 
 [Run]
 ; Register COM Server via 32-bit RegAsm
-Filename: "{dotnet4032}\regasm.exe"; Parameters: "/codebase ""{app}\MistralOfficeAddin.dll"""; StatusMsg: "Registering 32-bit COM components..."; Flags: runhidden
+Filename: "{dotnet4032}\regasm.exe"; Parameters: "/codebase ""{app}\MSOfficeAIAssistant.dll"""; StatusMsg: "Registering 32-bit COM components..."; Flags: runhidden
 
 [UninstallRun]
 ; Unregister COM Server
-Filename: "{dotnet4032}\regasm.exe"; Parameters: "/unregister ""{app}\MistralOfficeAddin.dll"""; StatusMsg: "Unregistering COM components..."; Flags: runhidden
+Filename: "{dotnet4032}\regasm.exe"; Parameters: "/unregister ""{app}\MSOfficeAIAssistant.dll"""; StatusMsg: "Unregistering 32-bit COM components..."; Flags: runhidden
 
 [Code]
 // Check .NET Framework 4.8 requirement

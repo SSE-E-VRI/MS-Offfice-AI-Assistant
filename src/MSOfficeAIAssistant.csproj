@@ -7,8 +7,8 @@
     <ProjectGuid>{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}</ProjectGuid>
     <OutputType>Library</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>MistralOfficeAddin</RootNamespace>
-    <AssemblyName>MistralOfficeAddin</AssemblyName>
+    <RootNamespace>MSOfficeAIAssistant</RootNamespace>
+    <AssemblyName>MSOfficeAIAssistant</AssemblyName>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <ProjectTypeGuids>{60dc8134-eba5-43b8-bcc9-bb4bc16c2548};{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}</ProjectTypeGuids>
@@ -183,9 +183,11 @@
     <Compile Include="Attachments\AttachmentExtractor.cs" />
     <Compile Include="Core\ConfigManager.cs" />
     <Compile Include="Core\ConversationStore.cs" />
+    <Compile Include="Core\ActionAuditStore.cs" />
     <Compile Include="Core\VersionDetector.cs" />
     <Compile Include="Core\Logger.cs" />
     <Compile Include="Core\SpreadsheetAction.cs" />
+    <Compile Include="Core\PowerPointActionParser.cs" />
     <Compile Include="Hosts\WordController.cs" />
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />
     <Compile Include="Hosts\ExcelController.cs" />
@@ -219,6 +221,6 @@
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="CopyAddinConfig" AfterTargets="Build">
-    <Copy SourceFiles="$(ProjectDir)app.config" DestinationFiles="$(OutputPath)MistralOfficeAddin.dll.config" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)app.config" DestinationFiles="$(OutputPath)MSOfficeAIAssistant.dll.config" SkipUnchangedFiles="true" />
   </Target>
 </Project>

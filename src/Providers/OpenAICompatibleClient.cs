@@ -167,6 +167,11 @@ namespace MistralOfficeAddin.Providers
                             }
                         }
                     }
+                    else
+                    {
+                        string errBody = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+                        Logger.Warn(string.Format("OpenAICompatibleClient: ListModelsAsync failed HTTP {0}: {1}", (int)response.StatusCode, errBody));
+                    }
                 }
             }
             catch (Exception ex)
@@ -182,9 +187,19 @@ namespace MistralOfficeAddin.Providers
             double temperature,
             int maxTokens,
             bool stream,
-            List<AttachmentBlock> attachments = null)
+            List<AttachmentBlock> attachments = null,
+            string systemPrompt = null)
         {
             var messagePayloads = new List<object>();
+
+            if (!string.IsNullOrWhiteSpace(systemPrompt))
+            {
+                bool hasSystemMessage = messages != null && messages.Any(m => m.IsSystem);
+                if (!hasSystemMessage)
+                {
+                    messagePayloads.Add(new { role = "system", content = systemPrompt });
+                }
+            }
 
             if (messages != null)
             {
@@ -246,8 +261,8 @@ namespace MistralOfficeAddin.Providers
             {
                 model = model,
                 messages = messagePayloads,
-                temperature = temperature,
-                max_tokens = maxTokens,
+                temperature = Math.Max(0.0, Math.Min(2.0, temperature)),
+                max_tokens = maxTokens > 0 ? maxTokens : 4096,
                 stream = stream
             };
         }
@@ -258,10 +273,11 @@ namespace MistralOfficeAddin.Providers
             double temperature,
             int maxTokens,
             List<AttachmentBlock> attachments = null,
-            CancellationToken ct = default(CancellationToken))
+            CancellationToken ct = default(CancellationToken),
+            string systemPrompt = null)
         {
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, false, attachments);
+            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, false, attachments, systemPrompt);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -298,7 +314,7 @@ namespace MistralOfficeAddin.Providers
                         else
                         {
                             throw new AIException(
-                                string.Format("{0} API returned HTTP {1} ({2}). Check log for details.", _providerType, statusCode, response.ReasonPhrase),
+                                string.Format("{0} returned HTTP {1}: {2}", _providerType, statusCode, errorBody),
                                 _providerType,
                                 statusCode);
                         }
@@ -327,12 +343,13 @@ namespace MistralOfficeAddin.Providers
             int maxTokens,
             Action<string> onDeltaReceived,
             List<AttachmentBlock> attachments = null,
-            CancellationToken ct = default(CancellationToken))
+            CancellationToken ct = default(CancellationToken),
+            string systemPrompt = null)
         {
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
 
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, true, attachments);
+            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, true, attachments, systemPrompt);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -364,7 +381,7 @@ namespace MistralOfficeAddin.Providers
                             else
                             {
                                 throw new AIException(
-                                    string.Format("{0} streaming returned HTTP {1} ({2}). Check log for details.", _providerType, statusCode, response.ReasonPhrase),
+                                    string.Format("{0} streaming returned HTTP {1}: {2}", _providerType, statusCode, errorBody),
                                     _providerType,
                                     statusCode);
                             }
@@ -384,11 +401,11 @@ namespace MistralOfficeAddin.Providers
                                     bool isDone;
                                     if (StreamingParser.TryParseLine(line, out delta, out isDone))
                                     {
-                                        if (isDone) break;
                                         if (!string.IsNullOrEmpty(delta))
                                         {
-                                             onDeltaReceived(delta);
+                                            onDeltaReceived(delta);
                                         }
+                                        if (isDone) break;
                                     }
                                 }
                             }

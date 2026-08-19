@@ -1,5 +1,7 @@
 using System;
 using System.Windows;
+using System.Windows.Forms.Integration;
+using System.Windows.Interop;
 using MistralOfficeAddin.Core;
 
 namespace MistralOfficeAddin.UI
@@ -27,9 +29,21 @@ namespace MistralOfficeAddin.UI
             this.MinHeight = 450;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
             this.Background = System.Windows.Media.Brushes.White;
+            this.ShowActivated = true;
 
             _sidebar = new ChatSidebar();
             this.Content = _sidebar;
+
+            try
+            {
+                // Excel 2010 owns the native message loop. This bridge is required for a
+                // modeless WPF window to receive keyboard input while Excel remains active.
+                ElementHost.EnableModelessKeyboardInterop(this);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ChatFloatingWindow keyboard interop setup failed: {0}", ex.Message));
+            }
         }
 
         public void InitializeHost(object appObj, string hostType)
@@ -39,6 +53,12 @@ namespace MistralOfficeAddin.UI
                 if (_sidebar != null)
                 {
                     _sidebar.InitializeHost(appObj, hostType);
+                }
+
+                IntPtr hostWindow = OfficeDockedPane.ResolveHostHwnd(appObj);
+                if (hostWindow != IntPtr.Zero)
+                {
+                    new WindowInteropHelper(this).Owner = hostWindow;
                 }
             }
             catch (Exception ex)
@@ -74,6 +94,18 @@ namespace MistralOfficeAddin.UI
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("ChatFloatingWindow.StartNewChat error: {0}", ex.Message));
+            }
+        }
+
+        public void FocusPromptInput()
+        {
+            try
+            {
+                if (_sidebar != null) _sidebar.FocusPromptInput();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ChatFloatingWindow.FocusPromptInput error: {0}", ex.Message));
             }
         }
     }

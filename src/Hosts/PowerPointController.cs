@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Xml;
 using MistralOfficeAddin.Core;
 
 namespace MistralOfficeAddin.Hosts
@@ -15,15 +17,28 @@ namespace MistralOfficeAddin.Hosts
             _rawAppObj = appObj;
         }
 
-        private class SlideData
-        {
-            public string Title { get; set; }
-            public List<string> Bullets { get; set; }
-            public string SpeakerNotes { get; set; }
 
-            public SlideData()
+
+        private dynamic GetActivePresentation(bool createIfNone)
+        {
+            if (_rawAppObj == null) return null;
+            try
             {
-                Bullets = new List<string>();
+                dynamic app = _rawAppObj;
+                dynamic presentation = null;
+                try { presentation = app.ActivePresentation; } catch { }
+                if (presentation == null && createIfNone)
+                {
+                    // msoTrue is -1.  Passing the explicit value avoids relying on
+                    // the COM coercion of msoCTrue (1) when a presentation window is created.
+                    try { presentation = app.Presentations.Add(-1); } catch { }
+                }
+                return presentation;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetActivePresentation failed: {0}", ex.Message));
+                return null;
             }
         }
 
@@ -33,7 +48,10 @@ namespace MistralOfficeAddin.Hosts
             try
             {
                 dynamic app = _rawAppObj;
-                dynamic activeWin = app.ActiveWindow;
+                dynamic activeWin = null;
+                // ActiveWindow can throw while PowerPoint is between presentation windows.
+                // Do not let that prevent the ActivePresentation fallback below.
+                try { activeWin = app.ActiveWindow; } catch { }
                 if (activeWin != null)
                 {
                     // 1. Try View.Slide
@@ -57,12 +75,7 @@ namespace MistralOfficeAddin.Hosts
                 }
 
                 // 3. Fallback: Check ActivePresentation
-                dynamic pres = null;
-                try { pres = app.ActivePresentation; } catch { }
-                if (pres == null && createIfNone)
-                {
-                    try { pres = app.Presentations.Add(1); } catch { }
-                }
+                dynamic pres = GetActivePresentation(createIfNone);
 
                 if (pres != null)
                 {
@@ -104,37 +117,7 @@ namespace MistralOfficeAddin.Hosts
                 dynamic slide = GetOrCreateActiveSlide(false);
                 if (slide != null)
                 {
-                    var sb = new StringBuilder();
-                    try
-                    {
-                        sb.AppendLine(string.Format("[Slide #{0}: {1}]", slide.SlideNumber, slide.Name));
-                    }
-                    catch { }
-
-                    dynamic shapes = slide.Shapes;
-                    if (shapes != null)
-                    {
-                        int count = Convert.ToInt32(shapes.Count);
-                        for (int i = 1; i <= count; i++)
-                        {
-                            try
-                            {
-                                dynamic shape = shapes[i];
-                                if (shape != null && Convert.ToInt32(shape.HasTextFrame) != 0)
-                                {
-                                    dynamic textFrame = shape.TextFrame;
-                                    if (textFrame != null && Convert.ToInt32(textFrame.HasText) != 0)
-                                    {
-                                        string text = Convert.ToString(textFrame.TextRange.Text);
-                                        if (!string.IsNullOrWhiteSpace(text))
-                                            sb.AppendLine(text.Trim());
-                                    }
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-                    return sb.ToString().TrimEnd();
+                    return GetSlideTextInternal(slide, true).TrimEnd();
                 }
             }
             catch (Exception ex)
@@ -144,12 +127,177 @@ namespace MistralOfficeAddin.Hosts
             return string.Empty;
         }
 
+        /// <summary>
+        /// Returns an all-slide, bounded context including speaker notes. This is used for
+        /// deck-level Q&amp;A and review prompts instead of limiting the model to the active slide.
+        /// </summary>
+        public string GetPresentationText(int maxCharacters)
+        {
+            if (maxCharacters <= 0) maxCharacters = 48000;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return string.Empty;
+
+                var sb = new StringBuilder();
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                for (int i = 1; i <= count; i++)
+                {
+                    dynamic slide = null;
+                    try { slide = presentation.Slides[i]; } catch { }
+                    if (slide == null) continue;
+
+                    string sectionName = GetSectionName(presentation, i);
+                    if (!string.IsNullOrWhiteSpace(sectionName))
+                        AppendBounded(sb, string.Format("[Section: {0}]\n", sectionName), maxCharacters);
+
+                    AppendBounded(sb, GetSlideTextInternal(slide, true), maxCharacters);
+                    AppendBounded(sb, "\n\n", maxCharacters);
+                    if (sb.Length >= maxCharacters) break;
+                }
+
+                if (sb.Length >= maxCharacters)
+                    return sb.ToString(0, maxCharacters) + "\n...[presentation truncated for length]";
+                return sb.ToString().TrimEnd();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetPresentationText failed: {0}", ex.Message));
+                return string.Empty;
+            }
+        }
+
+        public string GetPresentationOutline(int maxCharacters)
+        {
+            if (maxCharacters <= 0) maxCharacters = 24000;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return string.Empty;
+
+                var sb = new StringBuilder();
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                for (int i = 1; i <= count; i++)
+                {
+                    dynamic slide = presentation.Slides[i];
+                    string title = GetSlideTitle(slide);
+                    if (string.IsNullOrWhiteSpace(title)) title = "(untitled)";
+                    string sectionName = GetSectionName(presentation, i);
+                    string prefix = string.IsNullOrWhiteSpace(sectionName) ? string.Empty : string.Format(" [{0}]", sectionName);
+                    AppendBounded(sb, string.Format("{0}. {1}{2}\n", i, title, prefix), maxCharacters);
+                    if (sb.Length >= maxCharacters) break;
+                }
+                return sb.ToString().TrimEnd();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetPresentationOutline failed: {0}", ex.Message));
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Supplies a compact, deterministic review brief before the LLM adds recommendations.
+        /// </summary>
+        public string GetPresentationReviewContext(int maxCharacters)
+        {
+            if (maxCharacters <= 0) maxCharacters = 28000;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return string.Empty;
+
+                int slideCount = Convert.ToInt32(presentation.Slides.Count);
+                int untitled = 0;
+                int noBody = 0;
+                var titles = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+                var sb = new StringBuilder();
+                sb.AppendLine(string.Format("[Presentation Review Context | Slides: {0}]", slideCount));
+
+                for (int i = 1; i <= slideCount; i++)
+                {
+                    dynamic slide = presentation.Slides[i];
+                    string title = GetSlideTitle(slide);
+                    // Speaker notes are useful context, but they must not make a slide with no
+                    // visible body appear complete in the deterministic review summary.
+                    string slideText = GetSlideTextInternal(slide, false);
+                    if (string.IsNullOrWhiteSpace(title)) untitled++;
+                    else
+                    {
+                        int occurrences;
+                        titles.TryGetValue(title.Trim(), out occurrences);
+                        titles[title.Trim()] = occurrences + 1;
+                    }
+                    if (CountBodyLines(slideText) == 0) noBody++;
+
+                    AppendBounded(sb, string.Format("Slide {0}: {1}\n", i, string.IsNullOrWhiteSpace(title) ? "(untitled)" : title.Trim()), maxCharacters);
+                    if (sb.Length >= maxCharacters) break;
+                }
+
+                var duplicateTitles = new List<string>();
+                foreach (var pair in titles)
+                {
+                    if (pair.Value > 1) duplicateTitles.Add(pair.Key);
+                }
+                sb.Insert(0, string.Format("Untitled slides: {0}; slides without body text: {1}; duplicate titles: {2}.\n",
+                    untitled, noBody, duplicateTitles.Count == 0 ? "none" : string.Join(", ", duplicateTitles.ToArray())));
+                return sb.ToString().TrimEnd();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetPresentationReviewContext failed: {0}", ex.Message));
+                return string.Empty;
+            }
+        }
+
+        private static bool SlideHasSubstantiveContent(dynamic slide)
+        {
+            if (slide == null) return false;
+            try
+            {
+                dynamic shapes = slide.Shapes;
+                int count = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic shape = shapes[i];
+                        if (shape == null || Convert.ToInt32(shape.HasTextFrame) == 0) continue;
+                        dynamic textFrame = shape.TextFrame;
+                        if (textFrame == null || Convert.ToInt32(textFrame.HasText) == 0) continue;
+                        string text = Convert.ToString(textFrame.TextRange.Text);
+                        if (string.IsNullOrWhiteSpace(text)) continue;
+
+                        string trimmed = text.Trim();
+                        // Ignore default PowerPoint placeholder prompts
+                        if (trimmed.Equals("Click to add title", StringComparison.OrdinalIgnoreCase) ||
+                            trimmed.Equals("Click to add text", StringComparison.OrdinalIgnoreCase) ||
+                            trimmed.Equals("Click to add subtitle", StringComparison.OrdinalIgnoreCase) ||
+                            trimmed.Equals("Click to add content", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        return true;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return false;
+        }
+
         public void InsertText(string text)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
 
             try
             {
+                string cleanedText;
+                ApplyStructuredActions(text, out cleanedText);
+                text = cleanedText;
+                if (string.IsNullOrWhiteSpace(text)) return;
+
                 dynamic app = _rawAppObj;
                 if (app == null) return;
 
@@ -171,7 +319,7 @@ namespace MistralOfficeAddin.Hosts
                 catch { }
 
                 // 2. Parse text into structured slides
-                var slides = ParseSlideData(text);
+                var slides = PowerPointActionParser.ParseSlideData(text);
                 if (slides.Count == 0)
                 {
                     // Fallback to simple bullet insertion
@@ -179,29 +327,28 @@ namespace MistralOfficeAddin.Hosts
                     return;
                 }
 
-                dynamic pres = null;
-                try { pres = app.ActivePresentation; } catch { }
-                if (pres == null)
-                {
-                    try { pres = app.Presentations.Add(1); } catch { }
-                }
+                dynamic pres = GetActivePresentation(true);
+                if (pres == null) return;
 
                 dynamic activeSlide = GetOrCreateActiveSlide(true);
+                // If active slide already has user content, do not overwrite it — append new slides instead.
+                bool canReuseActiveSlide = activeSlide != null && !SlideHasSubstantiveContent(activeSlide);
                 bool isFirst = true;
 
                 foreach (var slideData in slides)
                 {
                     dynamic targetSlide;
-                    if (isFirst && activeSlide != null)
+                    if (isFirst && canReuseActiveSlide)
                     {
                         targetSlide = activeSlide;
                         isFirst = false;
                     }
                     else
                     {
-                        // Add subsequent slides at the end
+                        // Add subsequent slides using the current template's text layout where possible.
                         int slideCount = Convert.ToInt32(pres.Slides.Count);
-                        targetSlide = pres.Slides.Add(slideCount + 1, 2); // ppLayoutText = 2
+                        targetSlide = AddSlideUsingPresentationLayout(pres, slideCount + 1, activeSlide);
+                        isFirst = false;
                     }
 
                     PopulateSlide(targetSlide, slideData);
@@ -211,6 +358,384 @@ namespace MistralOfficeAddin.Hosts
             {
                 Logger.Error("PowerPointController.InsertText failed", ex);
                 throw;
+            }
+        }
+
+        /// <summary>
+        /// Builds a deck from the project slide format. If the active slide has content, new slides
+        /// are appended. If the active slide is blank, it is populated first.
+        /// </summary>
+        public void CreateOrUpdateDeckFromOutline(string outline)
+        {
+            InsertText(outline);
+        }
+
+        /// <summary>
+        /// Applies an allow-listed set of deck operations returned by the model.
+        /// </summary>
+        public int ApplyStructuredActions(string rawText, out string cleanedText)
+        {
+            var actions = PowerPointActionParser.ParseStructuredActions(rawText, out cleanedText);
+            int applied = 0;
+            try
+            {
+                foreach (var action in actions)
+                {
+                    bool success = false;
+                    if (action.Type == "move_slide")
+                        success = MoveSlide(action.Source, action.Target);
+                    else if (action.Type == "create_section")
+                        success = CreateSectionBeforeSlide(action.Name, action.Slide > 0 ? action.Slide : action.Target);
+                    else if (action.Type == "rename_section")
+                        success = RenameSection(action.Section, action.Name);
+                    else if (action.Type == "set_notes")
+                        success = SetSpeakerNotesForSlide(action.Slide, action.Notes);
+
+                    if (success) applied++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.ApplyStructuredActions failed: {0}", ex.Message));
+            }
+            return applied;
+        }
+
+        public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
+        {
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return false;
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                if (sourceSlideNumber < 1 || sourceSlideNumber > count || destinationSlideNumber < 1 || destinationSlideNumber > count)
+                    return false;
+                dynamic slide = presentation.Slides[sourceSlideNumber];
+                slide.MoveTo(destinationSlideNumber);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.MoveSlide failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public bool CreateSectionBeforeSlide(string sectionName, int slideNumber)
+        {
+            if (string.IsNullOrWhiteSpace(sectionName)) return false;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.SectionProperties == null) return false;
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                if (slideNumber < 1 || slideNumber > count + 1) return false;
+
+                if (slideNumber <= count)
+                {
+                    presentation.SectionProperties.AddBeforeSlide(slideNumber, sectionName.Trim());
+                }
+                else
+                {
+                    // AddBeforeSlide requires an existing slide.  AddSection is the COM API
+                    // that creates an empty section at the end of a presentation.
+                    int sectionCount = Convert.ToInt32(presentation.SectionProperties.Count);
+                    presentation.SectionProperties.AddSection(sectionCount + 1, sectionName.Trim());
+                }
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.CreateSectionBeforeSlide failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public bool RenameSection(int sectionIndex, string sectionName)
+        {
+            if (sectionIndex < 1 || string.IsNullOrWhiteSpace(sectionName)) return false;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.SectionProperties == null) return false;
+                presentation.SectionProperties.Rename(sectionIndex, sectionName.Trim());
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.RenameSection failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public bool SetSpeakerNotesForSlide(int slideNumber, string notes)
+        {
+            if (slideNumber < 1 || string.IsNullOrWhiteSpace(notes)) return false;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return false;
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                if (slideNumber > count) return false;
+                dynamic slide = presentation.Slides[slideNumber];
+                dynamic shapes = slide.NotesPage != null ? slide.NotesPage.Shapes : null;
+                int shapeCount = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+                for (int i = 1; i <= shapeCount; i++)
+                {
+                    dynamic shape = shapes[i];
+                    if (shape == null || shape.PlaceholderFormat == null) continue;
+                    if (Convert.ToInt32(shape.PlaceholderFormat.Type) == 2 && Convert.ToInt32(shape.HasTextFrame) != 0)
+                    {
+                        shape.TextFrame.TextRange.Text = CleanMarkdown(notes);
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.SetSpeakerNotesForSlide failed: {0}", ex.Message));
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Supports safe, local visual insertion. Generation/search is deliberately provider-neutral;
+        /// callers can create a local image and pass its verified path here.
+        /// </summary>
+        public bool InsertImageFromFile(string filePath, string altText)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
+            try
+            {
+                dynamic slide = GetOrCreateActiveSlide(true);
+                if (slide == null || slide.Shapes == null) return false;
+                dynamic picture = slide.Shapes.AddPicture(filePath, 0, -1, 70, 115, -1, -1);
+                if (picture != null && !string.IsNullOrWhiteSpace(altText))
+                {
+                    try { picture.AlternativeText = altText.Trim(); } catch { }
+                }
+                return picture != null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.InsertImageFromFile failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public bool UndoLastChange()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.CommandBars == null) return false;
+                app.CommandBars.ExecuteMso("Undo");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.UndoLastChange failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        private static void AppendBounded(StringBuilder builder, string value, int maxCharacters)
+        {
+            if (builder == null || string.IsNullOrEmpty(value) || builder.Length >= maxCharacters) return;
+            int remaining = maxCharacters - builder.Length;
+            if (value.Length <= remaining)
+                builder.Append(value);
+            else
+                builder.Append(value.Substring(0, remaining));
+        }
+
+        private static int ParsePositiveInt(string value)
+        {
+            int parsed;
+            return int.TryParse(value, out parsed) && parsed > 0 ? parsed : 0;
+        }
+
+        private string GetSlideTextInternal(dynamic slide, bool includeSpeakerNotes)
+        {
+            var sb = new StringBuilder();
+            if (slide == null) return string.Empty;
+
+            try
+            {
+                sb.AppendLine(string.Format("[Slide #{0}: {1}]", slide.SlideNumber, GetSlideTitle(slide)));
+            }
+            catch
+            {
+                sb.AppendLine("[Slide]");
+            }
+
+            try
+            {
+                dynamic shapes = slide.Shapes;
+                int count = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic shape = shapes[i];
+                        if (shape == null || Convert.ToInt32(shape.HasTextFrame) == 0) continue;
+                        dynamic textFrame = shape.TextFrame;
+                        if (textFrame == null || Convert.ToInt32(textFrame.HasText) == 0) continue;
+                        string text = Convert.ToString(textFrame.TextRange.Text);
+                        if (!string.IsNullOrWhiteSpace(text)) sb.AppendLine(text.Trim());
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+
+            if (includeSpeakerNotes)
+            {
+                string notes = GetSpeakerNotesInternal(slide);
+                if (!string.IsNullOrWhiteSpace(notes))
+                {
+                    sb.AppendLine("[Speaker Notes]");
+                    sb.AppendLine(notes.Trim());
+                }
+            }
+            return sb.ToString().TrimEnd();
+        }
+
+        private string GetSlideTitle(dynamic slide)
+        {
+            if (slide == null) return string.Empty;
+            try
+            {
+                dynamic shapes = slide.Shapes;
+                if (shapes != null)
+                {
+                    try
+                    {
+                        if (Convert.ToInt32(shapes.HasTitle) != 0 && shapes.Title != null &&
+                            Convert.ToInt32(shapes.Title.HasTextFrame) != 0)
+                        {
+                            string title = Convert.ToString(shapes.Title.TextFrame.TextRange.Text);
+                            if (!string.IsNullOrWhiteSpace(title)) return title.Trim();
+                        }
+                    }
+                    catch { }
+
+                    int count = Convert.ToInt32(shapes.Count);
+                    for (int i = 1; i <= count; i++)
+                    {
+                        try
+                        {
+                            dynamic shape = shapes[i];
+                            if (shape == null || Convert.ToInt32(shape.Type) != 14 || shape.PlaceholderFormat == null) continue;
+                            int placeholderType = Convert.ToInt32(shape.PlaceholderFormat.Type);
+                            if (placeholderType != 1 && placeholderType != 3) continue;
+                            if (Convert.ToInt32(shape.HasTextFrame) == 0) continue;
+                            string title = Convert.ToString(shape.TextFrame.TextRange.Text);
+                            if (!string.IsNullOrWhiteSpace(title)) return title.Trim();
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            try { return Convert.ToString(slide.Name) ?? string.Empty; } catch { return string.Empty; }
+        }
+
+        private string GetSpeakerNotesInternal(dynamic slide)
+        {
+            if (slide == null) return string.Empty;
+            try
+            {
+                dynamic notesPage = slide.NotesPage;
+                dynamic shapes = notesPage != null ? notesPage.Shapes : null;
+                int count = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic shape = shapes[i];
+                        if (shape == null || shape.PlaceholderFormat == null) continue;
+                        // ppPlaceholderBody = 2
+                        if (Convert.ToInt32(shape.PlaceholderFormat.Type) != 2 || Convert.ToInt32(shape.HasTextFrame) == 0) continue;
+                        string notes = Convert.ToString(shape.TextFrame.TextRange.Text);
+                        if (!string.IsNullOrWhiteSpace(notes)) return notes.Trim();
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+
+        private string GetSectionName(dynamic presentation, int slideNumber)
+        {
+            try
+            {
+                dynamic sections = presentation != null ? presentation.SectionProperties : null;
+                int sectionCount = sections != null ? Convert.ToInt32(sections.Count) : 0;
+                for (int i = 1; i <= sectionCount; i++)
+                {
+                    int firstSlide = Convert.ToInt32(sections.FirstSlide(i));
+                    int slideCount = Convert.ToInt32(sections.SlidesCount(i));
+                    if (slideCount > 0 && slideNumber >= firstSlide && slideNumber < firstSlide + slideCount)
+                    {
+                        string name = Convert.ToString(sections.Name(i));
+                        return name ?? string.Empty;
+                    }
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+
+        private static int CountBodyLines(string slideText)
+        {
+            if (string.IsNullOrWhiteSpace(slideText)) return 0;
+            string[] lines = slideText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            int contentLines = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string line = lines[i].Trim();
+                if (line.StartsWith("[Slide", StringComparison.OrdinalIgnoreCase) ||
+                    line.StartsWith("[Speaker Notes]", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                contentLines++;
+            }
+            // A title alone is not a substantive body.
+            return contentLines > 1 ? contentLines - 1 : 0;
+        }
+
+        private dynamic AddSlideUsingPresentationLayout(dynamic presentation, int insertIndex, dynamic sourceSlide)
+        {
+            if (presentation == null || presentation.Slides == null) return null;
+            try
+            {
+                dynamic layout = null;
+                try { layout = sourceSlide != null ? sourceSlide.CustomLayout : null; } catch { }
+                if (layout != null)
+                {
+                    try { return presentation.Slides.AddSlide(insertIndex, layout); } catch { }
+                }
+
+                try
+                {
+                    dynamic master = presentation.SlideMaster;
+                    dynamic layouts = master != null ? master.CustomLayouts : null;
+                    int layoutCount = layouts != null ? Convert.ToInt32(layouts.Count) : 0;
+                    if (layoutCount > 0)
+                    {
+                        int layoutIndex = layoutCount >= 2 ? 2 : 1;
+                        return presentation.Slides.AddSlide(insertIndex, layouts[layoutIndex]);
+                    }
+                }
+                catch { }
+
+                return presentation.Slides.Add(insertIndex, 2); // ppLayoutText
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.AddSlideUsingPresentationLayout failed: {0}", ex.Message));
+                return null;
             }
         }
 
@@ -316,8 +841,18 @@ namespace MistralOfficeAddin.Hosts
                 }
             }
 
+            // Keep model-proposed visuals in Notes so users can review them before using a local
+            // image or an image-generation provider. This avoids silently inserting unreviewed media.
+            string notesToApply = data.SpeakerNotes;
+            if (!string.IsNullOrWhiteSpace(data.VisualSuggestion))
+            {
+                notesToApply = string.IsNullOrWhiteSpace(notesToApply)
+                    ? string.Format("Visual suggestion: {0}", CleanMarkdown(data.VisualSuggestion))
+                    : string.Format("{0}\rVisual suggestion: {1}", notesToApply, CleanMarkdown(data.VisualSuggestion));
+            }
+
             // Set Speaker Notes if present
-            if (!string.IsNullOrWhiteSpace(data.SpeakerNotes))
+            if (!string.IsNullOrWhiteSpace(notesToApply))
             {
                 try
                 {
@@ -332,7 +867,7 @@ namespace MistralOfficeAddin.Hosts
                             {
                                 if (Convert.ToInt32(nShape.PlaceholderFormat.Type) == 2)
                                 {
-                                    nShape.TextFrame.TextRange.Text = CleanMarkdown(data.SpeakerNotes);
+                                    nShape.TextFrame.TextRange.Text = CleanMarkdown(notesToApply);
                                     break;
                                 }
                             }
@@ -343,115 +878,9 @@ namespace MistralOfficeAddin.Hosts
             }
         }
 
-        private List<SlideData> ParseSlideData(string rawText)
-        {
-            var result = new List<SlideData>();
-            if (string.IsNullOrWhiteSpace(rawText)) return result;
-
-            // Split by slide boundaries: "Slide 1:", "### Slide 2:", "## Slide 3", "---", etc.
-            string[] rawBlocks = Regex.Split(rawText, @"(?m)(?:^|\n)(?:---|\*\*\*|___|(?:#{1,4}\s*)?(?:\*\*)?Slide\s+\d+[:.]?.*?\n)", RegexOptions.IgnoreCase);
-
-            var blocks = new List<string>();
-            foreach (var b in rawBlocks)
-            {
-                if (!string.IsNullOrWhiteSpace(b)) blocks.Add(b.Trim());
-            }
-
-            if (blocks.Count == 0)
-            {
-                blocks.Add(rawText.Trim());
-            }
-
-            foreach (var block in blocks)
-            {
-                var slide = new SlideData();
-                var lines = block.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                bool inNotes = false;
-                var notesSb = new StringBuilder();
-
-                foreach (var rawLine in lines)
-                {
-                    string line = rawLine.Trim();
-                    if (string.IsNullOrWhiteSpace(line)) continue;
-
-                    // Detect notes section
-                    if (line.StartsWith("Speaker Notes:", StringComparison.OrdinalIgnoreCase) ||
-                        line.StartsWith("**Speaker Notes:**", StringComparison.OrdinalIgnoreCase) ||
-                        line.StartsWith("Notes:", StringComparison.OrdinalIgnoreCase))
-                    {
-                        inNotes = true;
-                        string noteContent = Regex.Replace(line, @"(?i)^\*?\*?(?:Speaker\s+)?Notes:\*?\*?\s*", "");
-                        if (!string.IsNullOrWhiteSpace(noteContent)) notesSb.AppendLine(noteContent);
-                        continue;
-                    }
-
-                    if (inNotes)
-                    {
-                        notesSb.AppendLine(line);
-                        continue;
-                    }
-
-                    // Detect title
-                    if (string.IsNullOrEmpty(slide.Title) &&
-                        (line.StartsWith("#") ||
-                         line.StartsWith("Title:", StringComparison.OrdinalIgnoreCase) ||
-                         line.StartsWith("**Title:**", StringComparison.OrdinalIgnoreCase) ||
-                         line.StartsWith("**Slide", StringComparison.OrdinalIgnoreCase) ||
-                         line.StartsWith("Slide", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        string titleText = Regex.Replace(line, @"^(?:#{1,4}\s*|\*?\*?Title:\*?\*?\s*|\*?\*?Slide\s*\d*[:.]?\s*)", "", RegexOptions.IgnoreCase);
-                        slide.Title = CleanMarkdown(titleText);
-                        continue;
-                    }
-
-                    // Skip section headings like "**Content:**" or "### Bullet Points"
-                    if (Regex.IsMatch(line, @"^\*?\*?Content(?:\s*\(.*?\))?:\*?\*?$", RegexOptions.IgnoreCase) ||
-                        Regex.IsMatch(line, @"^\*?\*?Bullet Points:\*?\*?$", RegexOptions.IgnoreCase) ||
-                        Regex.IsMatch(line, @"^\*?\*?Design Tip:.*?\*?\*?$", RegexOptions.IgnoreCase) ||
-                        Regex.IsMatch(line, @"^\*?\*?Visual:.*?\*?\*?$", RegexOptions.IgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    // Bullets / content line
-                    string bulletText = Regex.Replace(line, @"^[-*•+]\s*|^\d+[\.)]\s*", "");
-                    slide.Bullets.Add(CleanMarkdown(bulletText));
-                }
-
-                if (notesSb.Length > 0)
-                {
-                    slide.SpeakerNotes = notesSb.ToString().Trim();
-                }
-
-                if (!string.IsNullOrWhiteSpace(slide.Title) || slide.Bullets.Count > 0)
-                {
-                    result.Add(slide);
-                }
-            }
-
-            return result;
-        }
-
         private static string CleanMarkdown(string input)
         {
-            if (string.IsNullOrEmpty(input)) return string.Empty;
-
-            string s = input;
-            // Remove markdown bold/italic (**text**, *text*, __text__, _text_)
-            s = Regex.Replace(s, @"\*\*([^*]+)\*\*", "$1");
-            s = Regex.Replace(s, @"\*([^*]+)\*", "$1");
-            s = Regex.Replace(s, @"__([^_]+)__", "$1");
-            s = Regex.Replace(s, @"_([^_]+)_", "$1");
-            // Remove inline code ticks (`code`)
-            s = Regex.Replace(s, @"`([^`]+)`", "$1");
-            // Remove markdown headers (### Header)
-            s = Regex.Replace(s, @"^#{1,6}\s*", "");
-            // Remove leading bullet characters
-            s = Regex.Replace(s, @"^[-*•+]\s*", "");
-            // Remove stray markdown artifacts
-            s = s.Replace("**", "").Replace("##", "").Replace("###", "");
-
-            return s.Trim();
+            return PowerPointActionParser.CleanMarkdown(input);
         }
 
         public void AddBulletPoints(List<string> bullets)

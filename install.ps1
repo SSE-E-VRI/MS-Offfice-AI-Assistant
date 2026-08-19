@@ -1,13 +1,31 @@
-# PowerShell script to Build and Install AI Assistant Office Add-in
+# PowerShell script to Build and Install MS Office AI Assistant
 $ErrorActionPreference = "Stop"
 
 Write-Host "============================================================" -ForegroundColor Cyan
-Write-Host "  AI Assistant Office Add-in - Build & Install              " -ForegroundColor Cyan
+Write-Host "  MS Office AI Assistant - Build & Install                  " -ForegroundColor Cyan
 Write-Host "  Targets: Word, Excel, PowerPoint (Office 2010 - 365)      " -ForegroundColor Cyan
 Write-Host "============================================================" -ForegroundColor Cyan
 
 $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $baseDir
+
+function Import-RegFileSafe([string]$regFilePath) {
+    if ([string]::IsNullOrWhiteSpace($regFilePath) -or -not (Test-Path $regFilePath)) { return }
+    $regExe = Join-Path $env:WINDIR "System32\reg.exe"
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & $regExe import $regFilePath 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "      Registry import warning (non-fatal, often HKLM access denied)." -ForegroundColor DarkGray
+        }
+    } catch {
+        Write-Host "      Registry import skipped (non-fatal)." -ForegroundColor DarkGray
+    } finally {
+        $ErrorActionPreference = $prev
+        $global:LASTEXITCODE = 0
+    }
+}
 
 # --- 1. Locate MSBuild ---
 Write-Host "`n[1/5] Locating MSBuild..." -ForegroundColor Yellow
@@ -37,7 +55,7 @@ Write-Host "      Packages restored." -ForegroundColor DarkGray
 
 # --- 3. Build x86 and x64 Release Configurations ---
 Write-Host "`n[3/5] Building x86 & x64 Release Configurations..." -ForegroundColor Yellow
-$projPath = Join-Path $baseDir "src\MistralOfficeAddin.csproj"
+$projPath = Join-Path $baseDir "src\MSOfficeAIAssistant.csproj"
 
 & $msbuild $projPath /p:Configuration=Release /p:Platform=x86 /v:m /nologo
 if ($LASTEXITCODE -ne 0) {
@@ -54,8 +72,8 @@ Write-Host "      Built x86 and x64 Release assemblies." -ForegroundColor DarkGr
 
 # --- 4. Register COM Classes (Current User) ---
 Write-Host "`n[4/5] Registering COM classes for Current User..." -ForegroundColor Yellow
-$dll64 = Join-Path $baseDir "bin\x64\Release\MistralOfficeAddin.dll"
-$dll32 = Join-Path $baseDir "bin\x86\Release\MistralOfficeAddin.dll"
+$dll64 = Join-Path $baseDir "bin\x64\Release\MSOfficeAIAssistant.dll"
+$dll32 = Join-Path $baseDir "bin\x86\Release\MSOfficeAIAssistant.dll"
 $reg64 = "$env:WINDIR\Microsoft.NET\Framework64\v4.0.30319\RegAsm.exe"
 $reg32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
 
@@ -70,20 +88,35 @@ if (Test-Path $dll64) {
         $content = Get-Content -Raw $regFile64
         $content = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes"
         Set-Content -Path $regFile64 -Value $content -Encoding Unicode
-        reg import $regFile64 | Out-Null
+        Import-RegFileSafe $regFile64
         Remove-Item -Path $regFile64 -Force -ErrorAction SilentlyContinue
     }
 }
 
 # 32-bit COM Registration (for 32-bit Office)
+# IMPORTANT: On 64-bit Windows, never import the 32-bit regfile into
+# HKCU\Software\Classes (non-Wow). That overwrites the 64-bit CLSID and
+# leaves InprocServer32\<version>\CodeBase pointing at the x86 DLL, which
+# makes 64-bit Excel/Word fail with 0x8007000B (Bad Image Format).
 if (Test-Path $dll32) {
     $regFile32 = "$env:TEMP\MistralAI32.reg"
     & $reg32 $dll32 /nologo /codebase /regfile:$regFile32 | Out-Null
     if (Test-Path $regFile32) {
         $content = Get-Content -Raw $regFile32
-        $content = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes\Wow6432Node"
-        Set-Content -Path $regFile32 -Value $content -Encoding Unicode
-        reg import $regFile32 | Out-Null
+        $is64BitOs = [Environment]::Is64BitOperatingSystem
+
+        if (-not $is64BitOs) {
+            # Pure 32-bit Windows: Classes is not redirected.
+            $contentDirect = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes"
+            Set-Content -Path $regFile32 -Value $contentDirect -Encoding Unicode
+            Import-RegFileSafe $regFile32
+        } else {
+            # 32-bit Office on 64-bit Windows reads Wow6432Node.
+            $contentWow = $content -replace "HKEY_CLASSES_ROOT", "HKEY_CURRENT_USER\Software\Classes\Wow6432Node"
+            Set-Content -Path $regFile32 -Value $contentWow -Encoding Unicode
+            Import-RegFileSafe $regFile32
+        }
+
         Remove-Item -Path $regFile32 -Force -ErrorAction SilentlyContinue
     }
 }
@@ -105,31 +138,55 @@ foreach ($root in $roots) {
     foreach ($c in $clsids) {
         $inproc = "$root\CLSID\$c\InprocServer32"
         if (Test-Path $inproc) {
-            Set-ItemProperty -Path $inproc -Name "CodeBase" -Value $codebase -ErrorAction SilentlyContinue
+            # Parent + versioned subkeys (CLR prefers InprocServer32\<version>\CodeBase).
+            $inprocKeys = @($inproc)
+            Get-ChildItem -Path $inproc -ErrorAction SilentlyContinue | ForEach-Object {
+                $inprocKeys += $_.PSPath
+            }
+            foreach ($ik in $inprocKeys) {
+                Set-ItemProperty -Path $ik -Name "CodeBase" -Value $codebase -ErrorAction SilentlyContinue
+            }
         }
     }
 
     $k = "$root\CLSID\$guidTaskPane"
     if (Test-Path $k) {
-        New-Item -Path "$k\Control" -Force | Out-Null
-        New-Item -Path "$k\MiscStatus" -Force | Out-Null
-        Set-ItemProperty -Path "$k\MiscStatus" -Name "(default)" -Value "131473" -ErrorAction SilentlyContinue
-        $cat = "$k\Implemented Categories"
-        New-Item -Path "$cat\{7DD95801-9882-11CF-9FA9-00AA006C42C4}" -Force | Out-Null
-        New-Item -Path "$cat\{7DD95802-9882-11CF-9FA9-00AA006C42C4}" -Force | Out-Null
-        New-Item -Path "$cat\{40FC6ED4-2438-11CF-A3DB-080036F12502}" -Force | Out-Null
+        try {
+            New-Item -Path "$k\Control" -Force -ErrorAction SilentlyContinue | Out-Null
+            New-Item -Path "$k\MiscStatus" -Force -ErrorAction SilentlyContinue | Out-Null
+            Set-ItemProperty -Path "$k\MiscStatus" -Name "(default)" -Value "131473" -ErrorAction SilentlyContinue
+            $cat = "$k\Implemented Categories"
+            New-Item -Path "$cat\{7DD95801-9882-11CF-9FA9-00AA006C42C4}" -Force -ErrorAction SilentlyContinue | Out-Null
+            New-Item -Path "$cat\{7DD95802-9882-11CF-9FA9-00AA006C42C4}" -Force -ErrorAction SilentlyContinue | Out-Null
+            New-Item -Path "$cat\{40FC6ED4-2438-11CF-A3DB-080036F12502}" -Force -ErrorAction SilentlyContinue | Out-Null
+        } catch {
+            Write-Host "      Skipped ActiveX category write under $root (non-fatal)." -ForegroundColor DarkGray
+        }
     }
 }
 
-# Optional mirror for Word 2010 ActiveX docking (if running elevated)
+# Optional mirror for Word 2010 ActiveX docking (if running elevated). Access denied is expected without admin.
 try {
+    $regExe = Join-Path $env:WINDIR "System32\reg.exe"
     $hkcuClsid = "HKCU\Software\Classes\CLSID\$guidTaskPane"
     $hklmClsid = "HKLM\Software\Classes\CLSID\$guidTaskPane"
     $hkcuProg = "HKCU\Software\Classes\MistralAI.TaskPaneControl"
     $hklmProg = "HKLM\Software\Classes\MistralAI.TaskPaneControl"
-    Start-Process reg.exe -ArgumentList "copy `"$hkcuClsid`" `"$hklmClsid`" /s /f" -NoNewWindow -Wait -ErrorAction SilentlyContinue
-    Start-Process reg.exe -ArgumentList "copy `"$hkcuProg`" `"$hklmProg`" /s /f" -NoNewWindow -Wait -ErrorAction SilentlyContinue
-} catch { }
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    & $regExe copy $hkcuClsid $hklmClsid /s /f 2>$null | Out-Null
+    $copy1 = $LASTEXITCODE
+    & $regExe copy $hkcuProg $hklmProg /s /f 2>$null | Out-Null
+    $copy2 = $LASTEXITCODE
+    $ErrorActionPreference = $prev
+    $global:LASTEXITCODE = 0
+    if ($copy1 -ne 0 -or $copy2 -ne 0) {
+        Write-Host "      HKLM ActiveX mirror skipped (admin usually required)." -ForegroundColor DarkGray
+    }
+} catch {
+    Write-Host "      HKLM ActiveX mirror skipped (admin usually required)." -ForegroundColor DarkGray
+    $global:LASTEXITCODE = 0
+}
 
 # --- 5. Register Office Addin Keys & Enable ---
 Write-Host "`n[5/5] Configuring Office Add-in Registration..." -ForegroundColor Yellow
@@ -138,35 +195,79 @@ $versions = @("14.0", "15.0", "16.0")
 
 foreach ($ver in $versions) {
     foreach ($app in $apps) {
-        $resiliencyBase = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency"
-        if (Test-Path $resiliencyBase) {
-            $doNotDisable = "$resiliencyBase\DoNotDisableAddinList"
-            if (-not (Test-Path $doNotDisable)) {
-                New-Item -Path $doNotDisable -Force | Out-Null
+        try {
+            $resiliencyBase = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency"
+            if (Test-Path $resiliencyBase) {
+                $doNotDisable = "$resiliencyBase\DoNotDisableAddinList"
+                if (-not (Test-Path $doNotDisable)) {
+                    New-Item -Path $doNotDisable -Force -ErrorAction SilentlyContinue | Out-Null
+                }
+                if (Test-Path $doNotDisable) {
+                    Set-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+                }
             }
-            if ((Get-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -ErrorAction SilentlyContinue) -eq $null) {
-                Set-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-            }
+        } catch {
+            Write-Host "      Skipped resiliency key for $app $ver (access denied is non-fatal)." -ForegroundColor DarkGray
         }
     }
 }
 
+$addinRegistered = $false
 foreach ($app in $apps) {
-    $oldKey = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Connect"
-    if (Test-Path $oldKey) {
-        Remove-Item -Path $oldKey -Recurse -Force -ErrorAction SilentlyContinue
-    }
+    try {
+        $oldKey = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Connect"
+        if (Test-Path $oldKey) {
+            Remove-Item -Path $oldKey -Recurse -Force -ErrorAction SilentlyContinue
+        }
 
-    $key = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Addin"
-    if (-not (Test-Path $key)) {
-        New-Item -Path $key -Force | Out-Null
+        $keys = @(
+            "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Addin"
+        )
+        foreach ($ver in $versions) {
+            $keys += "HKCU:\Software\Microsoft\Office\$ver\$app\Addins\MistralAI.Addin"
+        }
+
+        foreach ($key in $keys) {
+            if (-not (Test-Path $key)) {
+                New-Item -Path $key -Force -ErrorAction SilentlyContinue | Out-Null
+            }
+            if (Test-Path $key) {
+                Set-ItemProperty -Path $key -Name "FriendlyName" -Value "MS Office AI Assistant" -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $key -Name "Description" -Value "MS Office AI Assistant for Word, Excel, and PowerPoint" -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $key -Name "LoadBehavior" -Value 3 -Type DWord -ErrorAction SilentlyContinue
+                Set-ItemProperty -Path $key -Name "CommandLineSafe" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+            }
+        }
+        $addinRegistered = $true
+        Write-Host "      Registered $app add-in (HKCU, LoadBehavior=3)." -ForegroundColor DarkGray
+    } catch {
+        Write-Host "      WARNING: Could not register $app add-in: $($_.Exception.Message)" -ForegroundColor Yellow
     }
-    Set-ItemProperty -Path $key -Name "FriendlyName" -Value "AI Assistant"
-    Set-ItemProperty -Path $key -Name "Description" -Value "AI Assistant for Word, Excel, and PowerPoint"
-    Set-ItemProperty -Path $key -Name "LoadBehavior" -Value 3 -Type DWord
+}
+
+foreach ($ver in $versions) {
+    foreach ($app in $apps) {
+        try {
+            $disabled = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\DisabledItems"
+            if (Test-Path $disabled) {
+                Remove-Item -Path $disabled -Recurse -Force -ErrorAction SilentlyContinue
+            }
+            $crash = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\CrashingAddinList"
+            if (Test-Path $crash) {
+                Remove-Item -Path $crash -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        } catch { }
+    }
+}
+
+if (-not $addinRegistered) {
+    Write-Host "      ERROR: No Office add-in keys could be written. Close Word/Excel/PowerPoint and retry." -ForegroundColor Red
+    exit 1
 }
 
 Write-Host "`n============================================================" -ForegroundColor Green
-Write-Host "  [SUCCESS] AI Assistant Add-in built & installed!          " -ForegroundColor Green
+Write-Host "  [SUCCESS] MS Office AI Assistant built & installed!       " -ForegroundColor Green
 Write-Host "  Launch Word, Excel, or PowerPoint to start using it.      " -ForegroundColor Green
 Write-Host "============================================================" -ForegroundColor Green
+# Do not leak a failed native "reg import" exit code to cmd.exe.
+exit 0
