@@ -476,6 +476,12 @@ namespace MistralOfficeAddin.Addin
             catch (Exception ex) { Logger.Error("OnBuildSlides error", ex); }
         }
 
+        public void OnOpenUserManual(object control)
+        {
+            try { if (_ribbonCallback != null) _ribbonCallback.OnOpenUserManual(control); }
+            catch (Exception ex) { Logger.Error("OnOpenUserManual error", ex); }
+        }
+
         public void OnOpenSettings(object control)
         {
             try { if (_ribbonCallback != null) _ribbonCallback.OnOpenSettings(control); }

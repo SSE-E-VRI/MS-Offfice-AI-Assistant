@@ -163,6 +163,7 @@
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
     <Compile Include="UI\ChatFloatingWindow.cs" />
+    <Compile Include="UI\HelpWindow.cs" />
     <Compile Include="UI\OfficeDockedPane.cs" />
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
@@ -208,6 +209,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Addin\Ribbon.xml" />
+    <EmbeddedResource Include="Help\UserManual.html" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

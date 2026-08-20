@@ -36,6 +36,13 @@
           <button id="btnReviewContent" label="Review" imageMso="FileNew" size="normal" onAction="OnReviewContent"/>
           <button id="btnBuildDeck" label="Slides" imageMso="FileSave" size="normal" onAction="OnBuildSlides"/>
         </group>
+        <group id="grpHelp" label="Help">
+          <button id="btnUserManual" label="User Manual"
+                  imageMso="Help" size="large"
+                  screentip="User Manual"
+                  supertip="Open the AI Assistant user manual in a window. Describes every ribbon and panel control, example prompts, and railway office workflows. Works without an API key."
+                  onAction="OnOpenUserManual"/>
+        </group>
       </tab>
     </tabs>
   </ribbon>

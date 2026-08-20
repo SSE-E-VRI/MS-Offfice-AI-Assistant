@@ -168,7 +168,7 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                <TextBlock Text="AI Assistant v0.3.0" FontWeight="Bold" FontSize="11" Foreground="#475569"/>
+                <TextBlock Text="AI Assistant v0.4.0" FontWeight="Bold" FontSize="11" Foreground="#475569"/>
                 <TextBlock Text="Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302" FontSize="10" Foreground="#64748B" TextWrapping="Wrap"/>
             </StackPanel>
 

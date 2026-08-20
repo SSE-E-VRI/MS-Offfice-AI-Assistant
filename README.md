@@ -1,6 +1,6 @@
 # AI Assistant for Microsoft Office 🤖
 
-**Version 0.3.0**  
+**Version 0.4.0**  
 *Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
 A cross-version Microsoft Office COM Add-in bringing modern AI chat and document intelligence to **Word, Excel, and PowerPoint** across **Office 2010 through Office 365**.
@@ -21,6 +21,7 @@ Powered by a provider-neutral orchestration architecture supporting **Mistral, G
 - **Local Attachments & Vision**: Safe Open XML text extraction (.docx, .xlsx, .pptx), PDF extraction via PdfPig, and image attachment routing to vision-enabled models.
 - **Real-Time Streaming**: Low-latency SSE parser streaming tokens live as AI models generate them.
 - **Security & Privacy**: Direct HTTPS connections to AI provider APIs. API keys are encrypted with Windows DPAPI. No telemetry, no middleman servers.
+- **In-app User Manual**: Click **User Manual** on the AI Assistant ribbon (or the **?** in the chat panel) for a full guide to every button, prompt examples, and railway office workflows — it works even before you add an API key.
 
 ---
 

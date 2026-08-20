@@ -206,6 +206,19 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        public void OnOpenUserManual(object control)
+        {
+            try
+            {
+                Logger.Info("Ribbon Callback: OnOpenUserManual");
+                _taskPaneManager.OpenUserManual();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnOpenUserManual error", ex);
+            }
+        }
+
         public void OnOpenSettings(object control)
         {
             try

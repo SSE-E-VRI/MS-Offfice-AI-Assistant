@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<title>AI Assistant for Microsoft Office — User Manual</title>
+<style type="text/css">
+  body {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1e293b;
+    background: #f8fafc;
+    margin: 0;
+    padding: 0;
+    line-height: 1.55;
+  }
+  .page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 24px 28px 60px 28px;
+  }
+  h1 { font-size: 26px; color: #0f172a; border-bottom: 3px solid #2563eb; padding-bottom: 10px; }
+  h2 {
+    font-size: 20px;
+    color: #0f172a;
+    margin-top: 40px;
+    padding: 8px 12px;
+    background: #eff6ff;
+    border-left: 5px solid #2563eb;
+  }
+  h3 { font-size: 16px; color: #1e3a8a; margin-top: 24px; }
+  h4 { font-size: 14px; color: #334155; margin-top: 18px; }
+  p, li { font-size: 14px; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #ffffff; }
+  th, td { border: 1px solid #cbd5e1; padding: 7px 9px; font-size: 13px; text-align: left; vertical-align: top; }
+  th { background: #1e293b; color: #f8fafc; }
+  tr:nth-child(even) td { background: #f8fafc; }
+  code, pre {
+    font-family: Consolas, "Courier New", monospace;
+    font-size: 13px;
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 2px 5px;
+    border-radius: 3px;
+  }
+  pre { padding: 12px; overflow-x: auto; line-height: 1.4; }
+  pre code { background: none; padding: 0; }
+  .prompt {
+    border: 1px solid #bfdbfe;
+    background: #eff6ff;
+    padding: 10px 14px;
+    margin: 8px 0 16px 0;
+    border-radius: 5px;
+  }
+  .prompt .meta { display: block; font-size: 12px; color: #475569; margin-bottom: 4px; }
+  .note {
+    border-left: 4px solid #f59e0b;
+    background: #fef3c7;
+    padding: 8px 12px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .warn {
+    border-left: 4px solid #dc2626;
+    background: #fee2e2;
+    padding: 8px 12px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .ok {
+    border-left: 4px solid #059669;
+    background: #d1fae5;
+    padding: 8px 12px;
+    margin: 12px 0;
+    font-size: 13px;
+  }
+  .toc { background: #ffffff; border: 1px solid #cbd5e1; padding: 14px 20px; border-radius: 6px; }
+  .toc ul { margin: 4px 0; padding-left: 22px; }
+  .toc li { margin: 3px 0; }
+  a { color: #2563eb; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .credit {
+    margin-top: 48px;
+    padding-top: 14px;
+    border-top: 1px solid #cbd5e1;
+    font-size: 12px;
+    color: #64748b;
+    text-align: center;
+  }
+  .pill {
+    display: inline-block;
+    background: #e0e7ff;
+    color: #3730a3;
+    font-size: 11px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 4px;
+  }
+  .host-word { background:#dcfce7; color:#166534; }
+  .host-excel { background:#dcfce7; color:#166534; }
+  .host-ppt { background:#dcfce7; color:#166534; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>AI Assistant for Microsoft Office — User Manual</h1>
+<p><strong>Version 0.4.0</strong> &nbsp;|&nbsp; Applies to <strong>Word, Excel, and PowerPoint</strong> (Office 2010 – Microsoft 365, 32-bit and 64-bit).</p>
+<p>Designed and developed by <strong>D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302</strong>.</p>
+
+<div class="ok">
+<strong>Before you start.</strong> The AI Assistant never changes your document silently. It proposes changes as text, cards, or previews, and every native Office edit is applied only after you confirm it. Use the <strong>Context scope</strong> dropdown in the panel to choose exactly what text leaves your PC and is sent to the AI provider. The assistant is a drafting and analysis aid — it does not replace the responsible human reviewer.
+</div>
+
+<div class="toc">
+<strong>Contents</strong>
+<ul>
+  <li><a href="#s1">1. Features available</a></li>
+  <li><a href="#s2">2. Configure your API key</a></li>
+  <li><a href="#s3">3. Get a free API key</a></li>
+  <li><a href="#s4">4. Example prompts — Word</a></li>
+  <li><a href="#s5">5. Example prompts — Excel</a></li>
+  <li><a href="#s6">6. Example prompts — PowerPoint</a></li>
+  <li><a href="#s7">7. Ribbon controls (catalogue)</a></li>
+  <li><a href="#s8">8. Chat panel controls (catalogue)</a></li>
+  <li><a href="#s9">9. Indian Railways office workflows</a></li>
+  <li><a href="#s10">10. Installation and troubleshooting</a></li>
+</ul>
+</div>
+
+<h2 id="s1">1. Features available</h2>
+<p>The AI Assistant is a Bring-Your-Own-Key (BYOK) add-in. You supply an API key for the AI provider of your choice; the add-in connects directly to that provider and stores your key and data locally and encrypted.</p>
+
+<h3>Providers and models</h3>
+<table>
+<tr><th>Provider</th><th>Default endpoint</th><th>Models offered in the UI</th></tr>
+<tr><td>Mistral AI</td><td>https://api.mistral.ai/v1</td><td>mistral-large-latest, mistral-small-latest, open-mistral-nemo, codestral-latest, pixtral-large-latest</td></tr>
+<tr><td>Groq (Ultra-Fast)</td><td>https://api.groq.com/openai/v1</td><td>openai/gpt-oss-20b, openai/gpt-oss-120b, qwen/qwen3.6-27b</td></tr>
+<tr><td>Google Gemini</td><td>https://generativelanguage.googleapis.com</td><td>gemini-3.6-flash (Discover button verifies models your key can use)</td></tr>
+<tr><td>Custom API (OpenAI-compatible / Ollama)</td><td>http://localhost:11434/v1 (default)</td><td>llama3, mistral, qwen2.5 — fully editable</td></tr>
+</table>
+
+<h3>What the assistant can do</h3>
+<ul>
+  <li><strong>Streaming chat</strong> — type a prompt, or click a ribbon/quick button, and see the answer appear live in the panel.</li>
+  <li><strong>Attachments</strong> — attach .docx, .xlsx, .pptx, .pdf, images (.png/.jpg/.jpeg/.webp/.gif), and text files (.txt/.csv/.json/.md). Image attachments are sent only to models that support vision; otherwise they are skipped with a note. Legacy .doc/.xls/.ppt/.rtf files are rejected.</li>
+  <li><strong>Context scope</strong> — decide per prompt what is sent: <em>Selection</em>, <em>Current file</em>, <em>Selection + file</em>, or <em>Attachments only</em>.</li>
+  <li><strong>Word</strong> — draft, continue, summarize, rewrite, expand, shorten, outline, extract action items, review, and translate via chat. Markdown tables become native Word tables. <strong>Track edits</strong> inserts/rewrites responses as Word Track Changes, with Accept/Reject controls.</li>
+  <li><strong>Excel</strong> — range analysis, formulas, fill-down, table writes, Excel Table creation, conditional formatting, sorting, filtering, data validation, charts, PivotTables, named ranges, and duplicate removal — always as previewable cards with a <strong>Review &amp; Apply</strong> confirmation. The add-in never writes to a workbook without your explicit approval.</li>
+  <li><strong>PowerPoint</strong> — build/update a deck from an outline, review the whole deck (untitled slides, duplicate titles, text-light slides), move slides, create/rename sections, set speaker notes, and insert a local image with accessible alt text.</li>
+  <li><strong>DPAPI local storage</strong> — your API keys (<code>config.dat</code>), conversation history, and the approved-action log (<code>action-audit.dat</code>) are encrypted for the current Windows user with Windows DPAPI under <code>%LOCALAPPDATA%\MistralOfficeAddin</code>.</li>
+</ul>
+
+<h3>What is NOT included in this version</h3>
+<ul>
+  <li>No Microsoft Graph, SharePoint/OneDrive retrieval, or tenant/enterprise search.</li>
+  <li>No cloud telemetry — the add-in does not phone home; it talks only to the provider you configure.</li>
+  <li>No dedicated <strong>Translate</strong> ribbon button in this build. Translation is done by asking the assistant in the chat input (see <a href="#s4">Word prompts</a>).</li>
+  <li>No Outlook integration in the current ribbon/panel.</li>
+</ul>
+
+<h2 id="s2">2. Configure your API key</h2>
+<ol>
+  <li>Open Word, Excel, or PowerPoint and switch to the <strong>AI Assistant</strong> tab on the ribbon.</li>
+  <li>Click <strong>Configure</strong> (or the ⚙️ icon in the top-right of the chat panel).</li>
+  <li>Choose your <strong>Active Provider</strong>: Mistral AI, Groq (Ultra-Fast), Google Gemini, or Custom API (OpenAI-compatible / Ollama).</li>
+  <li>Paste your <strong>API key</strong>. Use the eye icon to show/hide it while typing.</li>
+  <li>Choose or type your <strong>AI model</strong>. For Gemini, click <strong>Discover</strong> to list models your key can use. For Custom, enter the endpoint URL and any custom HTTP headers (JSON).</li>
+  <li>Optionally adjust <strong>Temperature</strong> (0.0 = deterministic, 1.0 = creative) and <strong>Max output tokens</strong> (256–8192).</li>
+  <li>Click <strong>Test Connection</strong> to verify the key and model work.</li>
+  <li>Click <strong>Save Settings</strong>.</li>
+</ol>
+<div class="note">
+<strong>Where keys are stored.</strong> Settings are saved encrypted with Windows DPAPI
+(<code>DataProtectionScope.CurrentUser</code>) to <code>%LOCALAPPDATA%\MistralOfficeAddin\config.dat</code>.
+Only the current Windows user on this PC can decrypt it. <strong>Your keys never leave this PC except to the
+provider you chose</strong> — the add-in sends them only to that provider's endpoint over HTTPS.
+</div>
+
+<h2 id="s3">3. Get a free API key</h2>
+<p>Each provider offers free developer tiers. The sign-up links are built into the Settings window ("Don't have an API key? Click here").</p>
+<table>
+<tr><th>Provider</th><th>Sign-up / key page</th><th>Notes</th></tr>
+<tr><td>Mistral AI</td><td>https://console.mistral.ai/api-keys/</td><td>Create a console account, then create an API key. Free tier has rate limits and may change; some models are paid.</td></tr>
+<tr><td>Groq</td><td>https://console.groq.com/keys</td><td>Free tier offers fast inference with request limits. Rate limits and availability can change.</td></tr>
+<tr><td>Google Gemini</td><td>https://aistudio.google.com/app/apikey</td><td>Free tier via Google AI Studio. Verify with the Discover button in Settings.</td></tr>
+<tr><td>Custom / Ollama (zero-cloud)</td><td>Install Ollama locally</td><td>Runs entirely on your PC (default http://localhost:11434/v1). No cloud account, no data leaves the machine. Best for air-gapped or sensitive offices.</td></tr>
+</table>
+<div class="warn">
+<strong>Caveats.</strong> Free tiers are not guaranteed to stay free and come with rate limits (you may see HTTP 429). Keys are personal — treat them like a password and never paste them into shared documents. In the settings window the API-key help link hides for Custom providers because no cloud sign-up is needed.
+</div>
+
+<h2 id="s4">4. Example prompts — Word</h2>
+<p>Set the <strong>Context scope</strong> to <em>Selection</em> (default) when the text you want the AI to work on is selected, or <em>Current file</em> to let the assistant read the relevant parts of the whole document. Ribbon buttons use the scope selected in the panel.</p>
+
+<div class="prompt"><span class="meta">Draft a circular — button: <strong>Generate</strong>, scope: Selection (official source) or Current file</span>
+Draft a circular on &lt;topic&gt; using only the facts provided. Structure it as: subject, reference, background, instructions, responsibilities, and effective date. Do not invent dates, names, or figures. Flag anything missing in a short note at the end.
+</div>
+
+<div class="prompt"><span class="meta">Rewrite official English — button: <strong>Rewrite</strong>, scope: Selection</span>
+Select the passage, then click <strong>Rewrite</strong> for "maximum clarity, professional flow, and polished vocabulary". For official correspondence, prefer plain, unambiguous English.
+</div>
+
+<div class="prompt"><span class="meta">Summarize minutes — button: <strong>Summarize</strong>, scope: Selection or Current file</span>
+Provide a concise executive summary of these minutes highlighting key takeaways and action items.
+</div>
+
+<div class="prompt"><span class="meta">Extract action items — button: <strong>Actions</strong>, scope: Selection or Current file</span>
+Extract decisions, action items, owners where explicitly stated, deadlines where explicitly stated, and risks. Do not invent people or dates.
+</div>
+
+<div class="prompt"><span class="meta">Outline notes — button: <strong>Outline</strong>, scope: Selection</span>
+Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow.
+</div>
+
+<div class="prompt"><span class="meta">Bilingual notice EN → Tamil / Hindi — chat input (no Translate ribbon button in this build), scope: Selection</span>
+Translate the following text into Tamil accurately and naturally. Output ONLY the clean translated text in Tamil, with no introductory remarks, conversation, or explanation.
+</div>
+
+<h4>Track-edits workflow</h4>
+<ol>
+  <li>In the panel, tick <strong>Track edits</strong> (available when Word is the active host).</li>
+  <li>Insert or replace a response (message <strong>Insert</strong> button). It is applied as Word Track Changes.</li>
+  <li>Review the tracked edits in Word's Review view, then use the panel's <strong>Accept</strong> / <strong>Reject</strong> buttons (selection, or all when nothing is selected), or Word's own Review tab.</li>
+  <li><strong>Undo</strong> undoes the assistant's last Office change.</li>
+</ol>
+
+<h2 id="s5">5. Example prompts — Excel</h2>
+<p>For Excel, the assistant inspects the worksheet context (explicit column letters and headers). When you ask for a change it returns a structured <code>&lt;excel_actions&gt;</code> block rendered as cards. <strong>Nothing is written to the workbook until you click Review &amp; Apply</strong> on a card (or <em>Review &amp; Apply All Spreadsheet Actions</em>).</p>
+
+<div class="prompt"><span class="meta">Range analysis — scope: Selection or Current file</span>
+Analyze the selected range: explain totals, trends, and any anomalies you notice. Reference the column letters and headers.
+</div>
+
+<div class="prompt"><span class="meta">Formulas — scope: Current file</span>
+For the sheet's categories, propose SUMIF/COUNTIF/AVERAGEIF formulas that match the category column with wildcards (for example "*non ferrous*") and return them as spreadsheet actions I can review.
+</div>
+
+<div class="prompt"><span class="meta">Fill-down — scope: Current file</span>
+Add a flag in column G (G2:G100) that marks rows "High Value" when column F is greater than 50,000, otherwise blank. Return it as an excel action.
+</div>
+
+<div class="prompt"><span class="meta">Table, validation, chart, PivotTable — scope: Current file</span>
+Create a PivotTable of total values by item category, and a column chart of totals by month. Return them as excel actions I can review before applying.
+</div>
+
+<div class="warn">
+<strong>Never silent writes.</strong> Every proposed change is a previewable action; applying always requires your confirmation. Actions that Excel cannot reliably undo — <em>create table, chart, PivotTable, named range, remove duplicates</em> — are shown with a warning before you apply them. Use <strong>Undo</strong> after an applied change only for undoable actions.
+</div>
+
+<h2 id="s6">6. Example prompts — PowerPoint</h2>
+<p>The <em>Build deck</em> quick chip and the ribbon <strong>Slides</strong> button are PowerPoint-oriented. When PowerPoint is the active host, the assistant can read the whole deck, sections, slide titles, and speaker notes.</p>
+
+<div class="prompt"><span class="meta">Build a deck — button: <strong>Slides</strong> or chip <strong>Build deck</strong>, scope: Selection + file (auto for chip)</span>
+Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide.
+</div>
+
+<div class="prompt"><span class="meta">Review weak slides — button: <strong>Review</strong> or chip <strong>Review</strong></span>
+Review this presentation for story flow and weak slides: flag untitled slides, duplicate titles, and text-light slides, and suggest the most valuable next edits.
+</div>
+
+<div class="prompt"><span class="meta">Reorganise — chat input</span>
+Move slide 3 before slide 7, rename section 2 to "Annexures", and add speaker notes to slide 5. Use only safe powerpoint actions.
+</div>
+
+<div class="prompt"><span class="meta">Insert image — chip <strong>Insert image</strong> (PowerPoint only)</span>
+Click <strong>Insert image</strong>, choose a local file (.png/.jpg/.jpeg/.webp/.bmp). The add-in asks you to confirm and inserts it into the active slide with accessible alt text derived from the file name. The image is a local file — the AI does not generate or fetch images.
+</div>
+
+<h2 id="s7">7. Ribbon controls (catalogue)</h2>
+<p>This table lists every control on the <strong>AI Assistant</strong> tab exactly as defined in the add-in. Icons are Office built-in images (<code>imageMso</code>) — the glyphs come from Office's own icon set, not custom artwork. Ribbon buttons insert their prompt into the chat panel and use whatever <strong>Context scope</strong> is currently selected there.</p>
+
+<h3>Group "Chat"</h3>
+<table>
+<tr><th>Label</th><th>id · onAction</th><th>Icon (imageMso)</th><th>What it does</th><th>Select text first?</th><th>Hosts</th></tr>
+<tr><td><strong>Open AI Chat</strong></td><td>btnToggleSidebar · OnToggleSidebar</td><td>FileOpen</td><td>Opens or closes the AI Assistant panel docked on the right of the window.</td><td>No</td><td>Word, Excel, PowerPoint</td></tr>
+<tr><td><strong>New Chat</strong></td><td>btnNewChat · OnNewChat</td><td>FileNew</td><td>Starts a new conversation and clears the current one (asks for confirmation).</td><td>No</td><td>Word, Excel, PowerPoint</td></tr>
+<tr><td><strong>Configure</strong></td><td>btnSettings · OnOpenSettings</td><td>FileSave</td><td>Opens Settings: provider, API key, endpoint, model, temperature, max tokens, system instructions, Test Connection, Save.</td><td>No</td><td>Word, Excel, PowerPoint</td></tr>
+</table>
+
+<h3>Group "Draft"</h3>
+<table>
+<tr><th>Label</th><th>id · onAction</th><th>Icon (imageMso)</th><th>What it does</th><th>Select text first?</th><th>Hosts</th></tr>
+<tr><td><strong>Generate</strong></td><td>btnGenerate · OnGenerate</td><td>Copy</td><td>Prompts: "Generate a comprehensive draft based on the topic or outline provided."</td><td>No — provide a topic/outline in the chat input or in the sent context</td><td>Word, Excel, PowerPoint</td></tr>
+<tr><td><strong>Continue</strong></td><td>btnContinue · OnContinueWriting</td><td>Paste</td><td>Prompts: "Continue writing seamlessly from the current point in the text."</td><td>Yes — place cursor / select the text to continue</td><td>Word (best)</td></tr>
+<tr><td><strong>Summarize</strong></td><td>btnSummarize · OnSummarize</td><td>Cut</td><td>Prompts: "Provide a concise executive summary highlighting key takeaways and action items."</td><td>Yes (or use Current file)</td><td>Word, Excel, PowerPoint</td></tr>
+<tr><td><strong>Rewrite</strong></td><td>btnRewrite · OnRewrite</td><td>Undo</td><td>Prompts: "Rewrite the selected text for maximum clarity, professional flow, and polished vocabulary."</td><td>Yes</td><td>Word (best)</td></tr>
+</table>
+
+<h3>Group "More"</h3>
+<table>
+<tr><th>Label</th><th>id · onAction</th><th>Icon (imageMso)</th><th>What it does</th><th>Select text first?</th><th>Hosts</th></tr>
+<tr><td><strong>Expand</strong></td><td>btnExpand · OnExpand</td><td>Bold</td><td>Elaborates the selected text with supporting details, explanations, and context.</td><td>Yes</td><td>Word</td></tr>
+<tr><td><strong>Shorten</strong></td><td>btnShorten · OnShorten</td><td>Italic</td><td>Condenses the selected text into a tight, impactful version without losing core meaning.</td><td>Yes</td><td>Word</td></tr>
+<tr><td><strong>Outline</strong></td><td>btnOutline · OnOutline</td><td>Redo</td><td>Creates a hierarchical outline, preserving key facts and the recommended narrative flow.</td><td>Yes (or Current file)</td><td>Word, PowerPoint</td></tr>
+<tr><td><strong>Actions</strong></td><td>btnActionItems · OnActionItems</td><td>FileOpen</td><td>Extracts decisions, action items, owners and deadlines only where explicitly stated, and risks; instructed not to invent people or dates.</td><td>Yes (or Current file)</td><td>Word, Excel, PowerPoint</td></tr>
+<tr><td><strong>Review</strong></td><td>btnReviewContent · OnReviewContent</td><td>FileNew</td><td>Reviews content for clarity, gaps, consistency, duplicated ideas, and next edits; for presentations also story flow and weak slides.</td><td>Yes (or Current file)</td><td>All; PowerPoint-oriented</td></tr>
+<tr><td><strong>Slides</strong></td><td>btnBuildDeck · OnBuildSlides</td><td>FileSave</td><td>Prompts for a concise, coherent slide deck: numbered slides with title, 3-5 bullets, Visual suggestion, and Speaker Notes.</td><td>Yes (or Current file)</td><td>PowerPoint-oriented</td></tr>
+</table>
+
+<h3>Group "Help" (new in this release)</h3>
+<table>
+<tr><th>Label</th><th>id · onAction</th><th>Icon (imageMso)</th><th>What it does</th><th>Select text first?</th><th>Hosts</th></tr>
+<tr><td><strong>User Manual</strong></td><td>btnUserManual · OnOpenUserManual</td><td>Help</td><td>Opens this manual in a separate window inside Office. Works even before you configure an API key.</td><td>No</td><td>Word, Excel, PowerPoint</td></tr>
+</table>
+
+<h2 id="s8">8. Chat panel controls (catalogue)</h2>
+
+<h3>Header (top bar)</h3>
+<table>
+<tr><th>Control</th><th>What it does</th><th>Notes</th></tr>
+<tr><td>Document badge</td><td>Shows the active host and document name ("Word: Report.docx").</td><td>Word/Excel/PowerPoint</td></tr>
+<tr><td><strong>Accept</strong></td><td>Accepts tracked AI edits — in the selection, or all tracked edits when nothing is selected.</td><td>Shown only in Word</td></tr>
+<tr><td><strong>Reject</strong></td><td>Rejects tracked AI edits.</td><td>Shown only in Word</td></tr>
+<tr><td><strong>Undo</strong></td><td>Undoes the last Office change made by the assistant.</td><td>Uses the host's native undo stack</td></tr>
+<tr><td><strong>Log</strong></td><td>Opens the local, encrypted audit trail of your last 30 approved AI actions.</td><td>DPAPI-encrypted</td></tr>
+<tr><td><strong>🔄 (New Chat)</strong></td><td>Clears the current conversation (with confirmation).</td><td>—</td></tr>
+<tr><td><strong>⚙️ (Settings)</strong></td><td>Opens Settings &amp; API key (same as ribbon Configure).</td><td>—</td></tr>
+<tr><td><strong>? (Help)</strong></td><td>Opens this User Manual.</td><td>New in this release</td></tr>
+</table>
+
+<h3>Model &amp; context toolbar</h3>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td><strong>Model</strong> dropdown</td><td>Picks the model for this conversation. Populated from the configured provider; you can type a custom model name.</td></tr>
+<tr><td><strong>Context scope</strong> dropdown</td><td>Exactly what is sent with the next prompt: <strong>Selection</strong> (default), <strong>Current file</strong>, <strong>Selection + file</strong>, or <strong>Attachments only</strong>.</td></tr>
+<tr><td><strong>Track edits</strong> checkbox</td><td>Word only: insert/rewrite responses as Word Track Changes. Disabled in Excel/PowerPoint.</td></tr>
+</table>
+
+<h3>Message area and per-message actions</h3>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td><strong>Copy</strong></td><td>Copies the assistant's response to the clipboard.</td></tr>
+<tr><td><strong>Preview</strong></td><td>Shows the full response in a dialog before you insert it.</td></tr>
+<tr><td><strong>Insert</strong></td><td>After confirmation, inserts the response: Word — at cursor / replacing selection (honours Track edits); Excel — into the active cell/selection (tables detected); PowerPoint — creates/updates slides from the outline.</td></tr>
+<tr><td><strong>Spreadsheet action cards</strong></td><td>Excel only. Each card shows the target cell/range, action type badge, description, and proposed formula/value. <strong>Review &amp; Apply</strong> applies one card; <strong>Review &amp; Apply All Spreadsheet Actions</strong> applies all pending ones. Both require your confirmation; non-undoable actions are flagged.</td></tr>
+</table>
+
+<h3>Input area</h3>
+<table>
+<tr><th>Control</th><th>What it does</th></tr>
+<tr><td>Prompt box</td><td>Type a prompt. Multi-line; <strong>Ctrl+Enter</strong> sends.</td></tr>
+<tr><td><strong>📎 Attach</strong></td><td>Attaches Word/Excel/PPT, PDF, images, or text files. Limits: max files per message, 20 MB per file, 30 MB total. Legacy binary formats (.doc/.xls/.ppt/.rtf) are rejected.</td></tr>
+<tr><td><strong>Summarize</strong> chip</td><td>Quick prompt on the selected text or document.</td></tr>
+<tr><td><strong>Rewrite</strong> chip</td><td>Quick prompt to rewrite selected text for clarity and tone.</td></tr>
+<tr><td><strong>Outline</strong> chip</td><td>Quick prompt to create a hierarchical outline.</td></tr>
+<tr><td><strong>Actions</strong> chip</td><td>Quick prompt to extract decisions, action items, owners, deadlines, risks — without inventing people or dates.</td></tr>
+<tr><td><strong>Review</strong> chip</td><td>Quick prompt to review content (and presentation story flow/weak slides).</td></tr>
+<tr><td><strong>Build deck</strong> chip</td><td>PowerPoint only. Builds a structured deck outline from the content.</td></tr>
+<tr><td><strong>Insert image</strong> chip</td><td>PowerPoint only. Inserts a local image into the active slide with alt text (with confirmation).</td></tr>
+<tr><td><strong>Send</strong> / <strong>Stop</strong></td><td>Send starts the request; Stop cancels streaming ("AI Assistant is generating...").</td></tr>
+<tr><td>Vision warning banner</td><td>Appears when images are attached but the selected model does not support vision; images are then skipped.</td></tr>
+</table>
+
+<h2 id="s9">9. Indian Railways office workflows</h2>
+<div class="note">
+<strong>Keep official data in the file.</strong> For anything official, set the Context scope so the real data is included — <em>Selection</em> for the authoritative passage, or <em>Current file</em> for a full document/workbook/deck — and attach source documents where needed. 
+</div>
+<div class="warn">
+<strong>Critical.</strong> The assistant must never be allowed to invent people, dates, station/division names, train details, or safety figures. Always instruct it to use only the supplied content, and have a competent human review and sign before any official issue. The add-in itself is instructed to extract owners/deadlines "where explicitly stated" and not to invent them — rely on that, but verify anyway.
+</div>
+
+<h3>9.1 Safety circulars (Word)</h3>
+<p><strong>Button:</strong> <strong>Generate</strong> (or chat) &nbsp;|&nbsp; <strong>Scope:</strong> Selection (official source text) or Current file &nbsp;|&nbsp; <strong>Finish:</strong> Insert with Track edits, then Accept/Reject after review.</p>
+<div class="prompt"><span class="meta">Prompt</span>
+Draft a railway safety circular on &lt;topic — e.g. monsoon preparedness, level-crossing vigilance, electrical work permits&gt;. Use only the facts in the selection/file. Structure: subject, reference, background, instructions, responsibilities, effective date (state it must be confirmed by the issuing authority), and sign-off. Do not invent dates, names, or figures; list anything missing as "TO BE CONFIRMED".
+</div>
+
+<h3>9.2 Inspection and failure notes (Word)</h3>
+<p><strong>Button:</strong> <strong>Summarize</strong>, <strong>Review</strong>, <strong>Actions</strong> &nbsp;|&nbsp; <strong>Scope:</strong> Selection or Current file</p>
+<div class="prompt"><span class="meta">Prompt</span>
+Summarize the selected inspection notes in neutral, precise official English. Preserve every location, item, and finding; do not add or invent findings. Then list follow-up action items with owners and deadlines only where the notes state them.
+</div>
+
+<h3>9.3 Estimates / BOQ tables (Excel)</h3>
+<p><strong>Button:</strong> chat &nbsp;|&nbsp; <strong>Scope:</strong> Current file &nbsp;|&nbsp; <strong>Finish:</strong> Review &amp; Apply each proposed action — never silent writes.</p>
+<div class="prompt"><span class="meta">Prompt</span>
+Analyse this estimate/BOQ sheet: quantities, rates, and totals by head of account. Propose formulas such as =SUMPRODUCT(quantity, rate) or category totals as spreadsheet actions I can review. Keep all changes bounded to the data rows; start row-level formulas at row 2.
+</div>
+<div class="prompt"><span class="meta">Prompt — validation dropdown</span>
+Add a data validation dropdown (Open / Closed / Pending) to column E rows 2-100, and a conditional format that flags any line with quantity 0. Return both as excel actions for review.
+</div>
+
+<h3>9.4 MOM and action items (Word)</h3>
+<p><strong>Button:</strong> <strong>Actions</strong> &nbsp;|&nbsp; <strong>Scope:</strong> Selection or Current file</p>
+<div class="prompt"><span class="meta">Prompt</span>
+Extract the decisions and action items from these minutes. For each action item give: what, who (only if stated), by when (only if stated), and risk. Do not invent people or dates.
+</div>
+
+<h3>9.5 Briefing decks for DRM / GM (PowerPoint)</h3>
+<p><strong>Button:</strong> <strong>Build deck</strong> chip or <strong>Slides</strong> ribbon &nbsp;|&nbsp; <strong>Scope:</strong> Selection + file (chip sets this automatically)</p>
+<div class="prompt"><span class="meta">Prompt</span>
+Create a briefing deck for the DRM/GM on &lt;subject&gt; from the supplied content only. Include: agenda, current status, key risks, actions underway, and a clear "ask". For every slide give a title, 3-5 bullets, a Visual suggestion, and speaker notes. Do not invent figures or names.
+</div>
+
+<h3>9.6 Bilingual notices (English → Tamil / Hindi / other)</h3>
+<p><strong>Where:</strong> chat input — there is no Translate ribbon button in this build &nbsp;|&nbsp; <strong>Scope:</strong> Selection</p>
+<div class="prompt"><span class="meta">Prompt — Tamil</span>
+Translate the following text into Tamil accurately and naturally. Preserve proper names, designations, station names, and all numbers exactly. Output ONLY the clean translation with no remarks.
+</div>
+<div class="prompt"><span class="meta">Prompt — Hindi</span>
+Translate the following text into Hindi accurately and naturally. Preserve proper names, designations, station names, and all numbers exactly. Output ONLY the clean translation with no remarks.
+</div>
+<div class="note">Translation is done by the AI model over chat. Confirm bilingual wording with a competent human reviewer before putting a notice on display; machine translation is not a substitute for the officially vetted text.</div>
+
+<h2 id="s10">10. Installation and troubleshooting</h2>
+<h3>Installation</h3>
+<ul>
+  <li><strong>Automated:</strong> run <code>install.cmd</code> at the repository root — it builds the x86 and x64 assemblies and registers the add-in for the current user. A standalone installer is built from <code>installer/setup-x86.iss</code> and <code>installer/setup-x64.iss</code> with Inno Setup.</li>
+  <li>Works with Office 2010, 2013, 2016, 2019, 2021, and Microsoft 365 (32-bit and 64-bit). Requires .NET Framework 4.8.</li>
+  <li>The User Manual is embedded in the add-in itself, so it is present in every install and opens even if you have never configured a key.</li>
+</ul>
+<h3>Troubleshooting</h3>
+<p>See <code>docs/TROUBLESHOOTING.md</code> in the repository. In brief:</p>
+<ul>
+  <li><strong>Ribbon tab missing:</strong> check <em>File → Options → Add-ins → COM Add-ins</em> that the add-in is enabled, and that you registered the correct bitness (x86 for 32-bit Office, x64 for 64-bit Office).</li>
+  <li><strong>API 401:</strong> key missing/expired — regenerate and Test Connection in Settings.</li>
+  <li><strong>API 429:</strong> rate limit — the add-in retries with backoff; reduce volume or switch model/tier.</li>
+  <li><strong>Logs:</strong> <code>%LOCALAPPDATA%\MistralOfficeAddin\addin.log</code> (fallback <code>%TEMP%\MistralAddinLog.txt</code>).</li>
+</ul>
+
+<div class="credit">
+AI Assistant v0.4.0 &nbsp;·&nbsp; Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302 &nbsp;·&nbsp; BYOK · DPAPI-encrypted local storage · No telemetry
+</div>
+
+</div>
+</body>
+</html>

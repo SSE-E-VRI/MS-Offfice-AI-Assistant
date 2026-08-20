@@ -907,6 +907,24 @@ namespace MistralOfficeAddin.UI
             }
         }
 
+        private void BtnHelp_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                IntPtr ownerHwnd = IntPtr.Zero;
+                if (_hostAppObj != null)
+                {
+                    try { ownerHwnd = OfficeDockedPane.ResolveHostHwnd(_hostAppObj); }
+                    catch { }
+                }
+                HelpWindow.ShowHelp(ownerHwnd);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(string.Format("Could not open the User Manual: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private string GetSelectedModelName()
         {
             try

@@ -558,6 +558,23 @@ namespace MistralOfficeAddin.Addin
             }
         }
 
+        /// <summary>
+        /// Opens the embedded User Manual in a modeless window owned by the Office host window
+        /// so the manual stays in front. Works without any API key.
+        /// </summary>
+        public void OpenUserManual()
+        {
+            try
+            {
+                IntPtr hostWindow = OfficeDockedPane.ResolveHostHwnd(_appObj);
+                HelpWindow.ShowHelp(hostWindow);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("CustomTaskPaneManager.OpenUserManual failed", ex);
+            }
+        }
+
         private void CreateAndShowPane()
         {
             // Excel 2010 hosts the managed ActiveX task-pane control but does not reliably
