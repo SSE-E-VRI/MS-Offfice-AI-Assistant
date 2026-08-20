@@ -65,6 +65,8 @@ namespace MistralOfficeAddin.UI
             _elementHost.Dock = DockStyle.Fill;
             _elementHost.TabStop = true;
             _sidebar = new ChatSidebar();
+            _sidebar.PromptInputFocusRequested += Sidebar_PromptInputFocusRequested;
+            _sidebar.PromptInputFocusLost += Sidebar_PromptInputFocusLost;
             _elementHost.Child = _sidebar;
 
             this.Controls.Add(_elementHost);
@@ -79,16 +81,6 @@ namespace MistralOfficeAddin.UI
         private int _lastPaneY = -1;
         private int _lastPaneW = -1;
         private int _lastPaneH = -1;
-
-        protected override void WndProc(ref Message m)
-        {
-            const int WM_MOUSEACTIVATE = 0x0021;
-            if (m.Msg == WM_MOUSEACTIVATE)
-            {
-                StealWin32Focus();
-            }
-            base.WndProc(ref m);
-        }
 
         public void InitializeHost(object appObj, string hostType)
         {
@@ -110,7 +102,29 @@ namespace MistralOfficeAddin.UI
 
         public void FocusPromptInput()
         {
-            CaptureKeyboardFromExcel();
+            try
+            {
+                ActivatePromptKeyboardRouting();
+                if (_sidebar != null)
+                    _sidebar.FocusPromptInput();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("OfficeDockedPane.FocusPromptInput failed: {0}", ex.Message));
+            }
+        }
+
+        private void Sidebar_PromptInputFocusRequested(object sender, EventArgs e)
+        {
+            if (this.IsHandleCreated)
+                this.BeginInvoke(new MethodInvoker(ActivatePromptKeyboardRouting));
+        }
+
+        private void Sidebar_PromptInputFocusLost(object sender, EventArgs e)
+        {
+            // Keyboard focus left the sidebar entirely (e.g. user clicked the sheet).
+            // Hand the keys back to Excel.
+            _routeKeysToPrompt = false;
         }
 
         private NativeWnd.RECT _originalDocRect = default(NativeWnd.RECT);
@@ -173,16 +187,18 @@ namespace MistralOfficeAddin.UI
             NativeWnd.SetWindowPos(this.Handle, NativeWnd.HWND_TOP, 0, 0, 0, 0,
                 NativeWnd.SWP_NOMOVE | NativeWnd.SWP_NOSIZE | NativeWnd.SWP_NOACTIVATE | NativeWnd.SWP_FRAMECHANGED | NativeWnd.SWP_SHOWWINDOW);
 
-            InstallKeyboardHook();
-            CaptureKeyboardFromExcel();
-            Logger.Info("OfficeDockedPane attached to host window (right dock).");
+            FocusPromptInput();
+            InstallPromptKeyboardHook();
+            Logger.Info("OfficeDockedPane attached to host window (right dock) with standard WPF keyboard routing.");
             return true;
         }
 
         public void DetachAndRestore()
         {
-            UninstallKeyboardHook();
-            _paneCapturesKeyboard = false;
+            UninstallPromptKeyboardHook();
+            _routeKeysToPrompt = false;
+            _promptInputHwnd = IntPtr.Zero;
+            _focusRetryCount = 0;
             try
             {
                 RestoreDocumentView();
@@ -374,119 +390,144 @@ namespace MistralOfficeAddin.UI
             _splitter.Capture = false;
         }
 
-        private bool _paneCapturesKeyboard;
+        // Excel 2010's native loop can retain focus on the worksheet even after a WPF child
+        // TextBox is clicked (GetFocus() stays on EXCEL7).  When the sidebar owns keyboard
+        // focus this hook consumes each queued key message, dispatches it to the WPF HwndSource,
+        // and rewrites it to WM_NULL so Excel's pump never feeds the active cell.  When the
+        // sidebar does not own focus, the message is left alone and Excel handles it normally.
+        private bool _routeKeysToPrompt;
+        private IntPtr _promptInputHwnd = IntPtr.Zero;
+        private IntPtr _keyboardHook = IntPtr.Zero;
+        private NativeWnd.HookProc _keyboardHookProc;
         private bool _dispatchingHook;
-        private IntPtr _hookHandle = IntPtr.Zero;
-        private NativeWnd.HookProc _hookProc;
+        private int _focusRetryCount;
 
-        private void StealWin32Focus()
+        private void ActivatePromptKeyboardRouting()
         {
-            _paneCapturesKeyboard = true;
-            try
+            if (_sidebar == null) return;
+
+            IntPtr promptWindow = _sidebar.GetPromptInputWindowHandle();
+            if (promptWindow == IntPtr.Zero || !NativeWnd.IsWindow(promptWindow))
             {
-                if (_elementHost != null && _elementHost.IsHandleCreated)
-                    NativeWnd.SetFocus(_elementHost.Handle);
-                else if (this.IsHandleCreated)
-                    NativeWnd.SetFocus(this.Handle);
+                // Attach runs before the WPF visual is connected; retry until the HwndSource exists.
+                if (_focusRetryCount < 10 && this.IsHandleCreated)
+                {
+                    _focusRetryCount++;
+                    this.BeginInvoke(new MethodInvoker(ActivatePromptKeyboardRouting));
+                }
+                return;
             }
-            catch { }
-        }
 
-        private void CaptureKeyboardFromExcel()
-        {
-            StealWin32Focus();
-            if (_sidebar != null)
-                _sidebar.FocusPromptInput();
+            _focusRetryCount = 0;
+            _promptInputHwnd = promptWindow;
+            _routeKeysToPrompt = true;
+            NativeWnd.SetFocus(promptWindow);
         }
 
         private bool IsInPane(IntPtr hwnd)
         {
             if (hwnd == IntPtr.Zero || !this.IsHandleCreated) return false;
-            if (hwnd == this.Handle) return true;
-            if (_elementHost != null && _elementHost.IsHandleCreated && hwnd == _elementHost.Handle) return true;
-            return NativeWnd.IsChild(this.Handle, hwnd);
+            return hwnd == this.Handle ||
+                   (_elementHost != null && _elementHost.IsHandleCreated && hwnd == _elementHost.Handle) ||
+                   NativeWnd.IsChild(this.Handle, hwnd);
         }
 
-        private void InstallKeyboardHook()
+        private void InstallPromptKeyboardHook()
         {
-            if (_hookHandle != IntPtr.Zero) return;
+            if (_keyboardHook != IntPtr.Zero) return;
             try
             {
-                _hookProc = new NativeWnd.HookProc(GetMsgHookCallback);
-                uint threadId = NativeWnd.GetCurrentThreadId();
-                _hookHandle = NativeWnd.SetWindowsHookEx(NativeWnd.WH_GETMESSAGE, _hookProc, IntPtr.Zero, threadId);
-                Logger.Info(string.Format("OfficeDockedPane: keyboard hook installed (Handle=0x{0:X})", _hookHandle.ToInt64()));
+                _keyboardHookProc = new NativeWnd.HookProc(PromptKeyboardHookCallback);
+                _keyboardHook = NativeWnd.SetWindowsHookEx(
+                    NativeWnd.WH_GETMESSAGE,
+                    _keyboardHookProc,
+                    IntPtr.Zero,
+                    NativeWnd.GetCurrentThreadId());
+                if (_keyboardHook == IntPtr.Zero)
+                    Logger.Warn("OfficeDockedPane: could not install the Excel prompt keyboard bridge.");
             }
             catch (Exception ex)
             {
-                Logger.Warn(string.Format("OfficeDockedPane: Failed to install keyboard hook: {0}", ex.Message));
+                Logger.Warn(string.Format("OfficeDockedPane: prompt keyboard bridge setup failed: {0}", ex.Message));
             }
         }
 
-        private void UninstallKeyboardHook()
+        private void UninstallPromptKeyboardHook()
         {
-            if (_hookHandle == IntPtr.Zero) return;
-            try
-            {
-                NativeWnd.UnhookWindowsHookEx(_hookHandle);
-                Logger.Info("OfficeDockedPane: keyboard hook uninstalled.");
-            }
+            if (_keyboardHook == IntPtr.Zero) return;
+            try { NativeWnd.UnhookWindowsHookEx(_keyboardHook); }
             catch { }
-            _hookHandle = IntPtr.Zero;
-            _hookProc = null;
+            _keyboardHook = IntPtr.Zero;
+            _keyboardHookProc = null;
         }
 
-        private IntPtr GetMsgHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        private IntPtr PromptKeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
-            if (_dispatchingHook || nCode < 0 || wParam.ToInt64() != NativeWnd.PM_REMOVE)
-                return NativeWnd.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
-
-            try
+            if (nCode >= 0 && wParam.ToInt64() == NativeWnd.PM_REMOVE && !_dispatchingHook)
             {
-                NativeWnd.MSG msg = (NativeWnd.MSG)Marshal.PtrToStructure(lParam, typeof(NativeWnd.MSG));
-
-                if (msg.message == NativeWnd.WM_LBUTTONDOWN ||
-                    msg.message == NativeWnd.WM_RBUTTONDOWN ||
-                    msg.message == NativeWnd.WM_MBUTTONDOWN ||
-                    msg.message == NativeWnd.WM_NCLBUTTONDOWN)
+                try
                 {
-                    bool inPane = IsInPane(msg.hwnd);
-                    _paneCapturesKeyboard = inPane;
-                    if (inPane)
-                        StealWin32Focus();
+                    NativeWnd.MSG message = (NativeWnd.MSG)Marshal.PtrToStructure(lParam, typeof(NativeWnd.MSG));
+                    if (message.message == NativeWnd.WM_LBUTTONDOWN ||
+                        message.message == NativeWnd.WM_RBUTTONDOWN ||
+                        message.message == NativeWnd.WM_MBUTTONDOWN ||
+                        message.message == NativeWnd.WM_NCLBUTTONDOWN)
+                    {
+                        if (IsInPane(message.hwnd))
+                        {
+                            // Any in-pane click re-arms key routing so pane controls (combo, list, etc.) work.
+                            // If Excel kept native focus (GetFocus still on EXCEL7), force it back to the
+                            // WPF HwndSource so WPF processes the input.
+                            _routeKeysToPrompt = true;
+                            IntPtr currentFocus = NativeWnd.GetFocus();
+                            if (_promptInputHwnd != IntPtr.Zero && NativeWnd.IsWindow(_promptInputHwnd) &&
+                                (currentFocus == IntPtr.Zero || !IsInPane(currentFocus)))
+                            {
+                                NativeWnd.SetFocus(_promptInputHwnd);
+                            }
+                        }
+                        else
+                        {
+                            // Click outside the assistant returns keyboard ownership to Excel
+                            _routeKeysToPrompt = false;
+                        }
+                    }
+                    else if (message.message >= NativeWnd.WM_KEYFIRST &&
+                             message.message <= NativeWnd.WM_KEYLAST &&
+                             _routeKeysToPrompt &&
+                             _sidebar != null && _sidebar.IsPromptKeyboardFocused &&
+                             _promptInputHwnd != IntPtr.Zero && NativeWnd.IsWindow(_promptInputHwnd))
+                    {
+                        // The sidebar owns keyboard focus: route the key to WPF (the HwndSource
+                        // delivers it to whichever pane element is focused) and consume the message
+                        // so Excel's pump never starts in-cell editing.
+                        message.hwnd = _promptInputHwnd;
+                        NativeWnd.TranslateMessage(ref message);
+                        _dispatchingHook = true;
+                        try
+                        {
+                            NativeWnd.DispatchMessage(ref message);
+                        }
+                        finally
+                        {
+                            _dispatchingHook = false;
+                        }
+                        message.message = NativeWnd.WM_NULL;
+                        Marshal.StructureToPtr(message, lParam, false);
+                    }
                 }
-                else if (_paneCapturesKeyboard &&
-                         msg.message >= NativeWnd.WM_KEYFIRST &&
-                         msg.message <= NativeWnd.WM_KEYLAST)
+                catch (Exception hookEx)
                 {
-                    if (_elementHost != null && _elementHost.IsHandleCreated)
-                        msg.hwnd = _elementHost.Handle;
-                    else if (this.IsHandleCreated)
-                        msg.hwnd = this.Handle;
-
-                    _dispatchingHook = true;
-                    try
-                    {
-                        NativeWnd.TranslateMessage(ref msg);
-                        NativeWnd.DispatchMessage(ref msg);
-                    }
-                    finally
-                    {
-                        _dispatchingHook = false;
-                    }
-
-                    msg.message = 0;
-                    Marshal.StructureToPtr(msg, lParam, false);
+                    Logger.Warn(string.Format("OfficeDockedPane: keyboard hook callback error: {0}", hookEx.Message));
                 }
             }
-            catch { }
 
-            return NativeWnd.CallNextHookEx(_hookHandle, nCode, wParam, lParam);
+            return NativeWnd.CallNextHookEx(_keyboardHook, nCode, wParam, lParam);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            UninstallKeyboardHook();
+            UninstallPromptKeyboardHook();
             DetachAndRestore();
             base.OnFormClosing(e);
         }
@@ -495,7 +536,7 @@ namespace MistralOfficeAddin.UI
         {
             if (disposing)
             {
-                UninstallKeyboardHook();
+                UninstallPromptKeyboardHook();
                 DetachAndRestore();
             }
             base.Dispose(disposing);
@@ -575,6 +616,7 @@ namespace MistralOfficeAddin.UI
 
         public const int WH_GETMESSAGE = 3;
         public const int PM_REMOVE = 1;
+        public const int WM_NULL = 0x0000;
         public const int WM_KEYFIRST = 0x0100;
         public const int WM_KEYLAST = 0x0109;
         public const int WM_LBUTTONDOWN = 0x0201;
@@ -599,12 +641,6 @@ namespace MistralOfficeAddin.UI
 
         [DllImport("user32.dll")]
         public static extern bool IsChild(IntPtr hWndParent, IntPtr hWnd);
-
-        [DllImport("user32.dll")]
-        public static extern bool TranslateMessage([In] ref MSG lpMsg);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr DispatchMessage([In] ref MSG lpmsg);
 
         [DllImport("user32.dll", SetLastError = true)]
         public static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
@@ -670,6 +706,12 @@ namespace MistralOfficeAddin.UI
         [DllImport("user32.dll")]
         public static extern IntPtr GetFocus();
 
+        [DllImport("user32.dll")]
+        public static extern bool TranslateMessage([In] ref MSG lpMsg);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr DispatchMessage([In] ref MSG lpmsg);
+
         [StructLayout(LayoutKind.Sequential)]
         public struct RECT
         {
@@ -696,5 +738,6 @@ namespace MistralOfficeAddin.UI
             public uint time;
             public POINT pt;
         }
+
     }
 }

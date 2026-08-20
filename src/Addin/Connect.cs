@@ -73,6 +73,7 @@ namespace MistralOfficeAddin.Addin
 
     #endregion
 
+    /// <summary>
     /// The primary COM Add-in entry point for Microsoft Office (Word, Excel, PowerPoint).
     /// AutoDual enables Office to discover ribbon callback methods (OnToggleSidebar, etc.) via IDispatch.
     /// </summary>

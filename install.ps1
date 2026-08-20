@@ -245,16 +245,17 @@ foreach ($app in $apps) {
     }
 }
 
+# Remove only our add-in from resiliency lists (do NOT wipe other add-ins' entries)
 foreach ($ver in $versions) {
     foreach ($app in $apps) {
         try {
             $disabled = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\DisabledItems"
             if (Test-Path $disabled) {
-                Remove-Item -Path $disabled -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $disabled -Name "MistralAI.Addin" -ErrorAction SilentlyContinue
             }
             $crash = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\CrashingAddinList"
             if (Test-Path $crash) {
-                Remove-Item -Path $crash -Recurse -Force -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $crash -Name "MistralAI.Addin" -ErrorAction SilentlyContinue
             }
         } catch { }
     }

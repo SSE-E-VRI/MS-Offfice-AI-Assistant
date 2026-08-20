@@ -89,6 +89,10 @@ namespace MistralOfficeAddin.API.Models
             get { return string.Equals(Role, "system", StringComparison.OrdinalIgnoreCase); }
         }
 
+        /// <summary>Full prompt content sent to the API, which may differ from the displayed Content.</summary>
+        [JsonProperty("fullContent", NullValueHandling = NullValueHandling.Ignore)]
+        public string FullContent { get; set; }
+
         private System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> _actions;
 
         [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]

@@ -98,7 +98,9 @@
         </Border>
 
         <!-- 3. Chat Messages Area -->
-        <!-- NOTE: VirtualizingStackPanel is used to prevent WPF from measuring all items at once -->
+        <!-- NOTE: Virtualization is intentionally disabled (IsVirtualizing=False) for this version.
+     All message bubbles are realized at once. Enable virtualization in a future pass
+     if conversation history grows long. -->
         <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" 
                       HorizontalScrollBarVisibility="Disabled" Padding="10,8"
                       CanContentScroll="True">
@@ -264,6 +266,8 @@
                 <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
                          TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
                          BorderThickness="1" FontSize="13" Focusable="True" IsTabStop="True" KeyDown="TxtInput_KeyDown"
+                         PreviewMouseDown="TxtInput_PreviewMouseDown"
+                         GotKeyboardFocus="TxtInput_GotKeyboardFocus" LostKeyboardFocus="TxtInput_LostKeyboardFocus"
                          ToolTip="Type your prompt here... (Ctrl+Enter to send)">
                     <TextBox.ContextMenu>
                         <ContextMenu Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" Padding="2">

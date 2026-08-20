@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using MistralOfficeAddin.API;
 using MistralOfficeAddin.API.Models;
@@ -40,6 +41,9 @@ namespace MistralOfficeAddin.UI
 
     public partial class ChatSidebar : UserControl
     {
+        public event EventHandler PromptInputFocusRequested;
+        public event EventHandler PromptInputFocusLost;
+
         private enum PromptContextScope
         {
             Selection,
@@ -68,6 +72,8 @@ namespace MistralOfficeAddin.UI
             InitializeComponent();
             MessagesItemsControl.ItemsSource = _messages;
             AttachmentsItemsControl.ItemsSource = _pendingAttachments;
+
+            this.Loaded += ChatSidebar_Loaded;
 
             _orchestrator = new ChatOrchestrator(ProviderFactory.CreateFromConfig(ConfigManager.Instance));
 
@@ -290,10 +296,18 @@ namespace MistralOfficeAddin.UI
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
-            if (_isSending && _streamingCts != null)
+            // Cancel any in-flight stream and wait for isSending to clear
+            if (_isSending)
             {
-                try { _streamingCts.Cancel(); } catch { }
+                if (_streamingCts != null)
+                {
+                    try { _streamingCts.Cancel(); } catch { }
+                }
+                // Brief yield to allow the in-flight finally block to run and reset _isSending
+                await Task.Delay(100).ConfigureAwait(true);
             }
+            // If still sending after grace period, skip — don't layer concurrent streams
+            if (_isSending) return;
 
             string selectedText = IncludesSelection(scope) ? GetSelectedTextOnly() : string.Empty;
             string documentContext = IncludesCurrentFile(scope) ? GetCurrentFileContext(prompt) : string.Empty;
@@ -379,7 +393,9 @@ namespace MistralOfficeAddin.UI
 
             _isSending = true;
             string displayUserMessage = customDisplayTitle ?? promptToSend;
-            _messages.Add(new ChatMessage("user", displayUserMessage));
+            var userMsg = new ChatMessage("user", displayUserMessage);
+            userMsg.FullContent = promptToSend;
+            _messages.Add(userMsg);
             ScrollToBottom();
 
             var assistantMsg = new ChatMessage("assistant", "") { IsStreaming = true };
@@ -451,7 +467,7 @@ namespace MistralOfficeAddin.UI
                 // Clone message list for API request to avoid mutating bound UI user messages
                 var historyForApi = _messages
                     .Where(m => (m.IsUser || m.IsAssistant) && m != assistantMsg)
-                    .Select(m => new ChatMessage(m.Role, m.Content))
+                    .Select(m => new ChatMessage(m.Role, !string.IsNullOrEmpty(m.FullContent) ? m.FullContent : m.Content))
                     .ToList();
 
                 // If attachments produced extracted text, augment the last user message copy
@@ -479,6 +495,8 @@ namespace MistralOfficeAddin.UI
                 };
 
                 var tokenAccumulator = new StringBuilder();
+                int _deltaCount = 0;
+                bool streamFinished = false;
 
                 await _orchestrator.StreamChatAsync(
                     aiRequest,
@@ -488,11 +506,26 @@ namespace MistralOfficeAddin.UI
                         lock (tokenAccumulator)
                         {
                             tokenAccumulator.Append(delta);
+                            _deltaCount++;
                         }
-                        Dispatcher.BeginInvoke(new Action(() =>
+                        // Throttled UI update: only update display every 5 deltas to reduce dispatcher pressure
+                        if (_deltaCount % 5 == 0)
                         {
-                            assistantMsg.Content += delta;
-                        }), DispatcherPriority.Background);
+                            string snapshot;
+                            lock (tokenAccumulator)
+                            {
+                                snapshot = tokenAccumulator.ToString();
+                            }
+                            Dispatcher.BeginInvoke(new Action(() =>
+                            {
+                                // Ignore queued updates after the stream has completed so a stale
+                                // snapshot never overwrites the final content.
+                                if (!streamFinished)
+                                {
+                                    assistantMsg.Content = snapshot;
+                                }
+                            }), DispatcherPriority.Background);
+                        }
                     },
                     myStreamCts.Token);
 
@@ -504,6 +537,7 @@ namespace MistralOfficeAddin.UI
 
                 Dispatcher.Invoke(new Action(() =>
                 {
+                    streamFinished = true;
                     assistantMsg.Content = fullAssistantText;
                     assistantMsg.IsStreaming = false;
 
@@ -1310,6 +1344,62 @@ namespace MistralOfficeAddin.UI
             }
         }
 
+        private void TxtInput_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Excel 2010 can retain native focus after clicking a child WPF control.  Set focus
+            // synchronously so the very first keystroke is already targeted at the WPF input source.
+            IntPtr promptWindow = GetPromptInputWindowHandle();
+            if (promptWindow != IntPtr.Zero)
+                NativeWnd.SetFocus(promptWindow);
+
+            FocusPromptInput();
+            EventHandler handler = PromptInputFocusRequested;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
+        private void TxtInput_GotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            // Arm routing on every focus path (Tab, programmatic focus), not just mouse-down.
+            FocusPromptInput();
+            EventHandler handler = PromptInputFocusRequested;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
+        private void TxtInput_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            // Only disarm when focus leaves the whole sidebar; moving to another pane control
+            // (e.g. the model combo) must keep routing active.
+            if (IsKeyboardFocusWithin) return;
+            EventHandler handler = PromptInputFocusLost;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
+        private void ChatSidebar_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Attach runs before the WPF visual is connected; re-arm once Loaded fires so the
+            // pane can cache the now-valid HwndSource.
+            EventHandler handler = PromptInputFocusRequested;
+            if (handler != null) handler(this, EventArgs.Empty);
+        }
+
+        public bool IsPromptKeyboardFocused
+        {
+            get { return TxtInput != null && (TxtInput.IsKeyboardFocused || TxtInput.IsKeyboardFocusWithin || IsKeyboardFocusWithin); }
+        }
+
+        private IntPtr _cachedPromptHwnd = IntPtr.Zero;
+
+        public IntPtr GetPromptInputWindowHandle()
+        {
+            if (TxtInput == null) return IntPtr.Zero;
+            if (_cachedPromptHwnd != IntPtr.Zero && NativeWnd.IsWindow(_cachedPromptHwnd))
+                return _cachedPromptHwnd;
+            _cachedPromptHwnd = IntPtr.Zero;
+            HwndSource source = PresentationSource.FromVisual(TxtInput) as HwndSource;
+            if (source != null) _cachedPromptHwnd = source.Handle;
+            return _cachedPromptHwnd;
+        }
+
         public void FocusPromptInput()
         {
             try
@@ -1317,6 +1407,10 @@ namespace MistralOfficeAddin.UI
                 if (TxtInput == null) return;
                 Dispatcher.BeginInvoke(new Action(delegate
                 {
+                    IntPtr promptWindow = GetPromptInputWindowHandle();
+                    if (promptWindow != IntPtr.Zero)
+                        NativeWnd.SetFocus(promptWindow);
+
                     TxtInput.Focus();
                     Keyboard.Focus(TxtInput);
                 }), DispatcherPriority.Input);

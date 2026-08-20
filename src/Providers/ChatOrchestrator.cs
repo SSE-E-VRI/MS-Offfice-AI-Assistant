@@ -73,6 +73,10 @@ namespace MistralOfficeAddin.Providers
 
             if (oldProviderToDispose != null && !object.ReferenceEquals(oldProviderToDispose, newProvider))
             {
+                // Brief grace period so any in-flight HTTP read can observe the cancellation token
+                // before the underlying HttpClient is disposed. This prevents ObjectDisposedException
+                // surfacing as "Error: ..." in the chat UI.
+                System.Threading.Thread.Sleep(150);
                 try
                 {
                     oldProviderToDispose.Dispose();

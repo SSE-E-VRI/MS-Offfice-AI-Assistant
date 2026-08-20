@@ -119,16 +119,33 @@ namespace MistralOfficeAddin.Core
 
         private List<ActionAuditEntry> LoadUnsafe()
         {
+            if (!File.Exists(_filePath)) return new List<ActionAuditEntry>();
             try
             {
-                if (!File.Exists(_filePath)) return new List<ActionAuditEntry>();
                 byte[] encrypted = File.ReadAllBytes(_filePath);
                 byte[] plain = ProtectedData.Unprotect(encrypted, null, DataProtectionScope.CurrentUser);
                 string json = Encoding.UTF8.GetString(plain);
                 return JsonConvert.DeserializeObject<List<ActionAuditEntry>>(json) ?? new List<ActionAuditEntry>();
             }
-            catch
+            catch (System.Security.Cryptography.CryptographicException ex)
             {
+                // DPAPI failure (profile/machine change, elevation mismatch) — quarantine, do not overwrite
+                Logger.Warn(string.Format("ActionAuditStore: DPAPI decryption failed ({0}). Existing audit log quarantined as .bak. History will restart.", ex.Message));
+                try
+                {
+                    string bakPath = _filePath + ".bak";
+                    if (File.Exists(bakPath)) File.Delete(bakPath);
+                    File.Move(_filePath, bakPath);
+                }
+                catch (Exception moveEx)
+                {
+                    Logger.Warn(string.Format("ActionAuditStore: Could not quarantine corrupt file: {0}", moveEx.Message));
+                }
+                return new List<ActionAuditEntry>();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ActionAuditStore: Could not load audit log ({0}). Starting fresh.", ex.Message));
                 return new List<ActionAuditEntry>();
             }
         }

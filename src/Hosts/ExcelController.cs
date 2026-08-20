@@ -912,6 +912,12 @@ namespace MistralOfficeAddin.Hosts
         {
             if (string.IsNullOrEmpty(formula)) return;
 
+            if (!string.IsNullOrEmpty(cellAddress) && !SpreadsheetActionParser.IsSafeTarget(cellAddress))
+            {
+                Logger.Warn(string.Format("ExcelController.WriteFormula: Rejected unsafe cell address: {0}", cellAddress));
+                return;
+            }
+
             try
             {
                 dynamic app = _rawAppObj;

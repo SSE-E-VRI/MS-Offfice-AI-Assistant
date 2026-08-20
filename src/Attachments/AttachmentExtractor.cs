@@ -18,10 +18,11 @@ namespace MistralOfficeAddin.Attachments
         public const long MaxTotalSizeBytes = 30 * 1024 * 1024;   // 30 MB
         public const int MaxFileCount = 10;
         public const int MaxExtractedCharacters = 50000;
+        private const long MaxDecompressedBytes = 100 * 1024 * 1024; // 100 MB decompressed limit
 
         private static readonly HashSet<string> ImageExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"
+            ".png", ".jpg", ".jpeg", ".webp", ".gif"
         };
 
         private static readonly HashSet<string> TextExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -125,6 +126,11 @@ namespace MistralOfficeAddin.Attachments
             var sb = new StringBuilder();
             using (var zip = ZipFile.OpenRead(path))
             {
+                if (ArchiveDecompressedSizeExceedsLimit(zip))
+                {
+                    return "[Attachment too large when decompressed to process safely.]";
+                }
+
                 var entry = zip.GetEntry("word/document.xml");
                 if (entry != null)
                 {
@@ -153,6 +159,11 @@ namespace MistralOfficeAddin.Attachments
 
             using (var zip = ZipFile.OpenRead(path))
             {
+                if (ArchiveDecompressedSizeExceedsLimit(zip))
+                {
+                    return "[Attachment too large when decompressed to process safely.]";
+                }
+
                 // Read Shared Strings
                 var sstEntry = zip.GetEntry("xl/sharedStrings.xml");
                 if (sstEntry != null)
@@ -218,6 +229,11 @@ namespace MistralOfficeAddin.Attachments
             var sb = new StringBuilder();
             using (var zip = ZipFile.OpenRead(path))
             {
+                if (ArchiveDecompressedSizeExceedsLimit(zip))
+                {
+                    return "[Attachment too large when decompressed to process safely.]";
+                }
+
                 var slideEntries = zip.Entries
                     .Where(e => e.FullName.StartsWith("ppt/slides/slide", StringComparison.OrdinalIgnoreCase) && e.FullName.EndsWith(".xml"))
                     .OrderBy(e => e.FullName)
@@ -243,6 +259,21 @@ namespace MistralOfficeAddin.Attachments
                 }
             }
             return sb.ToString();
+        }
+
+        private static bool ArchiveDecompressedSizeExceedsLimit(ZipArchive archive)
+        {
+            long totalDecompressed = 0;
+            foreach (var entry in archive.Entries)
+            {
+                totalDecompressed += entry.Length; // entry.Length is the uncompressed size
+                if (totalDecompressed > MaxDecompressedBytes)
+                {
+                    Logger.Warn(string.Format("AttachmentExtractor: Archive decompressed size exceeds {0}MB limit. Extraction stopped.", MaxDecompressedBytes / (1024 * 1024)));
+                    return true;
+                }
+            }
+            return false;
         }
 
         private static string ExtractPdf(string path)

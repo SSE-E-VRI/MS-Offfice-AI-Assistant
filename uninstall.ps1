@@ -20,6 +20,20 @@ foreach ($app in $apps) {
     }
 }
 
+# Remove versioned add-in keys (14.0/15.0/16.0) that install.ps1 also writes
+$versions = @("14.0", "15.0", "16.0")
+foreach ($ver in $versions) {
+    foreach ($app in $apps) {
+        foreach ($progId in $progIds) {
+            $versionedKey = "HKCU:\Software\Microsoft\Office\$ver\$app\Addins\$progId"
+            if (Test-Path $versionedKey) {
+                Remove-Item -Path $versionedKey -Recurse -Force
+                Write-Host "      Removed versioned key: $versionedKey" -ForegroundColor DarkGray
+            }
+        }
+    }
+}
+
 # 2. Remove COM CLSIDs and ProgIDs
 Write-Host "[2/3] Removing COM CLSIDs and ProgIDs..." -ForegroundColor Yellow
 $roots = @("HKCU:\Software\Classes")

@@ -100,7 +100,7 @@ namespace MistralOfficeAddin.Providers
         {
             try
             {
-                string testModel = !string.IsNullOrWhiteSpace(model) ? model : "test-model";
+                string testModel = !string.IsNullOrWhiteSpace(model) ? model : "gpt-3.5-turbo";
                 var testMessages = new List<ChatMessage> { new ChatMessage("user", "hi") };
 
                 var requestPayload = new ChatRequest
@@ -353,6 +353,7 @@ namespace MistralOfficeAddin.Providers
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
+            bool deltasEmitted = false;
 
             for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
@@ -404,6 +405,7 @@ namespace MistralOfficeAddin.Providers
                                         if (!string.IsNullOrEmpty(delta))
                                         {
                                             onDeltaReceived(delta);
+                                            deltasEmitted = true;
                                         }
                                         if (isDone) break;
                                     }
@@ -415,8 +417,9 @@ namespace MistralOfficeAddin.Providers
                 }
                 catch (HttpRequestException ex)
                 {
-                    if (attempt < maxRetries) shouldRetry = true;
-                    else throw new AIException(ex.Message, _providerType, 0, ex);
+                    if (deltasEmitted || attempt >= maxRetries)
+                        throw new AIException(ex.Message, _providerType, 0, ex);
+                    shouldRetry = true;
                 }
 
                 if (shouldRetry)

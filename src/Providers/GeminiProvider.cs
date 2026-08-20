@@ -255,13 +255,33 @@ namespace MistralOfficeAddin.Providers
             if (request == null) throw new ArgumentNullException("request");
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
 
-            // Gemini's SSE connection can remain open without a terminal event on some
-            // free-tier models. Use the standard generateContent endpoint so the Office UI
-            // always receives a completed response instead of waiting indefinitely.
-            var completeResponse = await ChatAsync(request, ct).ConfigureAwait(false);
-            if (completeResponse != null && !string.IsNullOrEmpty(completeResponse.Content))
+            bool shouldFallback = false;
+            try
             {
-                onDeltaReceived(completeResponse.Content);
+                await StreamChatViaSseAsync(request, onDeltaReceived, ct).ConfigureAwait(false);
+            }
+            catch (AIException)
+            {
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // SSE failed — fall back to non-streaming to guarantee a response
+                Logger.Warn(string.Format("GeminiProvider: SSE streaming failed ({0}), falling back to non-streaming.", ex.Message));
+                shouldFallback = true;
+            }
+
+            if (shouldFallback)
+            {
+                var completeResponse = await ChatAsync(request, ct).ConfigureAwait(false);
+                if (completeResponse != null && !string.IsNullOrEmpty(completeResponse.Content))
+                {
+                    onDeltaReceived(completeResponse.Content);
+                }
             }
         }
 
@@ -366,7 +386,7 @@ namespace MistralOfficeAddin.Providers
 
         private GeminiRequestPayload BuildGeminiPayload(AIRequest request)
         {
-            var contents = new List<GeminiContent>();
+            List<GeminiContent> contents = new List<GeminiContent>();
             string systemPrompt = request.SystemPrompt;
 
             if (request.Messages != null)
@@ -396,6 +416,31 @@ namespace MistralOfficeAddin.Providers
                         Parts = parts
                     });
                 }
+            }
+
+            // Merge consecutive same-role content blocks (Gemini requires strict alternation)
+            if (contents.Count > 1)
+            {
+                var merged = new List<GeminiContent>();
+                merged.Add(contents[0]);
+                for (int i = 1; i < contents.Count; i++)
+                {
+                    var prev = merged[merged.Count - 1];
+                    var curr = contents[i];
+                    if (string.Equals(prev.Role, curr.Role, StringComparison.Ordinal))
+                    {
+                        // Combine parts into the previous block
+                        foreach (var part in curr.Parts)
+                        {
+                            prev.Parts.Add(part);
+                        }
+                    }
+                    else
+                    {
+                        merged.Add(curr);
+                    }
+                }
+                contents = merged;
             }
 
             // Append active image attachments to last user content block
