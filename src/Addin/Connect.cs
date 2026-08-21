@@ -216,6 +216,7 @@ namespace MSOfficeAIAssistant.Addin
         public void OnConnection(object Application, ext_ConnectMode ConnectMode, object AddInInst, ref Array custom)
         {
             EnsureResiliencyEnabled();
+            OleMessageFilter.Register();
             Logger.Info(string.Format("OnConnection ENTERED (Mode: {0})", ConnectMode));
             try
             {
@@ -268,6 +269,7 @@ namespace MSOfficeAIAssistant.Addin
             Logger.Info(string.Format("OnDisconnection (Mode: {0})", RemoveMode));
             try
             {
+                OleMessageFilter.Revoke();
                 if (_taskPaneManager != null)
                     _taskPaneManager.Cleanup();
             }

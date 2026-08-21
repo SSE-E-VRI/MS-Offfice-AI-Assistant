@@ -21,6 +21,11 @@ namespace MSOfficeAIAssistant.Core
             }
         }
 
+        public static void Debug(string message)
+        {
+            WriteLog("DEBUG", message);
+        }
+
         public static void Info(string message)
         {
             WriteLog("INFO", message);

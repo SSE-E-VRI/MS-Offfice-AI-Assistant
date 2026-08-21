@@ -563,11 +563,6 @@ namespace MSOfficeAIAssistant.UI
             VisionWarningBanner.Visibility = (hasImages && !supportsVision) ? Visibility.Visible : Visibility.Collapsed;
         }
 
-        private string BuildHostAwareSystemPrompt(string basePrompt)
-        {
-            return PromptAssembler.BuildHostAwareSystemPrompt(basePrompt, _hostType);
-        }
-
         private PromptContextScope GetPromptContextScope()
         {
             try
