@@ -94,6 +94,7 @@ namespace MSOfficeAIAssistant.API.Models
         public string FullContent { get; set; }
 
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> _actions;
+        private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> _powerPointActions;
 
         [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]
         public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> Actions
@@ -114,6 +115,25 @@ namespace MSOfficeAIAssistant.API.Models
             OnPropertyChanged("HasActions");
         }
 
+        [JsonProperty("powerPointActions", NullValueHandling = NullValueHandling.Ignore)]
+        public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> PowerPointActions
+        {
+            get { return _powerPointActions; }
+            set { _powerPointActions = value; OnPropertyChanged("PowerPointActions"); OnPropertyChanged("HasPowerPointActions"); }
+        }
+
+        [JsonIgnore]
+        public bool HasPowerPointActions
+        {
+            get { return _powerPointActions != null && _powerPointActions.Count > 0; }
+        }
+
+        public void NotifyPowerPointActionsChanged()
+        {
+            OnPropertyChanged("PowerPointActions");
+            OnPropertyChanged("HasPowerPointActions");
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
@@ -128,6 +148,7 @@ namespace MSOfficeAIAssistant.API.Models
         public ChatMessage()
         {
             _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
+            _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
         }
 
@@ -136,6 +157,7 @@ namespace MSOfficeAIAssistant.API.Models
             Role = role;
             Content = content;
             _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
+            _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
         }
     }

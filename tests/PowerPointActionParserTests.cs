@@ -11,6 +11,60 @@ namespace MSOfficeAIAssistant.Tests
             TestParseStructuredActions();
             TestParseSlideData();
             TestCleanMarkdown();
+            TestPowerPointActionPropertiesAndStatus();
+        }
+
+        private static void TestPowerPointActionPropertiesAndStatus()
+        {
+            var action = new PowerPointAction
+            {
+                Type = "move_slide",
+                Source = 3,
+                Target = 1
+            };
+
+            Assert(action.TypeBadge == "move", "TypeBadge is move");
+            Assert(action.TargetDisplay == "Slide 3 → 1", "TargetDisplay is Slide 3 → 1");
+            Assert(action.Description == "Move slide 3 to position 1", "Description for move_slide");
+            Assert(action.IsPending, "Initial status is pending");
+            Assert(action.StatusDisplay == "Pending", "StatusDisplay is Pending");
+
+            var changedProps = new List<string>();
+            action.PropertyChanged += delegate(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+            {
+                changedProps.Add(e.PropertyName);
+            };
+
+            action.Status = PowerPointActionStatus.Applying;
+            Assert(action.StatusDisplay == "Applying...", "StatusDisplay is Applying...");
+            Assert(changedProps.Contains("Status"), "Notified Status change");
+
+            action.ResultText = "Moved slide 3 to 1";
+            action.Status = PowerPointActionStatus.Applied;
+            Assert(!action.IsPending, "Status is no longer pending");
+            Assert(action.StatusDisplay == "✓ Applied (Moved slide 3 to 1)", "StatusDisplay shows applied with result");
+
+            var sectionAction = new PowerPointAction
+            {
+                Type = "create_section",
+                Name = "Executive Summary",
+                Slide = 1
+            };
+            Assert(sectionAction.TypeBadge == "section+", "TypeBadge is section+");
+            Assert(sectionAction.TargetDisplay == "Slide 1", "TargetDisplay is Slide 1");
+            Assert(sectionAction.Description == "Create section 'Executive Summary' before slide 1", "Description for create_section");
+            Assert(sectionAction.ContentDisplay == "Executive Summary", "ContentDisplay is section name");
+
+            var notesAction = new PowerPointAction
+            {
+                Type = "set_notes",
+                Slide = 2,
+                Notes = "Emphasize KPI growth"
+            };
+            Assert(notesAction.TypeBadge == "notes", "TypeBadge is notes");
+            Assert(notesAction.TargetDisplay == "Slide 2", "TargetDisplay is Slide 2");
+            Assert(notesAction.Description == "Set speaker notes on slide 2", "Description for set_notes");
+            Assert(notesAction.ContentDisplay == "Emphasize KPI growth", "ContentDisplay is notes");
         }
 
         private static void TestParseStructuredActions()

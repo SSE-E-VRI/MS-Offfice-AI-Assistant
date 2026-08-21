@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -7,15 +8,190 @@ using System.Xml;
 
 namespace MSOfficeAIAssistant.Core
 {
-    public class PowerPointAction
+    public enum PowerPointActionStatus
     {
-        public string Type { get; set; }
-        public int Source { get; set; }
-        public int Target { get; set; }
-        public int Slide { get; set; }
-        public int Section { get; set; }
-        public string Name { get; set; }
-        public string Notes { get; set; }
+        Pending,
+        Applying,
+        Applied,
+        Error
+    }
+
+    public class PowerPointAction : INotifyPropertyChanged
+    {
+        private string _type;
+        private int _source;
+        private int _target;
+        private int _slide;
+        private int _section;
+        private string _name;
+        private string _notes;
+        private PowerPointActionStatus _status = PowerPointActionStatus.Pending;
+        private string _resultText;
+        private string _errorMessage;
+
+        public string Type
+        {
+            get { return _type; }
+            set { _type = value; OnPropertyChanged("Type"); OnPropertyChanged("TypeBadge"); OnPropertyChanged("Description"); }
+        }
+
+        public int Source
+        {
+            get { return _source; }
+            set { _source = value; OnPropertyChanged("Source"); OnPropertyChanged("TargetDisplay"); OnPropertyChanged("Description"); }
+        }
+
+        public int Target
+        {
+            get { return _target; }
+            set { _target = value; OnPropertyChanged("Target"); OnPropertyChanged("TargetDisplay"); OnPropertyChanged("Description"); }
+        }
+
+        public int Slide
+        {
+            get { return _slide; }
+            set { _slide = value; OnPropertyChanged("Slide"); OnPropertyChanged("TargetDisplay"); OnPropertyChanged("Description"); }
+        }
+
+        public int Section
+        {
+            get { return _section; }
+            set { _section = value; OnPropertyChanged("Section"); OnPropertyChanged("TargetDisplay"); OnPropertyChanged("Description"); }
+        }
+
+        public string Name
+        {
+            get { return _name; }
+            set { _name = value; OnPropertyChanged("Name"); OnPropertyChanged("Description"); OnPropertyChanged("ContentDisplay"); }
+        }
+
+        public string Notes
+        {
+            get { return _notes; }
+            set { _notes = value; OnPropertyChanged("Notes"); OnPropertyChanged("Description"); OnPropertyChanged("ContentDisplay"); }
+        }
+
+        public PowerPointActionStatus Status
+        {
+            get { return _status; }
+            set
+            {
+                _status = value;
+                OnPropertyChanged("Status");
+                OnPropertyChanged("StatusDisplay");
+                OnPropertyChanged("IsPending");
+            }
+        }
+
+        public bool IsPending
+        {
+            get { return _status == PowerPointActionStatus.Pending; }
+        }
+
+        public string ResultText
+        {
+            get { return _resultText; }
+            set { _resultText = value; OnPropertyChanged("ResultText"); OnPropertyChanged("StatusDisplay"); }
+        }
+
+        public string ErrorMessage
+        {
+            get { return _errorMessage; }
+            set { _errorMessage = value; OnPropertyChanged("ErrorMessage"); OnPropertyChanged("StatusDisplay"); }
+        }
+
+        public string StatusDisplay
+        {
+            get
+            {
+                switch (_status)
+                {
+                    case PowerPointActionStatus.Applied:
+                        return string.IsNullOrEmpty(_resultText) ? "✓ Applied" : string.Format("✓ Applied ({0})", _resultText);
+                    case PowerPointActionStatus.Error:
+                        return string.IsNullOrEmpty(_errorMessage) ? "⚠ Error" : string.Format("⚠ {0}", _errorMessage);
+                    case PowerPointActionStatus.Applying:
+                        return "Applying...";
+                    default:
+                        return "Pending";
+                }
+            }
+        }
+
+        public string TypeBadge
+        {
+            get
+            {
+                if (string.Equals(_type, "move_slide", StringComparison.OrdinalIgnoreCase)) return "move";
+                if (string.Equals(_type, "create_section", StringComparison.OrdinalIgnoreCase)) return "section+";
+                if (string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase)) return "section";
+                if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase)) return "notes";
+                return "action";
+            }
+        }
+
+        public string TargetDisplay
+        {
+            get
+            {
+                if (string.Equals(_type, "move_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0} → {1}", _source, _target);
+                if (string.Equals(_type, "create_section", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Section {0}", _section);
+                if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                return "Slide";
+            }
+        }
+
+        public string Description
+        {
+            get
+            {
+                if (string.Equals(_type, "move_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Move slide {0} to position {1}", _source, _target);
+                if (string.Equals(_type, "create_section", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Create section '{0}' before slide {1}", _name, _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Rename section {0} to '{1}'", _section, _name);
+                if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Set speaker notes on slide {0}", _slide);
+                return "PowerPoint action";
+            }
+        }
+
+        public string ContentDisplay
+        {
+            get
+            {
+                if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase))
+                    return _notes ?? string.Empty;
+                if (string.Equals(_type, "create_section", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase))
+                    return _name ?? string.Empty;
+                if (string.Equals(_type, "move_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Position {0} to {1}", _source, _target);
+                return string.Empty;
+            }
+        }
+
+        public bool IsUndoable
+        {
+            get { return true; }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+            {
+                handler(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
     }
 
     public class SlideData

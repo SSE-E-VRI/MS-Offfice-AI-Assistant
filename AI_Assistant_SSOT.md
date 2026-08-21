@@ -388,7 +388,7 @@ There is **no CI**.
 
 | ID | Severity | Issue |
 |---|---|---|
-| **D-1** | **High** | `PowerPointController.ApplyStructuredActions` is invoked from *inside* `InsertText` (`:297`). Slide moves, section creation and notes rewriting therefore execute under the generic `ConfirmInsert` preview, which shows only the prose text — **the user never sees the parsed actions they are approving.** |
+| ~~D-1~~ | — | **RESOLVED.** `PowerPointController.InsertText` strips action XML without executing. `<powerpoint_actions>` XML is parsed on response completion into `ChatMessage.PowerPointActions`, and actions are reviewed and approved via dedicated UI cards with typed status and audit logging. |
 | **D-2** | Medium | `GetOrCreateActiveSlide(createIfNone:true)` and `GetActivePresentation(createIfNone:true)` are read-shaped names that **create a presentation or slide as a side effect** (`PowerPointController.cs:34,96`). Any risk classification must treat them as mutating. |
 | ~~D-3~~ | — | **RESOLVED.** `tools/verify.ps1` checked ProgID `MistralAI.Connect` while the add-in registered `MistralAI.Addin`, so the smoke check always reported FAIL and pointed at the deleted `register.cmd`. Now checks `MSOfficeAIAssistant.Addin` and recommends `install.cmd`. |
 | **D-4** | Medium | `src/Hosts/OutlookController.cs` is on disk and git-tracked but **absent from the csproj compile list** — it is silently never built. Either compile it or delete it. |
