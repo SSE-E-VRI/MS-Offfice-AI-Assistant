@@ -90,5 +90,43 @@ namespace MSOfficeAIAssistant.Core
             return string.Format("{0}\n\n{1}\nWhen you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.",
                 baseContent, textAttachmentContext);
         }
+
+        /// <summary>
+        /// Composes an executive briefing deck prompt from topic instructions and/or attached document excerpts.
+        /// Formats structured slide outputs with titles, concise bullets, visual suggestions, and speaker notes.
+        /// </summary>
+        public static string BuildBriefingDeckPrompt(string topicOrInstruction, string documentAttachmentText = null, int targetSlideCount = 5)
+        {
+            int slideCount = targetSlideCount > 0 ? targetSlideCount : 5;
+            var sb = new StringBuilder();
+            sb.AppendFormat("Create a concise, executive briefing deck of {0} slides", slideCount);
+            if (!string.IsNullOrWhiteSpace(topicOrInstruction))
+            {
+                sb.AppendFormat(" focusing on: {0}", topicOrInstruction.Trim());
+            }
+            else
+            {
+                sb.Append(" based on the attached document");
+            }
+            sb.Append(".\n\n");
+            sb.AppendLine("Structure the response into clear, numbered slide blocks using this exact format:");
+            sb.AppendLine("Slide 1: [Executive Title]");
+            sb.AppendLine("- [Key takeaway or core thesis]");
+            sb.AppendLine("- [Supporting evidence or key context]");
+            sb.AppendLine("- [Strategic implication]");
+            sb.AppendLine("Visual suggestion: [Clean layout or diagram suggestion]");
+            sb.AppendLine("Speaker Notes: [Brief talking points for the presenter]\n");
+            sb.AppendLine("Guidelines:");
+            sb.AppendLine("1. Extract real facts, metrics, and conclusions from the source material; do not invent details.");
+            sb.AppendLine("2. Keep bullet points concise and presentation-ready (1-2 lines each).");
+            sb.AppendLine("3. Ensure the narrative flows logically from executive summary to problem/context, key findings, and recommended next steps.");
+
+            if (!string.IsNullOrWhiteSpace(documentAttachmentText))
+            {
+                sb.AppendFormat("\n[Source Document Excerpts]:\n{0}\n", documentAttachmentText.Trim());
+            }
+
+            return sb.ToString().TrimEnd();
+        }
     }
 }

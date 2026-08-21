@@ -92,6 +92,25 @@ Analyze document.
 [Attachment: Data.pdf (Page 1)] Table of values.
 When you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.
 
+=== BRIEFING DECK PROMPT ===
+Create a concise, executive briefing deck of 4 slides focusing on: Project status and risk review.
+
+Structure the response into clear, numbered slide blocks using this exact format:
+Slide 1: [Executive Title]
+- [Key takeaway or core thesis]
+- [Supporting evidence or key context]
+- [Strategic implication]
+Visual suggestion: [Clean layout or diagram suggestion]
+Speaker Notes: [Brief talking points for the presenter]
+
+Guidelines:
+1. Extract real facts, metrics, and conclusions from the source material; do not invent details.
+2. Keep bullet points concise and presentation-ready (1-2 lines each).
+3. Ensure the narrative flows logically from executive summary to problem/context, key findings, and recommended next steps.
+
+[Source Document Excerpts]:
+[Attachment: report.docx] Revenue grew by 14% with 3 key supply chain risks.
+
 === EXCEL PARSED ACTIONS ===
 Target=A1|Type=Value|Content=Revenue Analysis|Desc=Title header|Undoable=True|Badge=val
 Target=B2|Type=Formula|Content==SUM(B3:B20)|Desc=Total sum|Undoable=True|Badge=fx

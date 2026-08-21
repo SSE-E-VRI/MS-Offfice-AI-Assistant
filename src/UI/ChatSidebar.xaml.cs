@@ -1052,7 +1052,23 @@ namespace MSOfficeAIAssistant.UI
             if (_wordCtrl != null && ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
                 operation = "apply the response as Word Track Changes";
             else if (_pptCtrl != null)
-                operation = "create or update slides from the response";
+            {
+                var slides = PowerPointActionParser.ParseSlideData(content);
+                if (slides.Count > 0)
+                {
+                    var titles = new List<string>();
+                    for (int i = 0; i < slides.Count; i++)
+                    {
+                        string t = !string.IsNullOrWhiteSpace(slides[i].Title) ? slides[i].Title : string.Format("Slide {0}", i + 1);
+                        titles.Add(string.Format("{0}. {1}", i + 1, t));
+                    }
+                    operation = string.Format("create {0} slides:\n{1}", slides.Count, string.Join("\n", titles.ToArray()));
+                }
+                else
+                {
+                    operation = "create or update slides from the response";
+                }
+            }
             else if (_excelCtrl != null)
             {
                 string cellTarget;
@@ -1115,13 +1131,12 @@ namespace MSOfficeAIAssistant.UI
                     "Undo",
                     _currentDocumentKey,
                     GetSelectedModelName(),
-                    "Undo last action",
-                    "Undone");
+                    "Undo requested",
+                    "Undone successfully");
             }
             else
             {
-                MessageBox.Show("Office could not undo the last change. The native undo stack may be empty or a non-AI edit may be the latest action.",
-                    "Undo Unavailable", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(string.Format("Could not undo the last change in {0}.", _hostType), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
             }
         }
 
@@ -1194,8 +1209,15 @@ namespace MSOfficeAIAssistant.UI
                 string prompt = (string)btn.Tag;
                 string title = btn.Content != null ? btn.Content.ToString() : null;
                 PromptContextScope scope = GetPromptContextScope();
-                if (_pptCtrl != null && (btn.Name == "BtnQuickReview" || btn.Name == "BtnQuickDeck"))
+                if (_pptCtrl != null && btn.Name == "BtnQuickDeck")
+                {
+                    prompt = PromptAssembler.BuildBriefingDeckPrompt(null, null, 5);
                     scope = PromptContextScope.SelectionAndFile;
+                }
+                else if (_pptCtrl != null && btn.Name == "BtnQuickReview")
+                {
+                    scope = PromptContextScope.SelectionAndFile;
+                }
                 await ExecuteExternalPromptAsync(prompt, title, scope);
             }
         }
