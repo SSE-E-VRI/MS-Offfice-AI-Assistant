@@ -49,6 +49,38 @@ namespace MSOfficeAIAssistant.Tests
             Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Applying) == OfficeActionStatus.Applying, "Applying -> Applying OA");
             Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Applied) == OfficeActionStatus.Applied, "Applied -> Applied OA");
             Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Error) == OfficeActionStatus.Failed, "Error -> Failed OA");
+
+            // Adapter-level assertions: Verify that ToSpreadsheetAction() and ToPowerPointAction() invoke the mapper
+            var aApplied = new OfficeAction { Operation = "excel.write_formula", Status = OfficeActionStatus.Applied };
+            Assert(aApplied.ToSpreadsheetAction().Status == SpreadsheetActionStatus.Applied, "Applied must survive the Excel adapter, not become Error");
+
+            var aApproved = new OfficeAction { Operation = "excel.write_formula", Status = OfficeActionStatus.Approved };
+            Assert(aApproved.ToSpreadsheetAction().Status == SpreadsheetActionStatus.Pending, "Approved must map to Pending in Excel adapter");
+
+            var aFailed = new OfficeAction { Operation = "excel.write_formula", Status = OfficeActionStatus.Failed };
+            Assert(aFailed.ToSpreadsheetAction().Status == SpreadsheetActionStatus.Error, "Failed must map to Error in Excel adapter");
+
+            var pApplied = new OfficeAction { Operation = "powerpoint.move_slide", Status = OfficeActionStatus.Applied };
+            Assert(pApplied.ToPowerPointAction().Status == PowerPointActionStatus.Applied, "Applied must survive the PowerPoint adapter, not become Error");
+
+            var pApproved = new OfficeAction { Operation = "powerpoint.move_slide", Status = OfficeActionStatus.Approved };
+            Assert(pApproved.ToPowerPointAction().Status == PowerPointActionStatus.Pending, "Approved must map to Pending in PowerPoint adapter");
+
+            var pFailed = new OfficeAction { Operation = "powerpoint.move_slide", Status = OfficeActionStatus.Failed };
+            Assert(pFailed.ToPowerPointAction().Status == PowerPointActionStatus.Error, "Failed must map to Error in PowerPoint adapter");
+
+            // FromSpreadsheetAction / FromPowerPointAction adapter-level assertions
+            var saApplied = new SpreadsheetAction { Type = SpreadsheetActionType.Formula, Status = SpreadsheetActionStatus.Applied };
+            Assert(OfficeAction.FromSpreadsheetAction(saApplied).Status == OfficeActionStatus.Applied, "Applied must survive FromSpreadsheetAction");
+
+            var saError = new SpreadsheetAction { Type = SpreadsheetActionType.Formula, Status = SpreadsheetActionStatus.Error };
+            Assert(OfficeAction.FromSpreadsheetAction(saError).Status == OfficeActionStatus.Failed, "Error must map to Failed in FromSpreadsheetAction");
+
+            var paApplied = new PowerPointAction { Type = "move_slide", Status = PowerPointActionStatus.Applied };
+            Assert(OfficeAction.FromPowerPointAction(paApplied).Status == OfficeActionStatus.Applied, "Applied must survive FromPowerPointAction");
+
+            var paError = new PowerPointAction { Type = "move_slide", Status = PowerPointActionStatus.Error };
+            Assert(OfficeAction.FromPowerPointAction(paError).Status == OfficeActionStatus.Failed, "Error must map to Failed in FromPowerPointAction");
         }
 
         private static void TestUnknownOperationDoesNotDefaultToMutation()
