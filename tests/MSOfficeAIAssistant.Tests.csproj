@@ -87,6 +87,7 @@
     <Compile Include="ComResilienceTests.cs" />
     <Compile Include="ProviderCapabilitiesTests.cs" />
     <Compile Include="OfficeHostControllerTests.cs" />
+    <Compile Include="DocToDeckTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
