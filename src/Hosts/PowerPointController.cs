@@ -8,13 +8,67 @@ using MSOfficeAIAssistant.Core;
 
 namespace MSOfficeAIAssistant.Hosts
 {
-    public class PowerPointController
+    public class PowerPointController : IOfficeHostController
     {
         private readonly object _rawAppObj;
+
+        public string HostType
+        {
+            get { return "PowerPoint"; }
+        }
 
         public PowerPointController(object appObj)
         {
             _rawAppObj = appObj;
+        }
+
+        public string GetActiveDocumentName()
+        {
+            return GetActivePresentationName();
+        }
+
+        public string GetSelectedText()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app != null && app.ActiveWindow != null && app.ActiveWindow.Selection != null)
+                {
+                    dynamic selection = app.ActiveWindow.Selection;
+                    int selType = Convert.ToInt32(selection.Type);
+                    // ppSelectionText = 3
+                    if (selType == 3 && selection.TextRange != null)
+                    {
+                        string txt = Convert.ToString(selection.TextRange.Text);
+                        if (!string.IsNullOrWhiteSpace(txt)) return txt;
+                    }
+                }
+            }
+            catch { }
+            return GetSlideText();
+        }
+
+        public string GetDocumentContext(string prompt, int maxCharacters)
+        {
+            return GetPresentationReviewContext(maxCharacters > 0 ? maxCharacters : 28000);
+        }
+
+        public bool Undo()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app != null)
+                {
+                    app.CommandBars.ExecuteMso("Undo");
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.Undo failed: {0}", ex.Message));
+            }
+            return false;
         }
 
 
@@ -287,19 +341,19 @@ namespace MSOfficeAIAssistant.Hosts
             return false;
         }
 
-        public void InsertText(string text)
+        public bool InsertText(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return;
+            if (string.IsNullOrWhiteSpace(text)) return false;
 
             try
             {
                 string cleanedText;
                 PowerPointActionParser.ParseStructuredActions(text, out cleanedText);
                 text = cleanedText;
-                if (string.IsNullOrWhiteSpace(text)) return;
+                if (string.IsNullOrWhiteSpace(text)) return false;
 
                 dynamic app = _rawAppObj;
-                if (app == null) return;
+                if (app == null) return false;
 
                 // 1. If user has actively selected text or a specific shape, insert directly
                 try
@@ -312,7 +366,7 @@ namespace MSOfficeAIAssistant.Hosts
                         if (selType == 3)
                         {
                             selection.TextRange.InsertAfter(CleanMarkdown(text));
-                            return;
+                            return true;
                         }
                     }
                 }
@@ -324,11 +378,11 @@ namespace MSOfficeAIAssistant.Hosts
                 {
                     // Fallback to simple bullet insertion
                     AddBulletPoints(new List<string>(text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)));
-                    return;
+                    return true;
                 }
 
                 dynamic pres = GetActivePresentation(true);
-                if (pres == null) return;
+                if (pres == null) return false;
 
                 dynamic activeSlide = GetOrCreateActiveSlide(true);
                 // If active slide already has user content, do not overwrite it — append new slides instead.
@@ -353,11 +407,12 @@ namespace MSOfficeAIAssistant.Hosts
 
                     PopulateSlide(targetSlide, slideData);
                 }
+                return true;
             }
             catch (Exception ex)
             {
                 Logger.Error("PowerPointController.InsertText failed", ex);
-                throw;
+                return false;
             }
         }
 
