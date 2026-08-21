@@ -84,6 +84,7 @@
     <Compile Include="ActionAuditStoreTests.cs" />
     <Compile Include="ChatMessageSerializationTests.cs" />
     <Compile Include="SessionOrchestratorTests.cs" />
+    <Compile Include="ComResilienceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

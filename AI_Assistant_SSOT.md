@@ -399,7 +399,7 @@ There is **no CI**.
 | **D-9** | Low | `RibbonCallback.OnTranslate` (`:121-151`) implements 9 languages but **has no corresponding ribbon XML** — orphaned and unreachable. |
 | **D-10** | Low | Dead methods with no callers: `ExcelController.CreatePreviewDescription` (duplicates the UI's own `DescribeSpreadsheetAction`), `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`. |
 | ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
-| **D-12** | **High** | Missing `IOleMessageFilter` (`CoRegisterMessageFilter`). When Excel is in in-cell edit mode or displaying a modal dialog, inbound COM calls are rejected with `0x800AC472` (`VBA_E_IGNORE` / `RPC_E_SERVERCALL_RETRYLATER`). Bare `try/catch` swallows this, causing silent mutation and verification failures. |
+| ~~D-12~~ | — | **RESOLVED.** Implemented `OleMessageFilter` (`CoRegisterMessageFilter` on STA thread) to handle Excel in-cell edit busy rejections (`0x800AC472` / `RPC_E_SERVERCALL_RETRYLATER`) with 10s retry window; previous filter restored on add-in disconnect. Added typed `SafeOfficeProbe` helpers. |
 
 ---
 
