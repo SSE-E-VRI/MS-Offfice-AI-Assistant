@@ -32,15 +32,22 @@ namespace MSOfficeAIAssistant.Hosts
             try
             {
                 dynamic app = _rawAppObj;
-                if (app != null && app.ActiveWindow != null && app.ActiveWindow.Selection != null)
+                dynamic activeWin = null;
+                try { activeWin = app != null ? app.ActiveWindow : null; } catch { }
+                if (activeWin != null && IsNormalOrSlideView(activeWin))
                 {
-                    dynamic selection = app.ActiveWindow.Selection;
-                    int selType = Convert.ToInt32(selection.Type);
-                    // ppSelectionText = 3
-                    if (selType == 3 && selection.TextRange != null)
+                    dynamic selection = null;
+                    try { selection = activeWin.Selection; } catch { }
+                    if (selection != null)
                     {
-                        string txt = Convert.ToString(selection.TextRange.Text);
-                        if (!string.IsNullOrWhiteSpace(txt)) return txt;
+                        int selType = 0;
+                        try { selType = Convert.ToInt32(selection.Type); } catch { }
+                        // ppSelectionText = 3
+                        if (selType == 3 && selection.TextRange != null)
+                        {
+                            string txt = Convert.ToString(selection.TextRange.Text);
+                            if (!string.IsNullOrWhiteSpace(txt)) return txt;
+                        }
                     }
                 }
             }
@@ -50,7 +57,7 @@ namespace MSOfficeAIAssistant.Hosts
 
         public string GetDocumentContext(string prompt, int maxCharacters)
         {
-            return GetPresentationReviewContext(maxCharacters > 0 ? maxCharacters : 28000);
+            return GetPresentationReviewContext(maxCharacters > 0 ? maxCharacters : 7000);
         }
 
         public bool Undo()
@@ -71,7 +78,20 @@ namespace MSOfficeAIAssistant.Hosts
             return false;
         }
 
-
+        private static bool IsNormalOrSlideView(dynamic activeWin)
+        {
+            if (activeWin == null) return false;
+            try
+            {
+                int viewType = Convert.ToInt32(activeWin.ViewType);
+                // 1 = ppViewSlide, 9 = ppViewNormal
+                return viewType == 1 || viewType == 9;
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         private dynamic GetActivePresentation(bool createIfNone)
         {
@@ -103,20 +123,22 @@ namespace MSOfficeAIAssistant.Hosts
             {
                 dynamic app = _rawAppObj;
                 dynamic activeWin = null;
-                // ActiveWindow can throw while PowerPoint is between presentation windows.
-                // Do not let that prevent the ActivePresentation fallback below.
+                // ActiveWindow can throw while PowerPoint is between presentation windows or in Protected View.
                 try { activeWin = app.ActiveWindow; } catch { }
                 if (activeWin != null)
                 {
-                    // 1. Try View.Slide
-                    try
+                    // 1. Try View.Slide if in normal or single slide view
+                    if (IsNormalOrSlideView(activeWin))
                     {
-                        dynamic slide = activeWin.View.Slide;
-                        if (slide != null) return slide;
+                        try
+                        {
+                            dynamic slide = activeWin.View.Slide;
+                            if (slide != null) return slide;
+                        }
+                        catch { }
                     }
-                    catch { }
 
-                    // 2. Try Selection.SlideRange
+                    // 2. Try Selection.SlideRange (works in Slide Sorter view or Normal view)
                     try
                     {
                         dynamic selection = activeWin.Selection;
@@ -355,18 +377,25 @@ namespace MSOfficeAIAssistant.Hosts
                 dynamic app = _rawAppObj;
                 if (app == null) return false;
 
-                // 1. If user has actively selected text or a specific shape, insert directly
+                // 1. If in normal/slide view and user has actively selected text, insert directly
                 try
                 {
-                    dynamic selection = app.ActiveWindow.Selection;
-                    if (selection != null)
+                    dynamic activeWin = null;
+                    try { activeWin = app.ActiveWindow; } catch { }
+                    if (activeWin != null && IsNormalOrSlideView(activeWin))
                     {
-                        int selType = Convert.ToInt32(selection.Type);
-                        // ppSelectionText = 3
-                        if (selType == 3)
+                        dynamic selection = null;
+                        try { selection = activeWin.Selection; } catch { }
+                        if (selection != null)
                         {
-                            selection.TextRange.InsertAfter(CleanMarkdown(text));
-                            return true;
+                            int selType = 0;
+                            try { selType = Convert.ToInt32(selection.Type); } catch { }
+                            // ppSelectionText = 3
+                            if (selType == 3 && selection.TextRange != null)
+                            {
+                                selection.TextRange.InsertAfter(CleanMarkdown(text));
+                                return true;
+                            }
                         }
                     }
                 }
