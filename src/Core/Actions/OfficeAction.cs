@@ -445,21 +445,23 @@ namespace MSOfficeAIAssistant.Core.Actions
             if (sa.Type == SpreadsheetActionType.Formula)
             {
                 action.Parameters["formula"] = sa.Content;
-                action.RiskLevel = 2;
             }
             else if (sa.Type == SpreadsheetActionType.Value)
             {
                 action.Parameters["value"] = sa.Content;
-                action.RiskLevel = 1;
             }
-            else if (sa.Type == SpreadsheetActionType.RemoveDuplicates)
+
+            var tool = ToolRegistry.GetTool(opName, "Excel");
+            if (tool != null)
             {
-                action.RiskLevel = 3;
-                action.IsUndoable = false;
+                action.RiskLevel = tool.RiskLevel;
+                action.IsUndoable = tool.IsUndoable;
+                action.RequiresApproval = tool.RequiresApproval;
             }
             else
             {
-                action.RiskLevel = 2;
+                action.RiskLevel = sa.Type == SpreadsheetActionType.RemoveDuplicates ? 3 : (sa.Type == SpreadsheetActionType.Value ? 1 : 2);
+                action.IsUndoable = sa.IsUndoable;
             }
 
             return action;
@@ -501,17 +503,30 @@ namespace MSOfficeAIAssistant.Core.Actions
         public static OfficeAction FromPowerPointAction(PowerPointAction pa)
         {
             if (pa == null) return null;
+            string opName = "powerpoint." + (pa.Type ?? "action").ToLowerInvariant();
             var action = new OfficeAction
             {
                 Host = "PowerPoint",
-                Operation = "powerpoint." + (pa.Type ?? "action").ToLowerInvariant(),
+                Operation = opName,
                 ExpectedResult = pa.Description,
                 SourceReason = pa.Description,
                 Status = FromPowerPointActionStatus(pa.Status),
                 ErrorMessage = pa.ErrorMessage,
-                ResultText = pa.ResultText,
-                RiskLevel = string.Equals(pa.Type, "set_notes", StringComparison.OrdinalIgnoreCase) ? 1 : 2
+                ResultText = pa.ResultText
             };
+
+            var tool = ToolRegistry.GetTool(opName, "PowerPoint");
+            if (tool != null)
+            {
+                action.RiskLevel = tool.RiskLevel;
+                action.IsUndoable = tool.IsUndoable;
+                action.RequiresApproval = tool.RequiresApproval;
+            }
+            else
+            {
+                action.RiskLevel = string.Equals(pa.Type, "set_notes", StringComparison.OrdinalIgnoreCase) ? 1 : 2;
+                action.IsUndoable = true;
+            }
 
             if (pa.Slide > 0) action.Target.Slide = pa.Slide;
             if (pa.Source > 0) action.Parameters["source"] = pa.Source;

@@ -197,6 +197,7 @@
     <Compile Include="Core\Actions\ActionExtractor.cs" />
     <Compile Include="Core\Actions\ToolDefinition.cs" />
     <Compile Include="Core\Actions\ToolRegistry.cs" />
+    <Compile Include="Core\Actions\ActionVerifier.cs" />
     <Compile Include="Core\Session\StreamCoordinator.cs" />
     <Compile Include="Core\Session\AssistantSession.cs" />
     <Compile Include="Hosts\HostOperationResult.cs" />
