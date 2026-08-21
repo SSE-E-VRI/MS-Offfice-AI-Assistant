@@ -604,14 +604,12 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 
 ### Phase 0 — Foundation breakdown
 
-| # | Work | Addresses | Status |
-|---|---|---|---|
-| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`1f3971ed6790ed842fe73df80479d9e18f2ca723efd29ccde72454023918e4ca`) and `golden_master_baseline.txt` fixture committed to gate Phase 0.1 onward against byte-for-byte drift. | Verification Gate | Implemented |
-| 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | Implemented |
-| 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Implemented |
+| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`88e58388...`) and `golden_master_baseline.txt` fixture committed to gate changes against byte-for-byte drift. | Verification Gate | Verified |
+| 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | Verified |
+| 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Verified |
 | 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; ElementHost DPI handling; re-enable list virtualization; incremental markdown. | D-7, D-8 | Planned |
-| 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing common dispatch; deleted orphaned `OutlookController` (D-4). | D-4 | Implemented |
-| 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Implemented |
+| 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing common dispatch; deleted orphaned `OutlookController` (D-4). | D-4 | Verified |
+| 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Verified |
 
 **Exit:** identical responses, actions and audit entries before and after extraction; PowerPoint
 structured actions visible in approval dialog; Excel in-cell edit rejections handled gracefully.
@@ -698,7 +696,7 @@ confirm-before-write), not against Copilot's feature list.
 
 | Rank | Feature | Verdict |
 |---|---|---|
-| 1 | **Doc-to-deck** | Ship first (above). Pipeline exists; only the entry point is missing. |
+| 1 | **Doc-to-deck** | **Verified**. Attachment-sourced briefing generator, slide outline parser, preview dialog, and view-state guards active. |
 | 2 | **Word Review → native comments** | Build next. Genuinely new — `grep` finds **no** Comments API in any host controller. `Document.Comments.Add(Range, Text)` works from Office 2010 onward, and it is non-destructive, so it fits the existing safety model without new risk tiers. |
 | 3 | **`@` mention local files** | Same local grounding, better UX. Pure WPF work over `AttachmentExtractor`. Delivers the "Copilot `/file`" feel with no cloud dependency. Helps Word, Excel and doc-to-deck alike. |
 | 4 | Chart/Pivot "explain + suggest" | Cheap. Prompt work over the existing `excel_actions` chart/pivot types. A chip, not a project. |
