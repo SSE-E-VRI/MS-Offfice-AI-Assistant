@@ -193,34 +193,38 @@ namespace MSOfficeAIAssistant.Core.Actions
 
         /// <summary>
         /// Projects this OfficeAction into a legacy SpreadsheetAction view-model for backward compatibility.
+        /// Returns null if the operation is not a recognized spreadsheet action.
         /// </summary>
         public SpreadsheetAction ToSpreadsheetAction()
         {
-            SpreadsheetActionType type = SpreadsheetActionType.Value;
+            SpreadsheetActionType? type = null;
             string op = (Operation ?? string.Empty).ToLowerInvariant();
             if (op.Contains("formula")) type = SpreadsheetActionType.Formula;
-            else if (op.Contains("fill_down")) type = SpreadsheetActionType.FillDown;
-            else if (op.Contains("create_table")) type = SpreadsheetActionType.CreateTable;
+            else if (op.Contains("fill_down") || op.Contains("filldown")) type = SpreadsheetActionType.FillDown;
+            else if (op.Contains("create_table") || op.Contains("createtable")) type = SpreadsheetActionType.CreateTable;
             else if (op.Contains("table")) type = SpreadsheetActionType.Table;
-            else if (op.Contains("conditional_format")) type = SpreadsheetActionType.ConditionalFormat;
+            else if (op.Contains("conditional_format") || op.Contains("conditionalformat")) type = SpreadsheetActionType.ConditionalFormat;
             else if (op.Contains("sort")) type = SpreadsheetActionType.Sort;
             else if (op.Contains("filter")) type = SpreadsheetActionType.Filter;
-            else if (op.Contains("data_validation")) type = SpreadsheetActionType.DataValidation;
+            else if (op.Contains("data_validation") || op.Contains("datavalidation")) type = SpreadsheetActionType.DataValidation;
             else if (op.Contains("chart")) type = SpreadsheetActionType.Chart;
             else if (op.Contains("pivot")) type = SpreadsheetActionType.PivotTable;
-            else if (op.Contains("named_range")) type = SpreadsheetActionType.NamedRange;
-            else if (op.Contains("remove_duplicates")) type = SpreadsheetActionType.RemoveDuplicates;
+            else if (op.Contains("named_range") || op.Contains("namedrange")) type = SpreadsheetActionType.NamedRange;
+            else if (op.Contains("remove_duplicates") || op.Contains("removeduplicates")) type = SpreadsheetActionType.RemoveDuplicates;
+            else if (op.Contains("value")) type = SpreadsheetActionType.Value;
+
+            if (!type.HasValue) return null;
 
             string content = GetParameterString("value") ?? GetParameterString("content") ?? GetParameterString("formula") ?? string.Empty;
             string target = Target != null ? (Target.Range ?? Target.ToString()) : "A1";
 
             return new SpreadsheetAction
             {
-                Type = type,
+                Type = type.Value,
                 Target = target,
                 Content = content,
                 Description = PreviewDescription,
-                Status = (SpreadsheetActionStatus)(int)Status,
+                Status = ToSpreadsheetActionStatus(Status),
                 ErrorMessage = ErrorMessage,
                 ResultText = ResultText
             };
@@ -239,7 +243,7 @@ namespace MSOfficeAIAssistant.Core.Actions
                 ExpectedResult = sa.Description,
                 SourceReason = sa.Description,
                 IsUndoable = sa.IsUndoable,
-                Status = (OfficeActionStatus)(int)sa.Status,
+                Status = FromSpreadsheetActionStatus(sa.Status),
                 ErrorMessage = sa.ErrorMessage,
                 ResultText = sa.ResultText
             };
@@ -284,15 +288,18 @@ namespace MSOfficeAIAssistant.Core.Actions
 
         /// <summary>
         /// Projects this OfficeAction into a legacy PowerPointAction view-model for backward compatibility.
+        /// Returns null if the operation is not a recognized deck action.
         /// </summary>
         public PowerPointAction ToPowerPointAction()
         {
             string op = (Operation ?? string.Empty).ToLowerInvariant();
-            string type = "move_slide";
+            string type = null;
             if (op.Contains("create_section")) type = "create_section";
             else if (op.Contains("rename_section")) type = "rename_section";
             else if (op.Contains("set_notes")) type = "set_notes";
             else if (op.Contains("move_slide")) type = "move_slide";
+
+            if (type == null) return null;
 
             return new PowerPointAction
             {
@@ -303,7 +310,7 @@ namespace MSOfficeAIAssistant.Core.Actions
                 Section = GetParameterInt("section"),
                 Name = GetParameterString("name"),
                 Notes = GetParameterString("notes"),
-                Status = (PowerPointActionStatus)(int)Status,
+                Status = ToPowerPointActionStatus(Status),
                 ErrorMessage = ErrorMessage,
                 ResultText = ResultText
             };
@@ -321,7 +328,7 @@ namespace MSOfficeAIAssistant.Core.Actions
                 Operation = "powerpoint." + (pa.Type ?? "action").ToLowerInvariant(),
                 ExpectedResult = pa.Description,
                 SourceReason = pa.Description,
-                Status = (OfficeActionStatus)(int)pa.Status,
+                Status = FromPowerPointActionStatus(pa.Status),
                 ErrorMessage = pa.ErrorMessage,
                 ResultText = pa.ResultText,
                 RiskLevel = string.Equals(pa.Type, "set_notes", StringComparison.OrdinalIgnoreCase) ? 1 : 2
@@ -335,6 +342,74 @@ namespace MSOfficeAIAssistant.Core.Actions
             if (!string.IsNullOrEmpty(pa.Notes)) action.Parameters["notes"] = pa.Notes;
 
             return action;
+        }
+
+        public static SpreadsheetActionStatus ToSpreadsheetActionStatus(OfficeActionStatus status)
+        {
+            switch (status)
+            {
+                case OfficeActionStatus.Applying:
+                    return SpreadsheetActionStatus.Applying;
+                case OfficeActionStatus.Applied:
+                    return SpreadsheetActionStatus.Applied;
+                case OfficeActionStatus.Failed:
+                case OfficeActionStatus.Rejected:
+                    return SpreadsheetActionStatus.Error;
+                case OfficeActionStatus.Pending:
+                case OfficeActionStatus.Approved:
+                default:
+                    return SpreadsheetActionStatus.Pending;
+            }
+        }
+
+        public static OfficeActionStatus FromSpreadsheetActionStatus(SpreadsheetActionStatus status)
+        {
+            switch (status)
+            {
+                case SpreadsheetActionStatus.Applying:
+                    return OfficeActionStatus.Applying;
+                case SpreadsheetActionStatus.Applied:
+                    return OfficeActionStatus.Applied;
+                case SpreadsheetActionStatus.Error:
+                    return OfficeActionStatus.Failed;
+                case SpreadsheetActionStatus.Pending:
+                default:
+                    return OfficeActionStatus.Pending;
+            }
+        }
+
+        public static PowerPointActionStatus ToPowerPointActionStatus(OfficeActionStatus status)
+        {
+            switch (status)
+            {
+                case OfficeActionStatus.Applying:
+                    return PowerPointActionStatus.Applying;
+                case OfficeActionStatus.Applied:
+                    return PowerPointActionStatus.Applied;
+                case OfficeActionStatus.Failed:
+                case OfficeActionStatus.Rejected:
+                    return PowerPointActionStatus.Error;
+                case OfficeActionStatus.Pending:
+                case OfficeActionStatus.Approved:
+                default:
+                    return PowerPointActionStatus.Pending;
+            }
+        }
+
+        public static OfficeActionStatus FromPowerPointActionStatus(PowerPointActionStatus status)
+        {
+            switch (status)
+            {
+                case PowerPointActionStatus.Applying:
+                    return OfficeActionStatus.Applying;
+                case PowerPointActionStatus.Applied:
+                    return OfficeActionStatus.Applied;
+                case PowerPointActionStatus.Error:
+                    return OfficeActionStatus.Failed;
+                case PowerPointActionStatus.Pending:
+                default:
+                    return OfficeActionStatus.Pending;
+            }
         }
 
         #endregion

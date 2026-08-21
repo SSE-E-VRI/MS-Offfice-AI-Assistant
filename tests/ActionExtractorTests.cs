@@ -17,7 +17,56 @@ namespace MSOfficeAIAssistant.Tests
             TestMalformedJsonYieldsExtractionFailure();
             TestOfficeActionSpreadsheetAdapterRoundTrip();
             TestOfficeActionPowerPointAdapterRoundTrip();
+            TestStatusMappingRoundTrips();
+            TestUnknownOperationDoesNotDefaultToMutation();
             TestBadgesAndDescriptions();
+        }
+
+        private static void TestStatusMappingRoundTrips()
+        {
+            // Pending & Approved -> Pending
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Pending) == SpreadsheetActionStatus.Pending, "Pending -> Pending");
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Approved) == SpreadsheetActionStatus.Pending, "Approved -> Pending (not yet executed)");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Pending) == PowerPointActionStatus.Pending, "Pending -> Pending PPT");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Approved) == PowerPointActionStatus.Pending, "Approved -> Pending PPT");
+
+            // Applying -> Applying
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Applying) == SpreadsheetActionStatus.Applying, "Applying -> Applying");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Applying) == PowerPointActionStatus.Applying, "Applying -> Applying PPT");
+
+            // Applied -> Applied (NOT Error!)
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Applied) == SpreadsheetActionStatus.Applied, "Applied -> Applied");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Applied) == PowerPointActionStatus.Applied, "Applied -> Applied PPT");
+
+            // Failed & Rejected -> Error
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Failed) == SpreadsheetActionStatus.Error, "Failed -> Error");
+            Assert(OfficeAction.ToSpreadsheetActionStatus(OfficeActionStatus.Rejected) == SpreadsheetActionStatus.Error, "Rejected -> Error");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Failed) == PowerPointActionStatus.Error, "Failed -> Error PPT");
+            Assert(OfficeAction.ToPowerPointActionStatus(OfficeActionStatus.Rejected) == PowerPointActionStatus.Error, "Rejected -> Error PPT");
+
+            // Legacy enum -> OfficeActionStatus
+            Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Pending) == OfficeActionStatus.Pending, "Pending -> Pending OA");
+            Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Applying) == OfficeActionStatus.Applying, "Applying -> Applying OA");
+            Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Applied) == OfficeActionStatus.Applied, "Applied -> Applied OA");
+            Assert(OfficeAction.FromSpreadsheetActionStatus(SpreadsheetActionStatus.Error) == OfficeActionStatus.Failed, "Error -> Failed OA");
+        }
+
+        private static void TestUnknownOperationDoesNotDefaultToMutation()
+        {
+            var unknownPpt = new OfficeAction
+            {
+                Host = "PowerPoint",
+                Operation = "powerpoint.nonexistent_feature",
+                Parameters = new Dictionary<string, object> { { "source", 0 }, { "target", 0 } }
+            };
+            Assert(unknownPpt.ToPowerPointAction() == null, "Unknown PowerPoint operation must return null and not default to mutating move_slide");
+
+            var unknownExcel = new OfficeAction
+            {
+                Host = "Excel",
+                Operation = "excel.unsupported_action"
+            };
+            Assert(unknownExcel.ToSpreadsheetAction() == null, "Unknown Excel operation must return null");
         }
 
         private static void TestJsonOfficeActionsExtraction()
@@ -137,9 +186,11 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestNativeToolCallExtraction()
         {
-            var nativeCalls = new List<dynamic>
+            var nativeCalls = new List<MSOfficeAIAssistant.Providers.ToolCallDto>
             {
-                new {
+                new MSOfficeAIAssistant.Providers.ToolCallDto
+                {
+                    Id = "call_abc123",
                     Name = "excel_write_formula",
                     Arguments = "{\"target\": \"Sheet1!C5\", \"formula\": \"=AVERAGE(C1:C4)\", \"expected_result\": \"Average value in C5\"}"
                 }
@@ -148,6 +199,7 @@ namespace MSOfficeAIAssistant.Tests
             var result = ActionExtractor.Extract(null, "Excel", nativeCalls);
             Assert(result.HasActions, "Expected native tool call to produce action");
             Assert(result.Actions.Count == 1, "Expected 1 action");
+            Assert(result.Actions[0].ActionId == "call_abc123", "ActionId should be preserved from ToolCallDto");
             Assert(result.Actions[0].Operation == "excel.write_formula", "Normalized operation name mismatch");
             Assert(result.Actions[0].Target.Sheet == "Sheet1", "Sheet mismatch");
             Assert(result.Actions[0].Target.Range == "C5", "Range mismatch");
