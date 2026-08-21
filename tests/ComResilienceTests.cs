@@ -8,6 +8,7 @@ namespace MSOfficeAIAssistant.Tests
     {
         public static void RunAll()
         {
+            TestOleMessageFilterComInterfaceIdentity();
             TestOleMessageFilterHandlerReturns();
             TestOleMessageFilterRetryLogic();
             TestOleMessageFilterRegistrationLifecycle();
@@ -15,6 +16,22 @@ namespace MSOfficeAIAssistant.Tests
             TestSafeOfficeProbeComExceptionFallback();
             TestSafeOfficeProbeGeneralExceptionFallback();
             TestSafeOfficeProbeTryExecute();
+        }
+
+        private static void TestOleMessageFilterComInterfaceIdentity()
+        {
+            // Verify canonical IID_IMessageFilter: 00000016-0000-0000-C000-000000000046
+            Guid expectedIid = new Guid("00000016-0000-0000-C000-000000000046");
+            Guid actualIid = typeof(IOleMessageFilter).GUID;
+            Assert(actualIid == expectedIid,
+                string.Format("IOleMessageFilter GUID mismatch! Expected canonical IID_IMessageFilter {0}, got {1}",
+                    expectedIid, actualIid));
+
+            // Verify CCW creation and COM QueryInterface for IID_IMessageFilter
+            var filter = new OleMessageFilter();
+            IntPtr pCom = Marshal.GetComInterfaceForObject(filter, typeof(IOleMessageFilter));
+            Assert(pCom != IntPtr.Zero, "CCW must successfully create and expose COM interface pointer for IOleMessageFilter");
+            Marshal.Release(pCom);
         }
 
         private static void TestOleMessageFilterHandlerReturns()
