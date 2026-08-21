@@ -122,9 +122,11 @@ namespace MSOfficeAIAssistant.Tests
             Assert(!assistantMsg.IsStreaming, "IsStreaming should be false");
             Assert(!assistantMsg.Content.Contains("<excel_actions>"), "Prose should be cleaned of XML tags");
             Assert(assistantMsg.Content.Contains("Here are the formulas:"), "Prose should contain introductory text");
-            Assert(assistantMsg.Actions.Count == 1, "Expected 1 parsed Excel action, got " + assistantMsg.Actions.Count);
-            Assert(assistantMsg.Actions[0].Target == "B2", "Action target mismatch");
-            Assert(assistantMsg.Actions[0].Type == SpreadsheetActionType.Formula, "Action type mismatch");
+            Assert(assistantMsg.HasOfficeActions, "HasOfficeActions should be true");
+            Assert(assistantMsg.OfficeActions.Count == 1, "Expected 1 parsed Excel action, got " + assistantMsg.OfficeActions.Count);
+            Assert(assistantMsg.OfficeActions[0].TargetDisplay == "B2", "Action target mismatch");
+            Assert(assistantMsg.OfficeActions[0].Operation == "excel.write_formula", "Action operation mismatch");
+            Assert(assistantMsg.OfficeActions[0].ContentDisplay == "=SUM(B3:B10)", "Action content mismatch");
         }
 
         private static void TestAssistantSessionProcessPowerPointResponse()
@@ -141,10 +143,11 @@ namespace MSOfficeAIAssistant.Tests
             Assert(!assistantMsg.IsStreaming, "IsStreaming should be false");
             Assert(!assistantMsg.Content.Contains("<powerpoint_actions>"), "Prose should be cleaned of XML tags");
             Assert(assistantMsg.Content.Contains("Slide deck reorganization:"), "Prose should contain introductory text");
-            Assert(assistantMsg.PowerPointActions.Count == 1, "Expected 1 parsed PowerPoint action, got " + assistantMsg.PowerPointActions.Count);
-            Assert(assistantMsg.PowerPointActions[0].Type == "move_slide", "Action type mismatch");
-            Assert(assistantMsg.PowerPointActions[0].Source == 3, "Source slide mismatch");
-            Assert(assistantMsg.PowerPointActions[0].Target == 1, "Target position mismatch");
+            Assert(assistantMsg.HasOfficeActions, "HasOfficeActions should be true");
+            Assert(assistantMsg.OfficeActions.Count == 1, "Expected 1 parsed PowerPoint action, got " + assistantMsg.OfficeActions.Count);
+            Assert(assistantMsg.OfficeActions[0].Operation == "powerpoint.move_slide", "Action operation mismatch");
+            Assert(Convert.ToString(assistantMsg.OfficeActions[0].Parameters["source"]) == "3", "Source slide mismatch");
+            Assert(Convert.ToString(assistantMsg.OfficeActions[0].Parameters["target"]) == "1", "Target position mismatch");
         }
 
         private static void TestAssistantSessionHistoryRoundtrip()

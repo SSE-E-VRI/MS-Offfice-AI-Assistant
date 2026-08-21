@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using MSOfficeAIAssistant.API;
 using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
+using MSOfficeAIAssistant.Core.Actions;
 using MSOfficeAIAssistant.Providers;
 
 namespace MSOfficeAIAssistant.Core.Session
@@ -154,35 +155,16 @@ namespace MSOfficeAIAssistant.Core.Session
             if (assistantMsg == null) return;
             assistantMsg.IsStreaming = false;
 
-            if (string.Equals(_hostType, "Excel", StringComparison.OrdinalIgnoreCase))
+            var extraction = ActionExtractor.Extract(fullAssistantText, _hostType);
+            if (extraction != null && extraction.HasActions)
             {
-                string cleanContent;
-                var extractedActions = SpreadsheetActionParser.ExtractActions(fullAssistantText, out cleanContent);
-                if (extractedActions != null && extractedActions.Count > 0)
+                assistantMsg.Content = extraction.CleanText;
+                foreach (var act in extraction.Actions)
                 {
-                    assistantMsg.Content = cleanContent;
-                    foreach (var act in extractedActions)
-                    {
-                        assistantMsg.Actions.Add(act);
-                    }
-                    assistantMsg.NotifyActionsChanged();
-                    return;
+                    assistantMsg.OfficeActions.Add(act);
                 }
-            }
-            else if (string.Equals(_hostType, "PowerPoint", StringComparison.OrdinalIgnoreCase))
-            {
-                string cleanContent;
-                var pptActions = PowerPointActionParser.ParseStructuredActions(fullAssistantText, out cleanContent);
-                if (pptActions != null && pptActions.Count > 0)
-                {
-                    assistantMsg.Content = cleanContent;
-                    foreach (var act in pptActions)
-                    {
-                        assistantMsg.PowerPointActions.Add(act);
-                    }
-                    assistantMsg.NotifyPowerPointActionsChanged();
-                    return;
-                }
+                assistantMsg.NotifyOfficeActionsChanged();
+                return;
             }
 
             assistantMsg.Content = fullAssistantText;
