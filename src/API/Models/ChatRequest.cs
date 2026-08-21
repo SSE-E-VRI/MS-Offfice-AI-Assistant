@@ -93,14 +93,57 @@ namespace MSOfficeAIAssistant.API.Models
         [JsonProperty("fullContent", NullValueHandling = NullValueHandling.Ignore)]
         public string FullContent { get; set; }
 
+        private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction> _officeActions;
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> _actions;
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> _powerPointActions;
+        private bool _hydrated;
+
+        /// <summary>
+        /// Single authoritative structured action collection for UI rendering and execution (SSOT §5.3).
+        /// </summary>
+        [JsonProperty("officeActions", NullValueHandling = NullValueHandling.Ignore)]
+        public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction> OfficeActions
+        {
+            get
+            {
+                EnsureHydrated();
+                return _officeActions;
+            }
+            set
+            {
+                _officeActions = value;
+                OnPropertyChanged("OfficeActions");
+                OnPropertyChanged("HasOfficeActions");
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasOfficeActions
+        {
+            get
+            {
+                EnsureHydrated();
+                return _officeActions != null && _officeActions.Count > 0;
+            }
+        }
+
+        public void NotifyOfficeActionsChanged()
+        {
+            OnPropertyChanged("OfficeActions");
+            OnPropertyChanged("HasOfficeActions");
+        }
 
         [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]
         public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> Actions
         {
             get { return _actions; }
-            set { _actions = value; OnPropertyChanged("Actions"); OnPropertyChanged("HasActions"); }
+            set
+            {
+                _actions = value;
+                _hydrated = false;
+                OnPropertyChanged("Actions");
+                OnPropertyChanged("HasActions");
+            }
         }
 
         [JsonIgnore]
@@ -119,7 +162,13 @@ namespace MSOfficeAIAssistant.API.Models
         public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> PowerPointActions
         {
             get { return _powerPointActions; }
-            set { _powerPointActions = value; OnPropertyChanged("PowerPointActions"); OnPropertyChanged("HasPowerPointActions"); }
+            set
+            {
+                _powerPointActions = value;
+                _hydrated = false;
+                OnPropertyChanged("PowerPointActions");
+                OnPropertyChanged("HasPowerPointActions");
+            }
         }
 
         [JsonIgnore]
@@ -132,6 +181,51 @@ namespace MSOfficeAIAssistant.API.Models
         {
             OnPropertyChanged("PowerPointActions");
             OnPropertyChanged("HasPowerPointActions");
+        }
+
+        /// <summary>
+        /// Converts legacy Actions and PowerPointActions from existing conversation stores
+        /// into the single OfficeActions collection on deserialization/access.
+        /// </summary>
+        public void EnsureHydrated()
+        {
+            if (_hydrated) return;
+            _hydrated = true;
+
+            if (_officeActions == null)
+            {
+                _officeActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction>();
+            }
+
+            if (_officeActions.Count == 0 && _actions != null && _actions.Count > 0)
+            {
+                foreach (var act in _actions)
+                {
+                    var oa = MSOfficeAIAssistant.Core.Actions.OfficeAction.FromSpreadsheetAction(act);
+                    if (oa != null)
+                    {
+                        _officeActions.Add(oa);
+                    }
+                }
+            }
+
+            if (_officeActions.Count == 0 && _powerPointActions != null && _powerPointActions.Count > 0)
+            {
+                foreach (var act in _powerPointActions)
+                {
+                    var oa = MSOfficeAIAssistant.Core.Actions.OfficeAction.FromPowerPointAction(act);
+                    if (oa != null)
+                    {
+                        _officeActions.Add(oa);
+                    }
+                }
+            }
+        }
+
+        [System.Runtime.Serialization.OnDeserialized]
+        internal void OnDeserializedMethod(System.Runtime.Serialization.StreamingContext context)
+        {
+            EnsureHydrated();
         }
 
         public event PropertyChangedEventHandler PropertyChanged;
@@ -147,6 +241,7 @@ namespace MSOfficeAIAssistant.API.Models
 
         public ChatMessage()
         {
+            _officeActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction>();
             _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
             _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
@@ -156,6 +251,7 @@ namespace MSOfficeAIAssistant.API.Models
         {
             Role = role;
             Content = content;
+            _officeActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction>();
             _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
             _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
