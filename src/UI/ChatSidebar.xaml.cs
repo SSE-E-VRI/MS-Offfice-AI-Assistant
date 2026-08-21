@@ -54,6 +54,7 @@ namespace MSOfficeAIAssistant.UI
         private string _hostType = "Office";
 
         // Host Controllers — created lazily, not during startup
+        private IOfficeHostController _hostController;
         private WordController _wordCtrl;
         private ExcelController _excelCtrl;
         private PowerPointController _pptCtrl;
@@ -197,17 +198,22 @@ namespace MSOfficeAIAssistant.UI
                 if (string.Equals(_hostType, "Word", StringComparison.OrdinalIgnoreCase))
                 {
                     _wordCtrl = new WordController(_hostAppObj);
-                    docName = _wordCtrl.GetActiveDocumentName();
+                    _hostController = _wordCtrl;
                 }
                 else if (string.Equals(_hostType, "Excel", StringComparison.OrdinalIgnoreCase))
                 {
                     _excelCtrl = new ExcelController(_hostAppObj);
-                    docName = _excelCtrl.GetActiveWorkbookName();
+                    _hostController = _excelCtrl;
                 }
                 else if (string.Equals(_hostType, "PowerPoint", StringComparison.OrdinalIgnoreCase))
                 {
                     _pptCtrl = new PowerPointController(_hostAppObj);
-                    docName = _pptCtrl.GetActivePresentationName();
+                    _hostController = _pptCtrl;
+                }
+
+                if (_hostController != null)
+                {
+                    docName = _hostController.GetActiveDocumentName();
                 }
 
                 _currentDocumentKey = string.IsNullOrWhiteSpace(docName) ? "Document" : docName;
@@ -309,19 +315,9 @@ namespace MSOfficeAIAssistant.UI
         {
             try
             {
-                if (_wordCtrl != null)
+                if (_hostController != null)
                 {
-                    string sel = _wordCtrl.GetSelectedText();
-                    if (!string.IsNullOrWhiteSpace(sel)) return sel;
-                }
-                if (_excelCtrl != null)
-                {
-                    string sel = _excelCtrl.GetSelectedRangeValues();
-                    if (!string.IsNullOrWhiteSpace(sel)) return sel;
-                }
-                if (_pptCtrl != null)
-                {
-                    string sel = _pptCtrl.GetSlideText();
+                    string sel = _hostController.GetSelectedText();
                     if (!string.IsNullOrWhiteSpace(sel)) return sel;
                 }
             }
@@ -1051,7 +1047,7 @@ namespace MSOfficeAIAssistant.UI
 
         private bool ConfirmInsert(string content)
         {
-            string host = _wordCtrl != null ? "Word" : (_excelCtrl != null ? "Excel" : (_pptCtrl != null ? "PowerPoint" : "Office"));
+            string host = _hostController != null ? _hostController.HostType : "Office";
             string operation;
             if (_wordCtrl != null && ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
                 operation = "apply the response as Word Track Changes";
@@ -1095,9 +1091,13 @@ namespace MSOfficeAIAssistant.UI
             bool undone = false;
             try
             {
-                if (_wordCtrl != null) undone = _wordCtrl.UndoLastChange();
+                if (_hostController != null)
+                {
+                    undone = _hostController.Undo();
+                }
+                else if (_wordCtrl != null) undone = _wordCtrl.UndoLastChange();
                 else if (_excelCtrl != null) undone = _excelCtrl.UndoLastAction();
-                else if (_pptCtrl != null) undone = _pptCtrl.UndoLastChange();
+                else if (_pptCtrl != null) undone = _pptCtrl.Undo();
             }
             catch (Exception ex)
             {
