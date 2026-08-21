@@ -89,6 +89,7 @@
     <Compile Include="OfficeHostControllerTests.cs" />
     <Compile Include="DocToDeckTests.cs" />
     <Compile Include="HostOperationResultTests.cs" />
+    <Compile Include="ActionExtractorTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

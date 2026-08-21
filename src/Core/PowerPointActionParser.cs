@@ -248,7 +248,9 @@ namespace MSOfficeAIAssistant.Core
                 {
                     while (reader.Read())
                     {
-                        if (reader.NodeType != XmlNodeType.Element || !string.Equals(reader.Name, "powerpoint_action", StringComparison.OrdinalIgnoreCase))
+                        if (reader.NodeType != XmlNodeType.Element ||
+                            (!string.Equals(reader.Name, "powerpoint_action", StringComparison.OrdinalIgnoreCase) &&
+                             !string.Equals(reader.Name, "action", StringComparison.OrdinalIgnoreCase)))
                             continue;
 
                         string type = (reader.GetAttribute("type") ?? string.Empty).Trim().ToLowerInvariant();
