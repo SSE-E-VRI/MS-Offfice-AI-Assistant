@@ -2,7 +2,7 @@
 
 **Document:** `AI_Assistant_SSOT.md`
 **Product:** AI Assistant for Microsoft Office
-**Shipped version:** 0.4.0
+**Shipped version:** 0.5.0
 **SSOT revision date:** 2026-08-21
 **Developer credit:** Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302
 
@@ -92,7 +92,7 @@ Connect  (IDTExtensibility2, IRibbonExtensibility, ICustomTaskPaneConsumer)
 | Task-pane CLSID | `{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}` | `CustomTaskPaneManager.cs:100` |
 | Task-pane ProgID | `MSOfficeAIAssistant.TaskPaneControl` | `CustomTaskPaneManager.cs:101` |
 | Type library GUID | `{A7E4C9B1-3F82-4D16-9E5A-71B08C4D2F90}` | `AssemblyInfo.cs:18` |
-| Assembly / file version | `0.4.0.0` | `AssemblyInfo.cs:20-21` |
+| Assembly / file version | `0.5.0.0` | `AssemblyInfo.cs:20-21` |
 | Assembly name | `MSOfficeAIAssistant` | csproj |
 | Root namespace | `MSOfficeAIAssistant` (matches `RootNamespace` and `AssemblyName`) | — |
 
