@@ -609,9 +609,9 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 
 | # | Work | Addresses | Status |
 |---|---|---|---|
-| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`1f3971ed6790ed842fe73df80479d9e18f2ca723efd29ccde72454023918e4ca`) and `golden_master_baseline.txt` fixture committed to gate Phase 0.1 onward against byte-for-byte drift. | Verification Gate | **Verified** |
-| 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | **Verified** |
-| 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | **Verified** |
+| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`1f3971ed6790ed842fe73df80479d9e18f2ca723efd29ccde72454023918e4ca`) and `golden_master_baseline.txt` fixture committed to gate Phase 0.1 onward against byte-for-byte drift. | Verification Gate | Implemented |
+| 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | Implemented |
+| 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Implemented |
 | 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; ElementHost DPI handling; re-enable list virtualization; incremental markdown. | D-7, D-8 | Planned |
 | 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing null-check dispatch. Resolve `OutlookController`. | D-4 | Planned |
 | 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Planned |
