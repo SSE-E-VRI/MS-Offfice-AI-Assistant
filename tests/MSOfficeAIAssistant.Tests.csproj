@@ -85,5 +85,9 @@
     <Compile Include="ChatMessageSerializationTests.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="Fixtures\golden_master_baseline.txt" />
+  </ItemGroup>
+
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
