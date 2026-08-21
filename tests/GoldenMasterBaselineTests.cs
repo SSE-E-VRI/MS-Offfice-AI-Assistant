@@ -17,7 +17,7 @@ namespace MSOfficeAIAssistant.Tests
         // Canonical SHA-256 hash of all baseline outputs (system prompts, context compositions,
         // XML parsed action DTOs, slide outline parsing, and audit record shape).
         // Any mutation, reordering, whitespace change, or regression in Phase 0.1+ will fail this hash.
-        public const string ExpectedGoldenMasterSha256 = "1f3971ed6790ed842fe73df80479d9e18f2ca723efd29ccde72454023918e4ca";
+        public const string ExpectedGoldenMasterSha256 = "88e58388c7fd5277b234ae87aa92354b556fc7e66adff9e68ee8d220c7cdcc49";
 
         public static void RunAll()
         {
@@ -25,6 +25,7 @@ namespace MSOfficeAIAssistant.Tests
             TestPromptAssemblerSystemPrompts();
             TestPromptAssemblerContextPermutations();
             TestPromptAssemblerAttachmentCitations();
+            TestPromptAssemblerBriefingDeckPrompt();
             TestExcelActionParserFullCatalog();
             TestExcelActionParserSafetyBoundaries();
             TestPowerPointActionParserFullCatalog();
@@ -108,7 +109,11 @@ namespace MSOfficeAIAssistant.Tests
             sb.Append("=== ATTACHMENT CITATION INSTRUCTION ===\n");
             sb.Append(PromptAssembler.AppendAttachmentCitationInstruction("Analyze document.", "[Attachment: Data.pdf (Page 1)] Table of values.")).Append("\n\n");
 
-            // 4. Excel Actions Full Catalog DTOs
+            // 4. Briefing Deck Prompt Assembly
+            sb.Append("=== BRIEFING DECK PROMPT ===\n");
+            sb.Append(PromptAssembler.BuildBriefingDeckPrompt("Project status and risk review", "[Attachment: report.docx] Revenue grew by 14% with 3 key supply chain risks.", 4)).Append("\n\n");
+
+            // 5. Excel Actions Full Catalog DTOs
             string excelXml =
                 "<excel_actions>\n" +
                 "  <excel_action target=\"A1\" type=\"value\" value=\"Revenue Analysis\" description=\"Title header\" />\n" +
@@ -260,6 +265,16 @@ namespace MSOfficeAIAssistant.Tests
             Assert(augmented.StartsWith(userPrompt), "Augmented prompt starts with user prompt");
             Assert(augmented.Contains(extractedAttachmentText), "Contains attachment text");
             Assert(augmented.Contains("[Source: filename, page/section]"), "Contains strict citation requirement");
+        }
+
+        private static void TestPromptAssemblerBriefingDeckPrompt()
+        {
+            string prompt = PromptAssembler.BuildBriefingDeckPrompt("Quarterly financial highlights", "[Attachment: doc.pdf] Highlights excerpt", 5);
+            Assert(prompt.Contains("Create a concise, executive briefing deck of 5 slides focusing on: Quarterly financial highlights"), "Briefing deck prompt should include target slide count and topic");
+            Assert(prompt.Contains("Slide 1: [Executive Title]"), "Briefing deck prompt should specify slide format");
+            Assert(prompt.Contains("[Source Document Excerpts]:"), "Briefing deck prompt should embed document excerpt");
+            Assert(prompt.Contains("Speaker Notes:"), "Briefing deck prompt should mandate speaker notes");
+            Assert(prompt.Contains("Visual suggestion:"), "Briefing deck prompt should mandate visual suggestions");
         }
 
         private static void TestExcelActionParserFullCatalog()

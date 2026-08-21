@@ -318,10 +318,12 @@ namespace MSOfficeAIAssistant.Core
                     if (line == "---" || line == "***" || line == "___") continue;
 
                     if (line.StartsWith("Visual:", StringComparison.OrdinalIgnoreCase) ||
-                        line.StartsWith("**Visual:", StringComparison.OrdinalIgnoreCase))
+                        line.StartsWith("Visual suggestion:", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("**Visual:", StringComparison.OrdinalIgnoreCase) ||
+                        line.StartsWith("**Visual suggestion:", StringComparison.OrdinalIgnoreCase))
                     {
                         inNotes = false;
-                        slide.VisualSuggestion = Regex.Replace(line, @"(?i)^\*?\*?Visual:\*?\*?\s*", "");
+                        slide.VisualSuggestion = Regex.Replace(line, @"(?i)^\*?\*?Visual(?:\s+suggestion)?:\*?\*?\s*", "");
                         continue;
                     }
 
