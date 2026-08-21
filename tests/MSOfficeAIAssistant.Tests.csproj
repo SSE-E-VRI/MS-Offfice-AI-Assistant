@@ -90,6 +90,7 @@
     <Compile Include="DocToDeckTests.cs" />
     <Compile Include="HostOperationResultTests.cs" />
     <Compile Include="ActionExtractorTests.cs" />
+    <Compile Include="ToolRegistryTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
