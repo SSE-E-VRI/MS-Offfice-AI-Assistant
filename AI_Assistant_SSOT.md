@@ -780,6 +780,9 @@ location-tagged piece of context · **Source** — a resolvable Office location 
    requirement.
 9. Anything listed as out of scope in §1 requires an explicit revision of this document before any
    implementation begins.
+10. **Validate regression guards by deliberate negative mutation.** A regression test or safety guard must
+    be validated by temporarily reintroducing the defect it claims to prevent and confirming that the test
+    suite fails. Testing helper methods in isolation does not validate adapter call sites.
 
 ---
 

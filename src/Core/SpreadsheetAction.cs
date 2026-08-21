@@ -371,7 +371,8 @@ namespace MSOfficeAIAssistant.Core
             {
                 case "formula": actionType = SpreadsheetActionType.Formula; return true;
                 case "value": actionType = SpreadsheetActionType.Value; return true;
-                case "filldown": actionType = SpreadsheetActionType.FillDown; return true;
+                case "filldown":
+                case "fill_down": actionType = SpreadsheetActionType.FillDown; return true;
                 case "table": actionType = SpreadsheetActionType.Table; return true;
                 case "create_table": actionType = SpreadsheetActionType.CreateTable; return true;
                 case "conditional_format": actionType = SpreadsheetActionType.ConditionalFormat; return true;
