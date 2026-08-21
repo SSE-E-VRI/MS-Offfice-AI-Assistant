@@ -102,6 +102,53 @@ namespace MSOfficeAIAssistant.Core
             }
         }
 
+        public void RecordOfficeAction(
+            MSOfficeAIAssistant.Core.Actions.OfficeAction action,
+            string prompt = null,
+            string sourceContext = null,
+            string model = null)
+        {
+            if (action == null) return;
+            try
+            {
+                lock (SyncRoot)
+                {
+                    List<ActionAuditEntry> entries = LoadUnsafe();
+                    string beforeStr = action.BeforeState != null ? JsonConvert.SerializeObject(action.BeforeState) : string.Empty;
+                    entries.Add(new ActionAuditEntry
+                    {
+                        TimestampUtc = DateTime.UtcNow,
+                        ActionId = action.ActionId,
+                        Host = action.Host ?? "Office",
+                        ActionType = action.Operation ?? "Action",
+                        Target = action.TargetDisplay,
+                        Summary = Truncate(action.PreviewDescription),
+                        Undoable = action.IsUndoable,
+                        RiskLevel = action.RiskLevel,
+                        IsRollbackPossible = action.Rollback != null ? action.Rollback.IsRollbackPossible : action.IsUndoable,
+                        BeforeState = Truncate(beforeStr),
+                        AfterState = Truncate(action.ResultText),
+                        Status = action.Status.ToString(),
+                        Prompt = Truncate(prompt),
+                        SourceContext = Truncate(sourceContext),
+                        Model = model ?? string.Empty,
+                        FullProposedAction = Truncate(action.ContentDisplay),
+                        ApplyResult = Truncate(action.ResultText)
+                    });
+
+                    if (entries.Count > MaxEntries)
+                    {
+                        entries.RemoveRange(0, entries.Count - MaxEntries);
+                    }
+                    SaveUnsafe(entries);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Action audit could not be saved: {0}", ex.Message));
+            }
+        }
+
         public List<ActionAuditEntry> GetRecent(int maxEntries)
         {
             lock (SyncRoot)
@@ -162,6 +209,9 @@ namespace MSOfficeAIAssistant.Core
         }
     }
 
+    /// <summary>
+    /// Audit v2 entry preserving all legacy fields for backward compatibility while adding provenance, risk, and rollback tracking.
+    /// </summary>
     public class ActionAuditEntry
     {
         public DateTime TimestampUtc { get; set; }
@@ -175,5 +225,30 @@ namespace MSOfficeAIAssistant.Core
         public string Model { get; set; }
         public string FullProposedAction { get; set; }
         public string ApplyResult { get; set; }
+
+        // Audit v2 additive fields
+        [JsonProperty("ActionId")]
+        public string ActionId { get; set; }
+
+        [JsonProperty("RiskLevel")]
+        public int RiskLevel { get; set; }
+
+        [JsonProperty("IsRollbackPossible")]
+        public bool IsRollbackPossible { get; set; }
+
+        [JsonProperty("BeforeState")]
+        public string BeforeState { get; set; }
+
+        [JsonProperty("AfterState")]
+        public string AfterState { get; set; }
+
+        [JsonProperty("Status")]
+        public string Status { get; set; }
+
+        [JsonProperty("PlanId")]
+        public string PlanId { get; set; }
+
+        [JsonProperty("RollbackReason")]
+        public string RollbackReason { get; set; }
     }
 }

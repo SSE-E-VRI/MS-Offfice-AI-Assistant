@@ -13,7 +13,8 @@ namespace MSOfficeAIAssistant.Core.Actions
         Applying,
         Applied,
         Failed,
-        Rejected
+        Rejected,
+        RolledBack
     }
 
     public class ActionTarget
@@ -43,8 +44,17 @@ namespace MSOfficeAIAssistant.Core.Actions
 
     public class RollbackInfo
     {
+        [JsonProperty("is_rollback_possible")]
+        public bool IsRollbackPossible { get; set; }
+
         [JsonProperty("strategy")]
         public string Strategy { get; set; }
+
+        [JsonProperty("failure_reason")]
+        public string FailureReason { get; set; }
+
+        [JsonProperty("captured_at")]
+        public DateTime? CapturedAt { get; set; }
 
         [JsonProperty("data")]
         public Dictionary<string, object> Data { get; set; }
@@ -52,11 +62,13 @@ namespace MSOfficeAIAssistant.Core.Actions
         public RollbackInfo()
         {
             Data = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+            IsRollbackPossible = true;
         }
 
         public RollbackInfo(string strategy) : this()
         {
             Strategy = strategy;
+            IsRollbackPossible = true;
         }
     }
 
@@ -74,7 +86,7 @@ namespace MSOfficeAIAssistant.Core.Actions
 
     /// <summary>
     /// Unified structured action model implementing SSOT §5.3 across Word, Excel, and PowerPoint.
-    /// Acts as the single authoritative action schema for validation, risk gating, UI presentation, and verification.
+    /// Acts as the single authoritative action schema for validation, risk gating, UI presentation, verification, and rollback.
     /// </summary>
     public class OfficeAction : INotifyPropertyChanged
     {
@@ -97,6 +109,9 @@ namespace MSOfficeAIAssistant.Core.Actions
 
         [JsonProperty("input")]
         public Dictionary<string, object> Parameters { get; set; }
+
+        [JsonProperty("before_state")]
+        public object BeforeState { get; set; }
 
         [JsonProperty("expected_result")]
         public string ExpectedResult { get; set; }
@@ -303,6 +318,8 @@ namespace MSOfficeAIAssistant.Core.Actions
                         return !string.IsNullOrEmpty(_errorMessage) ? ("⚠ Error: " + _errorMessage) : "⚠ Error";
                     case OfficeActionStatus.Rejected:
                         return "Rejected";
+                    case OfficeActionStatus.RolledBack:
+                        return !string.IsNullOrEmpty(_resultText) ? ("↺ " + _resultText) : "↺ Rolled Back";
                     default:
                         return _status.ToString();
                 }
@@ -322,6 +339,8 @@ namespace MSOfficeAIAssistant.Core.Actions
                         return "#DC2626"; // Red
                     case OfficeActionStatus.Applying:
                         return "#2563EB"; // Blue
+                    case OfficeActionStatus.RolledBack:
+                        return "#D97706"; // Amber / Orange
                     default:
                         return "#475569"; // Slate
                 }

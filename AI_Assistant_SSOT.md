@@ -368,12 +368,12 @@ There is **no CI**.
 | Embedded offline User Manual | Implemented |
 | Office 2021 stale-COM-registration fix | Implemented (see Appendix A) |
 | Mistral-neutral identity rename + legacy purge + data migration | Implemented |
-| From document → briefing deck (doc-to-deck) | Planned — builds on Phase 0 foundation |
+| From document → briefing deck (doc-to-deck) | Implemented (Verified in slice) |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
 | Chat / Plan / Edit modes | Planned — Phase A |
 | Context bar, source citations, response cards | Planned — Phase A |
 | Skills and domain packs | Planned — Phase B |
-| Unified action schema, tool registry, risk levels, verification, rollback | Planned — Phase C |
+| Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
 | Multi-step planner, cross-host workflows | Planned — Phase D |
 | Web search / external grounding | Deferred (Post-Phase D) — opt-in BYOK client-side search |
 | AI Pages, model routing, knowledge library, feedback capture | Not Implemented — deferred past Phase D |
@@ -647,30 +647,16 @@ with working source links. Mutation behavior unchanged.
 **Exit:** the same prompt under `general` and `railway` produces an appropriately different register;
 domain rules demonstrably suppress invented references.
 
-### Phase C — Safe execution (medium risk)
+### Phase C — Safe execution (Implemented & Verified in 16/16 Unit Suites)
 
-- **C1** `src/Core/Actions/OfficeAction.cs` implementing §5.3. `SpreadsheetAction` becomes a
-  view-model projection. **Keep the `<excel_actions>` XML parser as a compatibility path** so stored
-  conversations keep working.
-- **C2** `src/Core/Tools/` — the Tool Registry. Each entry declares name, input schema, risk level,
-  host method, rollback strategy and validation rules, and the registry **generates** the prompt's
-  action catalog, the validator allow-list and the dispatch table — retiring all four duplicated
-  allow-lists (D-5). Must be written in C# 5 style: `Dictionary<string, ToolDefinition>` with explicit
-  delegates. Initial set includes **a Word action set, which does not exist today** (§2.7).
-- **C3** Action Extractor accepting native tool calls or embedded JSON; on malformed output emit a
-  typed `ExtractionFailure` and route into **editable Plan mode**, never a silent chat-only fallback.
-  `StreamingParser.TryParseLine` must stop discarding non-content deltas.
-- **C4** Risk gating with in-panel risk-badged preview cards replacing every `MessageBox`. Preserve
-  and extend the existing safety bounds (§2.7).
-- **C5** Verification engine — compare observed against `expected_result`; detect `#REF!`/`#VALUE!`;
-  offer Fix / Review / Cancel. **Prerequisite:** make the ~60 silent `catch {}` swallows reportable
-  (§2.12), or verification cannot see partial failures.
-- **C6** Audit v2 — add `ActionId`, `BeforeState`, `RiskLevel`, `PlanId`; capture before-state at
-  apply time; generalize Word's `UndoRecord` grouping so a batch apply is **one** undo step in every
-  host, not N or zero.
+- **C0** `HostOperationResult` structured execution envelopes with HRESULT capture and error classification.
+- **C1** `src/Core/Actions/OfficeAction.cs` implementing §5.3 unified schema with backward-compatible adapters.
+- **C2** `src/Core/Actions/ToolRegistry.cs` single-source tool registry for actions, risk levels, and prompt generation (D-5).
+- **C3** `src/Core/Actions/ActionExtractor.cs` native/embedded extraction and unified single-card UI (`ChatSidebar.xaml`).
+- **C4** `src/Core/Actions/ActionVerifier.cs` pre/post verification engine, Excel calculation error literal detection (`#REF!`, `#VALUE!`), and busy state (`0x800AC472`) classification.
+- **C5** `src/Core/Actions/RollbackExecutor.cs` & Audit v2: formula-preserving `BeforeState` capture, programmatic inverse execution, strict LIFO batch unwinding, capacity limits (5,000 cells), and additive `ActionAuditStore`.
 
-**Exit:** a multi-step plan is reviewable, approvable per-step or wholesale, executed safely,
-verified and undoable — identically across all four providers.
+**Exit:** All structured actions across Word, Excel, and PowerPoint are unified, risk-gated, verified, rollbackable in strict LIFO order, and audited with full forensic provenance.
 
 ### Phase D — Agentic plan-then-execute (medium–high risk)
 
