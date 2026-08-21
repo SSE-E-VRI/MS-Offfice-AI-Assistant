@@ -237,119 +237,36 @@ namespace MSOfficeAIAssistant.Hosts
             return string.Empty;
         }
 
-        public bool ApplySpreadsheetAction(SpreadsheetAction action)
+        private HostOperationResult ResolveTargetRange(string targetAddress, out dynamic app, out dynamic ws, out dynamic targetRange)
         {
-            if (action == null || !SpreadsheetActionParser.IsSafeTarget(action.Target))
-                return false;
+            app = null;
+            ws = null;
+            targetRange = null;
+
+            if (string.IsNullOrEmpty(targetAddress) || !SpreadsheetActionParser.IsSafeTarget(targetAddress))
+                return HostOperationResult.Failed(string.Format("Invalid or unsafe cell/range address: '{0}'.", targetAddress), 0, targetAddress);
 
             try
             {
-                dynamic app = _rawAppObj;
+                app = _rawAppObj;
                 if (app == null)
-                {
-                    action.Status = SpreadsheetActionStatus.Error;
-                    action.ErrorMessage = "No active Excel worksheet found.";
-                    return false;
-                }
+                    return HostOperationResult.Failed("No active Excel workbook found.", 0, targetAddress);
 
-                dynamic ws = null;
                 try { ws = app.ActiveSheet; } catch { }
                 if (ws == null)
-                {
-                    action.Status = SpreadsheetActionStatus.Error;
-                    action.ErrorMessage = "No active Excel worksheet found.";
-                    return false;
-                }
+                    return HostOperationResult.Failed("No active Excel worksheet found.", 0, targetAddress);
 
                 EnsureWorksheetEditable(ws);
 
-                dynamic targetRange = null;
-                try { targetRange = ws.Range(action.Target); } catch { }
+                try { targetRange = ws.Range(targetAddress); } catch { }
                 if (targetRange == null)
-                {
-                    action.Status = SpreadsheetActionStatus.Error;
-                    action.ErrorMessage = string.Format("Invalid range target: {0}", action.Target);
-                    return false;
-                }
+                    return HostOperationResult.Failed(string.Format("Could not resolve target range: '{0}'.", targetAddress), 0, targetAddress);
 
-                action.Status = SpreadsheetActionStatus.Applying;
-                action.ErrorMessage = string.Empty;
-                action.ResultText = string.Empty;
-                string result;
-
-                switch (action.Type)
-                {
-                    case SpreadsheetActionType.Formula:
-                        targetRange.Formula = EnsureFormula(action.Content);
-                        result = ReadRangeResult(targetRange);
-                        break;
-
-                    case SpreadsheetActionType.FillDown:
-                        ApplyFillDown(targetRange, action.Content);
-                        result = string.Format("Filled {0}", action.Target);
-                        break;
-
-                    case SpreadsheetActionType.Table:
-                        WriteTable(ws, targetRange, action.Content);
-                        result = "Table written";
-                        break;
-
-                    case SpreadsheetActionType.Value:
-                        targetRange.Value2 = action.Content;
-                        result = "Value written";
-                        break;
-
-                    case SpreadsheetActionType.CreateTable:
-                        result = CreateExcelTable(ws, targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.ConditionalFormat:
-                        result = ApplyConditionalFormatting(targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.Sort:
-                        result = ApplySort(ws, targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.Filter:
-                        result = ApplyFilter(targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.DataValidation:
-                        result = ApplyDataValidation(targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.Chart:
-                        result = CreateChart(ws, targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.PivotTable:
-                        result = CreatePivotTable(app, ws, targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.NamedRange:
-                        result = CreateNamedRange(app, ws, targetRange, action.Content);
-                        break;
-
-                    case SpreadsheetActionType.RemoveDuplicates:
-                        result = RemoveDuplicates(targetRange, action.Content);
-                        break;
-
-                    default:
-                        throw new InvalidOperationException("Unsupported spreadsheet action type.");
-                }
-
-                action.ResultText = result;
-                action.Status = SpreadsheetActionStatus.Applied;
-                Logger.Info(string.Format("Applied {0} to {1}: {2}", action.Type, action.Target, result));
-                return true;
+                return HostOperationResult.Ok(null, targetAddress);
             }
             catch (Exception ex)
             {
-                action.Status = SpreadsheetActionStatus.Error;
-                action.ErrorMessage = ex.Message;
-                Logger.Error(string.Format("Failed to apply {0} to {1}", action.Type, action.Target), ex);
-                return false;
+                return HostOperationResult.FromException(ex, "ExcelController.ResolveTargetRange", targetAddress);
             }
         }
 
@@ -358,15 +275,33 @@ namespace MSOfficeAIAssistant.Hosts
             if (action == null)
                 return HostOperationResult.Failed("Spreadsheet action cannot be null.");
 
-            if (!ApplySpreadsheetAction(action))
+            var oa = MSOfficeAIAssistant.Core.Actions.OfficeAction.FromSpreadsheetAction(action);
+            var res = ToolRegistry.Execute(this, oa);
+            if (res.Success)
             {
-                return HostOperationResult.Failed(
-                    !string.IsNullOrEmpty(action.ErrorMessage) ? action.ErrorMessage : "Spreadsheet action application failed.",
-                    0,
-                    action.Target);
+                action.Status = SpreadsheetActionStatus.Applied;
+                action.ResultText = res.Value != null ? Convert.ToString(res.Value) : "Applied successfully";
+                action.ErrorMessage = null;
+                Logger.Info(string.Format("Applied {0} to {1}: {2}", action.Type, action.Target, action.ResultText));
             }
+            else
+            {
+                action.Status = SpreadsheetActionStatus.Error;
+                action.ErrorMessage = res.ErrorMessage;
+                Logger.Error(string.Format("Failed to apply {0} to {1}: {2}", action.Type, action.Target, res.ErrorMessage));
+            }
+            return res;
+        }
 
-            return HostOperationResult.Ok(action.ResultText, action.Target);
+        public bool ApplySpreadsheetAction(SpreadsheetAction action)
+        {
+            if (action == null) return false;
+            action.Status = SpreadsheetActionStatus.Applying;
+            action.ErrorMessage = string.Empty;
+            action.ResultText = string.Empty;
+
+            var res = ExecuteSpreadsheetAction(action);
+            return res.Success;
         }
 
         public HostOperationResult ExecuteWriteFormula(string formula, string cellAddress)
@@ -374,20 +309,12 @@ namespace MSOfficeAIAssistant.Hosts
             if (string.IsNullOrEmpty(formula))
                 return HostOperationResult.Failed("Formula cannot be empty.", 0, cellAddress);
 
-            if (string.IsNullOrEmpty(cellAddress) || !SpreadsheetActionParser.IsSafeTarget(cellAddress))
-                return HostOperationResult.Failed(string.Format("Invalid or unsafe cell address: {0}", cellAddress), 0, cellAddress);
+            dynamic app, ws, targetRange;
+            var resolveRes = ResolveTargetRange(cellAddress, out app, out ws, out targetRange);
+            if (!resolveRes.Success) return resolveRes;
 
             try
             {
-                dynamic app = _rawAppObj;
-                if (app == null || app.ActiveSheet == null)
-                    return HostOperationResult.Failed("No active Excel worksheet found.", 0, cellAddress);
-
-                EnsureWorksheetEditable(app.ActiveSheet);
-                dynamic targetRange = app.ActiveSheet.Range(cellAddress);
-                if (targetRange == null)
-                    return HostOperationResult.Failed(string.Format("Could not resolve cell address: {0}", cellAddress), 0, cellAddress);
-
                 if (!formula.StartsWith("=")) formula = "=" + formula;
                 targetRange.Formula = formula;
                 string res = ReadRangeResult(targetRange);
@@ -402,20 +329,12 @@ namespace MSOfficeAIAssistant.Hosts
 
         public HostOperationResult ExecuteWriteValue(string value, string cellAddress)
         {
-            if (string.IsNullOrEmpty(cellAddress) || !SpreadsheetActionParser.IsSafeTarget(cellAddress))
-                return HostOperationResult.Failed(string.Format("Invalid or unsafe cell address: {0}", cellAddress), 0, cellAddress);
+            dynamic app, ws, targetRange;
+            var resolveRes = ResolveTargetRange(cellAddress, out app, out ws, out targetRange);
+            if (!resolveRes.Success) return resolveRes;
 
             try
             {
-                dynamic app = _rawAppObj;
-                if (app == null || app.ActiveSheet == null)
-                    return HostOperationResult.Failed("No active Excel worksheet found.", 0, cellAddress);
-
-                EnsureWorksheetEditable(app.ActiveSheet);
-                dynamic targetRange = app.ActiveSheet.Range(cellAddress);
-                if (targetRange == null)
-                    return HostOperationResult.Failed(string.Format("Could not resolve cell address: {0}", cellAddress), 0, cellAddress);
-
                 targetRange.Value2 = value ?? string.Empty;
                 return HostOperationResult.Ok("Value written", cellAddress);
             }
@@ -423,6 +342,204 @@ namespace MSOfficeAIAssistant.Hosts
             {
                 Logger.Error("ExcelController.ExecuteWriteValue failed", ex);
                 return HostOperationResult.FromException(ex, "ExcelController.ExecuteWriteValue", cellAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteFillDown(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                ApplyFillDown(targetRange, content);
+                return HostOperationResult.Ok(string.Format("Filled {0}", targetAddress), targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteFillDown failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteFillDown", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteTable(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                WriteTable(ws, targetRange, content);
+                return HostOperationResult.Ok("Table written", targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteTable failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteTable", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteCreateTable(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = CreateExcelTable(ws, targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteCreateTable failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteCreateTable", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteConditionalFormat(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = ApplyConditionalFormatting(targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteConditionalFormat failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteConditionalFormat", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteSort(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = ApplySort(ws, targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteSort failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteSort", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteFilter(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = ApplyFilter(targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteFilter failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteFilter", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteDataValidation(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = ApplyDataValidation(targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteDataValidation failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteDataValidation", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteCreateChart(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = CreateChart(ws, targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteCreateChart failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteCreateChart", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteCreatePivotTable(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = CreatePivotTable(app, ws, targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteCreatePivotTable failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteCreatePivotTable", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteNamedRange(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = CreateNamedRange(app, ws, targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteNamedRange failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteNamedRange", targetAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteRemoveDuplicates(string targetAddress, string content)
+        {
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                string r = RemoveDuplicates(targetRange, content);
+                return HostOperationResult.Ok(r, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteRemoveDuplicates failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteRemoveDuplicates", targetAddress);
             }
         }
 
