@@ -188,7 +188,11 @@ namespace MSOfficeAIAssistant.Providers
             int maxTokens,
             bool stream,
             List<AttachmentBlock> attachments = null,
-            string systemPrompt = null)
+            string systemPrompt = null,
+            string responseFormat = null,
+            object tools = null,
+            object toolChoice = null,
+            Dictionary<string, object> extraParameters = null)
         {
             var messagePayloads = new List<object>();
 
@@ -257,14 +261,63 @@ namespace MSOfficeAIAssistant.Providers
                 }
             }
 
-            return new
+            var payload = new Dictionary<string, object>();
+            payload["model"] = model;
+            payload["messages"] = messagePayloads;
+            payload["temperature"] = Math.Max(0.0, Math.Min(2.0, temperature));
+            payload["max_tokens"] = maxTokens > 0 ? maxTokens : 4096;
+            payload["stream"] = stream;
+
+            if (!string.IsNullOrWhiteSpace(responseFormat))
             {
-                model = model,
-                messages = messagePayloads,
-                temperature = Math.Max(0.0, Math.Min(2.0, temperature)),
-                max_tokens = maxTokens > 0 ? maxTokens : 4096,
-                stream = stream
-            };
+                if (string.Equals(responseFormat, "json_object", StringComparison.OrdinalIgnoreCase))
+                {
+                    payload["response_format"] = new Dictionary<string, object> { { "type", "json_object" } };
+                }
+                else
+                {
+                    payload["response_format"] = new Dictionary<string, object> { { "type", responseFormat } };
+                }
+            }
+
+            if (tools != null)
+            {
+                payload["tools"] = tools;
+                if (toolChoice != null)
+                {
+                    payload["tool_choice"] = toolChoice;
+                }
+            }
+
+            if (extraParameters != null)
+            {
+                foreach (var kvp in extraParameters)
+                {
+                    if (!string.IsNullOrWhiteSpace(kvp.Key) && !payload.ContainsKey(kvp.Key))
+                    {
+                        payload[kvp.Key] = kvp.Value;
+                    }
+                }
+            }
+
+            return payload;
+        }
+
+        public static object BuildPayload(AIRequest request, bool stream)
+        {
+            if (request == null) return null;
+            return BuildPayload(
+                request.Model,
+                request.Messages,
+                request.Temperature,
+                request.MaxTokens,
+                stream,
+                request.Attachments,
+                request.SystemPrompt,
+                request.ResponseFormat,
+                request.Tools,
+                request.ToolChoice,
+                request.ExtraParameters);
         }
 
         public async Task<string> ChatAsync(
@@ -276,8 +329,22 @@ namespace MSOfficeAIAssistant.Providers
             CancellationToken ct = default(CancellationToken),
             string systemPrompt = null)
         {
+            return await ChatAsync(new AIRequest
+            {
+                Model = model,
+                Messages = messages,
+                Temperature = temperature,
+                MaxTokens = maxTokens,
+                Attachments = attachments,
+                SystemPrompt = systemPrompt
+            }, ct).ConfigureAwait(false);
+        }
+
+        public async Task<string> ChatAsync(AIRequest request, CancellationToken ct = default(CancellationToken))
+        {
+            if (request == null) throw new ArgumentNullException("request");
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, false, attachments, systemPrompt);
+            var requestPayload = BuildPayload(request, false);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -346,10 +413,27 @@ namespace MSOfficeAIAssistant.Providers
             CancellationToken ct = default(CancellationToken),
             string systemPrompt = null)
         {
+            await StreamChatCallbackAsync(new AIRequest
+            {
+                Model = model,
+                Messages = messages,
+                Temperature = temperature,
+                MaxTokens = maxTokens,
+                Attachments = attachments,
+                SystemPrompt = systemPrompt
+            }, onDeltaReceived, ct).ConfigureAwait(false);
+        }
+
+        public async Task StreamChatCallbackAsync(
+            AIRequest request,
+            Action<string> onDeltaReceived,
+            CancellationToken ct = default(CancellationToken))
+        {
+            if (request == null) throw new ArgumentNullException("request");
             if (onDeltaReceived == null) throw new ArgumentNullException("onDeltaReceived");
 
             string url = string.Format("{0}/chat/completions", _baseUrl);
-            var requestPayload = BuildPayload(model, messages, temperature, maxTokens, true, attachments, systemPrompt);
+            var requestPayload = BuildPayload(request, true);
             string requestJson = JsonConvert.SerializeObject(requestPayload);
             int maxRetries = 3;
             int delayMs = 1000;
@@ -362,12 +446,12 @@ namespace MSOfficeAIAssistant.Providers
 
                 try
                 {
-                    var request = new HttpRequestMessage(HttpMethod.Post, url)
+                    var httpRequestMessage = new HttpRequestMessage(HttpMethod.Post, url)
                     {
                         Content = new StringContent(requestJson, Encoding.UTF8, "application/json")
                     };
 
-                    using (var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
+                    using (var response = await _httpClient.SendAsync(httpRequestMessage, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false))
                     {
                         if (!response.IsSuccessStatusCode)
                         {

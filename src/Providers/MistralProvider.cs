@@ -32,7 +32,10 @@ namespace MSOfficeAIAssistant.Providers
                        AICapabilities.Streaming |
                        AICapabilities.Vision |
                        AICapabilities.ModelListing |
-                       AICapabilities.ConnectionTest;
+                       AICapabilities.ConnectionTest |
+                       AICapabilities.StructuredOutput |
+                       AICapabilities.ToolCalling |
+                       AICapabilities.JsonMode;
             }
         }
 
@@ -62,8 +65,9 @@ namespace MSOfficeAIAssistant.Providers
             var results = new List<AIModelInfo>();
             try
             {
-                using (var http = new HttpClient { Timeout = TimeSpan.FromSeconds(15) })
+                using (var http = new HttpClient())
                 {
+                    http.Timeout = TimeSpan.FromSeconds(15);
                     if (!string.IsNullOrWhiteSpace(_apiKey))
                     {
                         http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _apiKey);
@@ -113,14 +117,7 @@ namespace MSOfficeAIAssistant.Providers
             if (request == null) throw new ArgumentNullException("request");
             try
             {
-                string text = await _client.ChatAsync(
-                    request.Model,
-                    request.Messages,
-                    request.Temperature,
-                    request.MaxTokens,
-                    request.Attachments,
-                    ct,
-                    request.SystemPrompt).ConfigureAwait(false);
+                string text = await _client.ChatAsync(request, ct).ConfigureAwait(false);
 
                 return new AIResponse(text) { Model = request.Model };
             }
@@ -138,15 +135,7 @@ namespace MSOfficeAIAssistant.Providers
 
             try
             {
-                await _client.StreamChatCallbackAsync(
-                    request.Model,
-                    request.Messages,
-                    request.Temperature,
-                    request.MaxTokens,
-                    onDeltaReceived,
-                    request.Attachments,
-                    ct,
-                    request.SystemPrompt).ConfigureAwait(false);
+                await _client.StreamChatCallbackAsync(request, onDeltaReceived, ct).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
