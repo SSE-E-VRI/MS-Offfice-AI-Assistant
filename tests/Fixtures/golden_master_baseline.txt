@@ -93,20 +93,19 @@ Analyze document.
 When you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.
 
 === EXCEL PARSED ACTIONS ===
-Target=A1|Type=Value|Content=Revenue Analysis|Desc=Title header|Undoable=True|Badge=value
-Target=B2|Type=Formula|Content==SUM(B3:B20)|Desc=Total sum|Undoable=True|Badge=formula
-Target=C2:C20|Type=FillDown|Content==B2*1.18|Desc=Tax inclusive|Undoable=True|Badge=filldown
-Target=A3:D20|Type=Table|Content=ColA	ColB	ColC	ColD
-1	2	3	4|Desc=Data table|Undoable=True|Badge=table
+Target=A1|Type=Value|Content=Revenue Analysis|Desc=Title header|Undoable=True|Badge=val
+Target=B2|Type=Formula|Content==SUM(B3:B20)|Desc=Total sum|Undoable=True|Badge=fx
+Target=C2:C20|Type=FillDown|Content==B2*1.18|Desc=Tax inclusive|Undoable=True|Badge=fill
+Target=A3:D20|Type=Table|Content=ColA ColB ColC ColD 1 2 3 4|Desc=Data table|Undoable=True|Badge=table
 Target=A3:D20|Type=CreateTable|Content=SalesTable|Desc=Table description|Undoable=False|Badge=table+
-Target=B2:B20|Type=ConditionalFormat|Content=gt:1000|Desc=Highlight large values|Undoable=True|Badge=cond-fmt
+Target=B2:B20|Type=ConditionalFormat|Content=gt:1000|Desc=Highlight large values|Undoable=True|Badge=format
 Target=A2:D20|Type=Sort|Content=descending|Desc=Sort by Revenue|Undoable=True|Badge=sort
 Target=A2:D20|Type=Filter|Content=ColB:>100|Desc=Filter active|Undoable=True|Badge=filter
-Target=E2:E20|Type=DataValidation|Content=list:Open,Closed,Pending|Desc=Status dropdown|Undoable=True|Badge=valid
+Target=E2:E20|Type=DataValidation|Content=list:Open,Closed,Pending|Desc=Status dropdown|Undoable=True|Badge=validate
 Target=A2:B10|Type=Chart|Content=column|Desc=Revenue Column Chart|Undoable=False|Badge=chart
 Target=A2:D50|Type=PivotTable|Content=rows:Region;vals:Sales|Desc=Summary Pivot|Undoable=False|Badge=pivot
 Target=B2:B20|Type=NamedRange|Content=MonthlyRevenue|Desc=Named range definition|Undoable=False|Badge=name
-Target=A2:D50|Type=RemoveDuplicates|Content=columns:1,2|Desc=Deduplicate entries|Undoable=False|Badge=dedup
+Target=A2:D50|Type=RemoveDuplicates|Content=columns:1,2|Desc=Deduplicate entries|Undoable=False|Badge=dedupe
 
 === POWERPOINT PARSED ACTIONS ===
 Type=move_slide|Src=4|Tgt=1|Slide=0|Sec=0|Name=|Notes=|Badge=move|TgtDisp=Slide 4 → 1|Desc=Move slide 4 to position 1|ContDisp=Position 4 to 1
