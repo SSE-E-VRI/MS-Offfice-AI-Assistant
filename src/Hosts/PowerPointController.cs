@@ -518,6 +518,65 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        public HostOperationResult ExecutePowerPointAction(PowerPointAction action)
+        {
+            if (action == null)
+                return HostOperationResult.Failed("PowerPoint action cannot be null.");
+
+            if (!ApplyPowerPointAction(action))
+            {
+                return HostOperationResult.Failed(
+                    !string.IsNullOrEmpty(action.ErrorMessage) ? action.ErrorMessage : "PowerPoint action application failed.",
+                    0,
+                    action.Slide > 0 ? "Slide " + action.Slide : null);
+            }
+
+            return HostOperationResult.Ok(action.ResultText, action.Slide > 0 ? "Slide " + action.Slide : null);
+        }
+
+        public HostOperationResult ExecuteCreateDeckFromOutline(string outline)
+        {
+            if (string.IsNullOrWhiteSpace(outline))
+                return HostOperationResult.Failed("Outline content cannot be empty.");
+
+            try
+            {
+                bool ok = InsertText(outline);
+                if (ok)
+                    return HostOperationResult.Ok("Deck created or updated from outline.");
+                else
+                    return HostOperationResult.Failed("Failed to create or update deck from outline.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteCreateDeckFromOutline failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteCreateDeckFromOutline");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertImage(string filePath, string altText = null)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                return HostOperationResult.Failed("Image file path cannot be empty.");
+
+            if (!System.IO.File.Exists(filePath))
+                return HostOperationResult.Failed(string.Format("Image file not found: {0}", filePath));
+
+            try
+            {
+                bool ok = InsertImageFromFile(filePath, altText);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Inserted image from {0}", System.IO.Path.GetFileName(filePath)));
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to insert image from {0}", filePath));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteInsertImage failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteInsertImage");
+            }
+        }
+
         public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
             try
