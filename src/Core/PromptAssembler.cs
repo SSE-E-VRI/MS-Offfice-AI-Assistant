@@ -35,7 +35,7 @@ namespace MSOfficeAIAssistant.Core
                     "     <excel_action target=\"K22\" type=\"formula\" formula=\"=AVERAGEIF(E2:E100, 0, F2:F100)\" description=\"Average value of zero-quantity items\" />\n" +
                     "     <excel_action target=\"G2:G27\" type=\"filldown\" formula=\"=IF(F2&gt;50000, &quot;High Value&quot;, &quot;&quot;)\" description=\"High value flag (&gt;50,000)\" />\n" +
                     "   </excel_actions>\n" +
-                    string.Format("6. Supported action types are {0}. ", Actions.ToolRegistry.FormatActionTypesList("Excel")) +
+                    string.Format("6. Supported action types are {0}. ", ToolRegistry.FormatActionTypesList("Excel")) +
                     "Use the value attribute for each action's concise option (for example value=\"descending\", value=\"list:Open,Closed\", or value=\"columns:1,2\") and state any assumptions in the description.\n" +
                     "7. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
             }
@@ -51,7 +51,7 @@ namespace MSOfficeAIAssistant.Core
                 hostContext = "\n\nYou are embedded inside Microsoft PowerPoint. The supplied context can include the full deck, sections, slide text, and speaker notes. " +
                     "When the user asks for slides or bullet points, provide structured slides with Slide titles, concise bullets, speaker notes, and a one-line Visual suggestion. " +
                     "Preserve the presentation's existing style and structure where possible. " +
-                    string.Format("For a requested deck reorganization, use only an optional <powerpoint_actions> block with safe action types {0}; use numbered existing slides and include no other commands.", Actions.ToolRegistry.FormatActionTypesList("PowerPoint"));
+                    string.Format("For a requested deck reorganization, use only an optional <powerpoint_actions> block with safe action types {0}; use numbered existing slides and include no other commands.", ToolRegistry.FormatActionTypesList("PowerPoint"));
             }
             return (basePrompt ?? "You are an expert AI assistant embedded inside Microsoft Office.") + hostContext;
         }

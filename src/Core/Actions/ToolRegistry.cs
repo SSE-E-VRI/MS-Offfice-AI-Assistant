@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace MSOfficeAIAssistant.Core.Actions
+namespace MSOfficeAIAssistant.Core
 {
     /// <summary>
     /// Central registry of all host capabilities and tools per SSOT §5.2 and §5.3.
@@ -14,6 +14,9 @@ namespace MSOfficeAIAssistant.Core.Actions
             new Dictionary<string, ToolDefinition>(StringComparer.OrdinalIgnoreCase);
 
         private static readonly Dictionary<string, ToolDefinition> ToolsByAlias =
+            new Dictionary<string, ToolDefinition>(StringComparer.OrdinalIgnoreCase);
+
+        private static readonly Dictionary<string, ToolDefinition> ToolsByHostAndAlias =
             new Dictionary<string, ToolDefinition>(StringComparer.OrdinalIgnoreCase);
 
         private static readonly Dictionary<string, List<ToolDefinition>> ToolsByHost =
@@ -31,6 +34,9 @@ namespace MSOfficeAIAssistant.Core.Actions
             ToolsByName[tool.Name] = tool;
             ToolsByAlias[tool.Name] = tool;
 
+            string host = tool.Host ?? "General";
+            ToolsByHostAndAlias[host + ":" + tool.Name] = tool;
+
             if (tool.Aliases != null)
             {
                 foreach (var alias in tool.Aliases)
@@ -38,11 +44,11 @@ namespace MSOfficeAIAssistant.Core.Actions
                     if (!string.IsNullOrWhiteSpace(alias))
                     {
                         ToolsByAlias[alias] = tool;
+                        ToolsByHostAndAlias[host + ":" + alias] = tool;
                     }
                 }
             }
 
-            string host = tool.Host ?? "General";
             if (!ToolsByHost.ContainsKey(host))
             {
                 ToolsByHost[host] = new List<ToolDefinition>();
@@ -53,20 +59,27 @@ namespace MSOfficeAIAssistant.Core.Actions
             }
         }
 
-        public static ToolDefinition GetTool(string nameOrAlias)
+        public static ToolDefinition GetTool(string nameOrAlias, string host = null)
         {
             ToolDefinition tool;
-            if (TryGetTool(nameOrAlias, out tool))
+            if (TryGetTool(nameOrAlias, out tool, host))
             {
                 return tool;
             }
             return null;
         }
 
-        public static bool TryGetTool(string nameOrAlias, out ToolDefinition tool)
+        public static bool TryGetTool(string nameOrAlias, out ToolDefinition tool, string host = null)
         {
             tool = null;
             if (string.IsNullOrWhiteSpace(nameOrAlias)) return false;
+
+            if (!string.IsNullOrEmpty(host))
+            {
+                string hostKey = host + ":" + nameOrAlias;
+                if (ToolsByHostAndAlias.TryGetValue(hostKey, out tool)) return true;
+                if (ToolsByName.TryGetValue(nameOrAlias, out tool) && string.Equals(tool.Host, host, StringComparison.OrdinalIgnoreCase)) return true;
+            }
 
             if (ToolsByName.TryGetValue(nameOrAlias, out tool)) return true;
             if (ToolsByAlias.TryGetValue(nameOrAlias, out tool)) return true;
