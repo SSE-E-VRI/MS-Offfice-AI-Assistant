@@ -1,4 +1,4 @@
-<Window x:Class="MistralOfficeAddin.UI.SettingsWindow"
+<Window x:Class="MSOfficeAIAssistant.UI.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AI Assistant — Settings" Height="680" Width="520"

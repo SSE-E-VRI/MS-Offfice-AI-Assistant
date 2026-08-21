@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.API.Models
+namespace MSOfficeAIAssistant.API.Models
 {
     public class ChatResponse
     {

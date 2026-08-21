@@ -147,7 +147,7 @@
   <li><strong>Word</strong> — draft, continue, summarize, rewrite, expand, shorten, outline, extract action items, review, and translate via chat. Markdown tables become native Word tables. <strong>Track edits</strong> inserts/rewrites responses as Word Track Changes, with Accept/Reject controls.</li>
   <li><strong>Excel</strong> — range analysis, formulas, fill-down, table writes, Excel Table creation, conditional formatting, sorting, filtering, data validation, charts, PivotTables, named ranges, and duplicate removal — always as previewable cards with a <strong>Review &amp; Apply</strong> confirmation. The add-in never writes to a workbook without your explicit approval.</li>
   <li><strong>PowerPoint</strong> — build/update a deck from an outline, review the whole deck (untitled slides, duplicate titles, text-light slides), move slides, create/rename sections, set speaker notes, and insert a local image with accessible alt text.</li>
-  <li><strong>DPAPI local storage</strong> — your API keys (<code>config.dat</code>), conversation history, and the approved-action log (<code>action-audit.dat</code>) are encrypted for the current Windows user with Windows DPAPI under <code>%LOCALAPPDATA%\MistralOfficeAddin</code>.</li>
+  <li><strong>DPAPI local storage</strong> — your API keys (<code>config.dat</code>), conversation history, and the approved-action log (<code>action-audit.dat</code>) are encrypted for the current Windows user with Windows DPAPI under <code>%LOCALAPPDATA%\MSOfficeAIAssistant</code>.</li>
 </ul>
 
 <h3>What is NOT included in this version</h3>
@@ -171,7 +171,7 @@
 </ol>
 <div class="note">
 <strong>Where keys are stored.</strong> Settings are saved encrypted with Windows DPAPI
-(<code>DataProtectionScope.CurrentUser</code>) to <code>%LOCALAPPDATA%\MistralOfficeAddin\config.dat</code>.
+(<code>DataProtectionScope.CurrentUser</code>) to <code>%LOCALAPPDATA%\MSOfficeAIAssistant\config.dat</code>.
 Only the current Windows user on this PC can decrypt it. <strong>Your keys never leave this PC except to the
 provider you chose</strong> — the add-in sends them only to that provider's endpoint over HTTPS.
 </div>
@@ -415,7 +415,7 @@ Translate the following text into Hindi accurately and naturally. Preserve prope
   <li><strong>Ribbon tab missing:</strong> check <em>File → Options → Add-ins → COM Add-ins</em> that the add-in is enabled, and that you registered the correct bitness (x86 for 32-bit Office, x64 for 64-bit Office).</li>
   <li><strong>API 401:</strong> key missing/expired — regenerate and Test Connection in Settings.</li>
   <li><strong>API 429:</strong> rate limit — the add-in retries with backoff; reduce volume or switch model/tier.</li>
-  <li><strong>Logs:</strong> <code>%LOCALAPPDATA%\MistralOfficeAddin\addin.log</code> (fallback <code>%TEMP%\MistralAddinLog.txt</code>).</li>
+  <li><strong>Logs:</strong> <code>%LOCALAPPDATA%\MSOfficeAIAssistant\addin.log</code> (fallback <code>%TEMP%\MSOfficeAIAssistant.log</code>).</li>
 </ul>
 
 <div class="credit">

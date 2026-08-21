@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     public static class Logger
     {
@@ -13,17 +13,11 @@ namespace MistralOfficeAddin.Core
         {
             try
             {
-                string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string dir = Path.Combine(localAppData, "MistralOfficeAddin");
-                if (!Directory.Exists(dir))
-                {
-                    Directory.CreateDirectory(dir);
-                }
-                _logFilePath = Path.Combine(dir, "addin.log");
+                _logFilePath = AppPaths.InDataDirectory("addin.log");
             }
             catch
             {
-                _logFilePath = Path.Combine(Path.GetTempPath(), "MistralAddinLog.txt");
+                _logFilePath = Path.Combine(Path.GetTempPath(), "MSOfficeAIAssistant.log");
             }
         }
 

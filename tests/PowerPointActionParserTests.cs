@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
 namespace MSOfficeAIAssistant.Tests
 {

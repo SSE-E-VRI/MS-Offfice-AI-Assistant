@@ -1,8 +1,8 @@
 using System;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 using Outlook = NetOffice.OutlookApi;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     public class OutlookController
     {

@@ -2,9 +2,9 @@ using System;
 using System.Windows;
 using System.Windows.Forms.Integration;
 using System.Windows.Interop;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.UI
+namespace MSOfficeAIAssistant.UI
 {
     /// <summary>
     /// Fallback / Standalone WPF Window hosting ChatSidebar when Office Custom Task Pane factory

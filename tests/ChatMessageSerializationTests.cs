@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Core;
 using Newtonsoft.Json;
 
 namespace MSOfficeAIAssistant.Tests

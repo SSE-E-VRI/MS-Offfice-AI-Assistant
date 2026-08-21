@@ -4,10 +4,10 @@ using System.Threading;
 using System.Windows.Forms;
 using System.Windows.Forms.Integration;
 using Microsoft.Win32;
-using MistralOfficeAddin.Core;
-using MistralOfficeAddin.UI;
+using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.UI;
 
-namespace MistralOfficeAddin.Addin
+namespace MSOfficeAIAssistant.Addin
 {
     #region COM Interfaces for Task Panes & Object Safety
 
@@ -98,12 +98,12 @@ namespace MistralOfficeAddin.Addin
     /// </summary>
     [ComVisible(true)]
     [Guid("9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7")]
-    [ProgId("MistralAI.TaskPaneControl")]
+    [ProgId("MSOfficeAIAssistant.TaskPaneControl")]
     [ClassInterface(ClassInterfaceType.AutoDispatch)]
     public class TaskPaneControl : UserControl, IObjectSafety
     {
         public const string ControlClsid = "{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}";
-        public const string ControlProgId = "MistralAI.TaskPaneControl";
+        public const string ControlProgId = "MSOfficeAIAssistant.TaskPaneControl";
 
         private const int INTERFACESAFE_FOR_UNTRUSTED_CALLER = 0x00000001;
         private const int INTERFACESAFE_FOR_UNTRUSTED_DATA = 0x00000002;
@@ -601,7 +601,7 @@ namespace MistralOfficeAddin.Addin
             {
                 try
                 {
-                    Logger.Info("Creating Custom Task Pane with ProgId MistralAI.TaskPaneControl...");
+                    Logger.Info("Creating Custom Task Pane with ProgId MSOfficeAIAssistant.TaskPaneControl...");
                     dynamic factory = _ctpFactoryObj;
                     object parentWindow = ResolveParentWindow();
 

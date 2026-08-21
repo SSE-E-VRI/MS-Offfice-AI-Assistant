@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using MistralOfficeAddin.API.Models;
+using MSOfficeAIAssistant.API.Models;
 
-namespace MistralOfficeAddin.API
+namespace MSOfficeAIAssistant.API
 {
     public static class TokenCounter
     {

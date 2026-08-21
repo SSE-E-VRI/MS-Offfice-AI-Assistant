@@ -7,12 +7,12 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Core;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public class GeminiPart
     {

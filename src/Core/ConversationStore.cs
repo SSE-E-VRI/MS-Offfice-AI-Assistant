@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using MistralOfficeAddin.API.Models;
+using MSOfficeAIAssistant.API.Models;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     public class ConversationStore
     {
@@ -35,8 +35,7 @@ namespace MistralOfficeAddin.Core
 
         public ConversationStore()
         {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            _storageDir = Path.Combine(localAppData, "MistralOfficeAddin", "Conversations");
+            _storageDir = AppPaths.InDataDirectory("Conversations");
             try
             {
                 if (!Directory.Exists(_storageDir))
@@ -52,7 +51,7 @@ namespace MistralOfficeAddin.Core
 
         public ConversationStore(string customDir)
         {
-            _storageDir = customDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MistralOfficeAddin", "Conversations");
+            _storageDir = customDir ?? AppPaths.InDataDirectory("Conversations");
             try
             {
                 if (!Directory.Exists(_storageDir))

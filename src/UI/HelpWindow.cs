@@ -5,9 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms.Integration;
 using System.Windows.Interop;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.UI
+namespace MSOfficeAIAssistant.UI
 {
     /// <summary>
     /// In-add-in window that shows the offline User Manual (UserManual.html) embedded as a
@@ -229,12 +229,7 @@ namespace MistralOfficeAddin.UI
         {
             try
             {
-                string dir = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "MistralOfficeAddin");
-                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
-
-                string path = Path.Combine(dir, "UserManual.html");
+                string path = AppPaths.InDataDirectory("UserManual.html");
                 File.WriteAllText(path, html);
                 return path;
             }

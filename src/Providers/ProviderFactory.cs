@@ -1,7 +1,7 @@
 using System;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public static class ProviderFactory
     {

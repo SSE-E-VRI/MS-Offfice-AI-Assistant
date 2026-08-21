@@ -5,7 +5,7 @@ using System.IO;
 using System.Text.RegularExpressions;
 using System.Xml;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     public enum SpreadsheetActionType
     {

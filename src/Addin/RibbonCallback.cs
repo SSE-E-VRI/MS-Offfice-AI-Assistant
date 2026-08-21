@@ -1,9 +1,9 @@
 using System;
 using System.Windows.Forms;
-using MistralOfficeAddin.Core;
-using MistralOfficeAddin.UI;
+using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.UI;
 
-namespace MistralOfficeAddin.Addin
+namespace MSOfficeAIAssistant.Addin
 {
     public class RibbonCallback
     {
