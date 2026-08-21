@@ -35,19 +35,19 @@ Source: "..\bin\x64\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesu
 
 [Registry]
 ; Word Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Word\Addins\MSOfficeAIAssistant.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Excel Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\Excel\Addins\MSOfficeAIAssistant.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; PowerPoint Add-in Registration
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
-Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MistralAI.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "FriendlyName"; ValueData: "MS Office AI Assistant"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MSOfficeAIAssistant.Addin"; ValueType: string; ValueName: "Description"; ValueData: "MS Office AI Assistant for Word, Excel, and PowerPoint"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MSOfficeAIAssistant.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Task pane ActiveX (Office CreateCTP requires HKLM CLSID + Control categories)
 Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Control"; Flags: uninsdeletekey

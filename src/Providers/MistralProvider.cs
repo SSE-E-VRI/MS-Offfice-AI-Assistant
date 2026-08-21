@@ -4,12 +4,12 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Threading;
 using System.Threading.Tasks;
-using MistralOfficeAddin.API;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.API;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Core;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public class MistralProvider : IAIProvider
     {

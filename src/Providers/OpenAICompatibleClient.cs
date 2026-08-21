@@ -8,13 +8,13 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using MistralOfficeAddin.API;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Attachments;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.API;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Attachments;
+using MSOfficeAIAssistant.Core;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public class OpenAICompatibleClient : IDisposable
     {

@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 using Word = NetOffice.WordApi;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     /// <summary>
     /// Word host operations.  The context helpers deliberately keep their ranking logic

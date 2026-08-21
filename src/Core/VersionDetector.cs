@@ -1,7 +1,7 @@
 using System;
 using System.Globalization;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     public enum OfficeVersion
     {

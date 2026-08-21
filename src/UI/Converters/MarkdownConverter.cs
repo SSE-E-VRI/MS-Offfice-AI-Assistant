@@ -6,7 +6,7 @@ using System.Windows.Documents;
 using Markdig;
 using Markdig.Wpf;
 
-namespace MistralOfficeAddin.UI.Converters
+namespace MSOfficeAIAssistant.UI.Converters
 {
     [ValueConversion(typeof(string), typeof(FlowDocument))]
     public class MarkdownToFlowDocumentConverter : IValueConverter

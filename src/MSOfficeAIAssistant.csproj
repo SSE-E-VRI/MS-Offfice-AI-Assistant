@@ -184,6 +184,7 @@
     <Compile Include="Attachments\AttachmentExtractor.cs" />
     <Compile Include="Core\ConfigManager.cs" />
     <Compile Include="Core\ConversationStore.cs" />
+    <Compile Include="Core\AppPaths.cs" />
     <Compile Include="Core\ActionAuditStore.cs" />
     <Compile Include="Core\VersionDetector.cs" />
     <Compile Include="Core\Logger.cs" />

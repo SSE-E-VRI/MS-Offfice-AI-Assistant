@@ -12,14 +12,14 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
-using MistralOfficeAddin.API;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Attachments;
-using MistralOfficeAddin.Core;
-using MistralOfficeAddin.Hosts;
-using MistralOfficeAddin.Providers;
+using MSOfficeAIAssistant.API;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Attachments;
+using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.Hosts;
+using MSOfficeAIAssistant.Providers;
 
-namespace MistralOfficeAddin.UI
+namespace MSOfficeAIAssistant.UI
 {
     public class AttachmentItemViewModel
     {

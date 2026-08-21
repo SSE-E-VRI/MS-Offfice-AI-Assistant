@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
-using MistralOfficeAddin.Providers;
+using MSOfficeAIAssistant.Providers;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     public class ProviderSettings
     {
@@ -103,8 +103,7 @@ namespace MistralOfficeAddin.Core
             SystemPrompt = "You are an expert AI assistant embedded inside Microsoft Office. Help the user draft, refine, summarize, and analyze documents with professional quality.";
             AutoInsertResponse = false;
 
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            _configDirectory = Path.Combine(localAppData, "MistralOfficeAddin");
+            _configDirectory = AppPaths.DataDirectory;
             _configFilePath = Path.Combine(_configDirectory, "config.dat");
         }
 

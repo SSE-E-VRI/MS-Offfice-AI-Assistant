@@ -6,7 +6,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 
-namespace MistralOfficeAddin.UI.Helpers
+namespace MSOfficeAIAssistant.UI.Helpers
 {
     /// <summary>
     /// Attached property that renders Markdown text directly into a WPF TextBlock as formatted Inlines.

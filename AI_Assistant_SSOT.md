@@ -85,16 +85,16 @@ Connect  (IDTExtensibility2, IRibbonExtensibility, ICustomTaskPaneConsumer)
 
 | Item | Value | Source |
 |---|---|---|
-| Add-in class | `MistralOfficeAddin.Connect` | `src/Addin/Connect.cs:81` |
+| Add-in class | `MSOfficeAIAssistant.Addin.Connect` | `src/Addin/Connect.cs:81` |
 | Add-in CLSID | `{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}` | `Connect.cs:81` |
-| Add-in ProgID | **`MistralAI.Addin`** | `Connect.cs:82` |
-| Task-pane class | `MistralOfficeAddin.TaskPaneControl` | `CustomTaskPaneManager.cs:100` |
+| Add-in ProgID | **`MSOfficeAIAssistant.Addin`** | `Connect.cs:82` |
+| Task-pane class | `MSOfficeAIAssistant.Addin.TaskPaneControl` | `CustomTaskPaneManager.cs:100` |
 | Task-pane CLSID | `{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}` | `CustomTaskPaneManager.cs:100` |
-| Task-pane ProgID | `MistralAI.TaskPaneControl` | `CustomTaskPaneManager.cs:101` |
+| Task-pane ProgID | `MSOfficeAIAssistant.TaskPaneControl` | `CustomTaskPaneManager.cs:101` |
 | Type library GUID | `{A7E4C9B1-3F82-4D16-9E5A-71B08C4D2F90}` | `AssemblyInfo.cs:18` |
 | Assembly / file version | `0.4.0.0` | `AssemblyInfo.cs:20-21` |
 | Assembly name | `MSOfficeAIAssistant` | csproj |
-| Root namespace | `MistralOfficeAddin` (legacy, retained for COM compatibility) | — |
+| Root namespace | `MSOfficeAIAssistant` (matches `RootNamespace` and `AssemblyName`) | — |
 
 Declared Office interface GUIDs (`Connect.cs:32,66`; `CustomTaskPaneManager.cs:18,30,45,75`):
 `IDTExtensibility2 {B65AD801-ABAF-11D0-BB8B-00A0C90F2744}`,
@@ -105,9 +105,37 @@ Declared Office interface GUIDs (`Connect.cs:32,66`; `CustomTaskPaneManager.cs:1
 > ⚠️ **The csproj `ProjectGuid` is deliberately the same value as the add-in CLSID**
 > (`install.ps1:80` depends on it). Never change it.
 
+#### Identity migration (v0.4.0 → v0.5.0)
+
+The Mistral-specific identifiers were renamed in one pass. **The CLSIDs and the type-library
+GUID did not change** — only the human-readable names did, so COM class identity is stable.
+
+| Layer | Was | Now |
+|---|---|---|
+| C# namespace | `MistralOfficeAddin.*` | `MSOfficeAIAssistant.*` |
+| Add-in ProgID | `MistralAI.Addin` | `MSOfficeAIAssistant.Addin` |
+| Task-pane ProgID | `MistralAI.TaskPaneControl` | `MSOfficeAIAssistant.TaskPaneControl` |
+| Ribbon tab id | `tabMistralAI` | `tabAIAssistant` |
+| User data folder | `%LOCALAPPDATA%\MistralOfficeAddin` | `%LOCALAPPDATA%\MSOfficeAIAssistant` |
+| Log fallback | `%TEMP%\MistralAddinLog.txt` | `%TEMP%\MSOfficeAIAssistant.log` |
+
+Because a renamed ProgID still resolves to the *same* CLSID, an orphaned old ProgID would let
+Office load the add-in twice under two names — the same class of failure as the Office 2021
+incident in Appendix A. Two mitigations are therefore mandatory and are implemented:
+
+1. **`install.ps1` purges the legacy identities** (`MistralAI.Addin`, `MistralAI.Connect`,
+   `MistralAI.TaskPaneControl`, `MistralAI.ChatPane`) from `Software\Classes`, from every
+   `Addins` key (versioned and unversioned), and from `DoNotDisableAddinList`, before
+   registering the new names. `uninstall.ps1` removes both old and new sets.
+2. **`AppPaths` migrates user data** (`src/Core/AppPaths.cs`). On first access it moves the
+   legacy folder to the new one, falling back to a non-overwriting file-by-file copy if the
+   move is blocked. DPAPI blobs are user-scoped, not path-scoped, so credentials, conversation
+   history and the audit trail all survive. `AppPaths` deliberately takes no dependency on
+   `Logger`, because `Logger`'s static constructor calls it.
+
 ### 2.2 Ribbon
 
-One tab, `tabMistralAI`, labelled **AI Assistant** (`src/Addin/Ribbon.xml`, embedded resource loaded
+One tab, `tabAIAssistant`, labelled **AI Assistant** (`src/Addin/Ribbon.xml`, embedded resource loaded
 in `Connect.cs:322-340`). Four groups, 14 buttons, all handled in `src/Addin/RibbonCallback.cs`:
 
 | Group | Buttons |
@@ -217,12 +245,12 @@ There is **no before-state capture, no snapshot, and no custom rollback anywhere
 
 ### 2.9 Storage and security
 
-| Store | Path (under `%LOCALAPPDATA%\MistralOfficeAddin\`) | Protection |
+| Store | Path (under `%LOCALAPPDATA%\MSOfficeAIAssistant\`) | Protection |
 |---|---|---|
 | Settings + API keys | `config.dat` | Whole file DPAPI, `CurrentUser`, no entropy |
 | Conversations | `Conversations\{key}.dat` | DPAPI; legacy `.json` migrated on load |
 | Action audit | `action-audit.dat` | DPAPI; 250 entries max, 2,000 chars/field; `.bak` quarantine on corruption |
-| Log | `addin.log` (fallback `%TEMP%\MistralAddinLog.txt`) | Plain text |
+| Log | `addin.log` (fallback `%TEMP%\MSOfficeAIAssistant.log`) | Plain text |
 
 `ActionAuditEntry` records `TimestampUtc, Host, ActionType, Target, Summary, Undoable, Prompt,
 SourceContext, Model, FullProposedAction, ApplyResult`. It is **append-only, written only after
@@ -277,7 +305,7 @@ invisible**, which any future verification layer must account for.
 - **Build + install:** `install.cmd` → `install.ps1`. Locates MSBuild → downloads `nuget.exe` if
   absent → restores → builds x86 and x64 → cleans stale CLSID trees → `RegAsm /codebase /regfile`
   with `HKCR`→`HKCU\Software\Classes` rewriting → writes
-  `HKCU\Software\Microsoft\Office\{Word,Excel,PowerPoint}\Addins\MistralAI.Addin\LoadBehavior = 3`.
+  `HKCU\Software\Microsoft\Office\{Word,Excel,PowerPoint}\Addins\MSOfficeAIAssistant.Addin\LoadBehavior = 3`.
   It **cannot** be run build-only. x86 regfile entries are routed to `Wow6432Node` deliberately.
 - **Uninstall:** `uninstall.cmd` / `uninstall.ps1`.
 - **Distribution:** `installer/setup-x86.iss`, `installer/setup-x64.iss` (Inno Setup 6).
@@ -326,6 +354,8 @@ There is **no CI**.
 | PowerPoint: deck build, slide move, sections, speaker notes, image insert | Implemented |
 | Embedded offline User Manual | Implemented |
 | Office 2021 stale-COM-registration fix | Implemented (see Appendix A) |
+| Mistral-neutral identity rename + legacy purge + data migration | Implemented |
+| From document → briefing deck (doc-to-deck) | Planned — next slice |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
 | Chat / Plan / Edit modes | Planned — Phase A |
 | Context bar, source citations, response cards | Planned — Phase A |
@@ -343,7 +373,7 @@ There is **no CI**.
 |---|---|---|
 | **D-1** | **High** | `PowerPointController.ApplyStructuredActions` is invoked from *inside* `InsertText` (`:297`). Slide moves, section creation and notes rewriting therefore execute under the generic `ConfirmInsert` preview, which shows only the prose text — **the user never sees the parsed actions they are approving.** |
 | **D-2** | Medium | `GetOrCreateActiveSlide(createIfNone:true)` and `GetActivePresentation(createIfNone:true)` are read-shaped names that **create a presentation or slide as a side effect** (`PowerPointController.cs:34,96`). Any risk classification must treat them as mutating. |
-| **D-3** | Medium | `tools/verify.ps1:29` checks for ProgID **`MistralAI.Connect`**, but the add-in registers **`MistralAI.Addin`** (`Connect.cs:82`). The smoke check therefore always reports FAIL, and its remedy message points at the deleted `register.cmd`. |
+| ~~D-3~~ | — | **RESOLVED.** `tools/verify.ps1` checked ProgID `MistralAI.Connect` while the add-in registered `MistralAI.Addin`, so the smoke check always reported FAIL and pointed at the deleted `register.cmd`. Now checks `MSOfficeAIAssistant.Addin` and recommends `install.cmd`. |
 | **D-4** | Medium | `src/Hosts/OutlookController.cs` is on disk and git-tracked but **absent from the csproj compile list** — it is silently never built. Either compile it or delete it. |
 | **D-5** | Medium | Action-type allow-lists are duplicated in **four** places — `SpreadsheetAction.cs:366`, `PowerPointActionParser.cs:36`, the `ExcelController.cs:250` switch, and a **prompt string literal** at `ChatSidebar.xaml.cs:729` — and must be kept in sync by hand. |
 | **D-6** | Medium | `ChatSidebar.xaml.cs` is 1,463 lines and is the *de facto* orchestrator; `SendMessageAsync` alone is 214 lines. Context assembly, prompt construction, token budgeting, action parsing, approval and audit all live in view code-behind. |
@@ -351,7 +381,7 @@ There is **no CI**.
 | **D-8** | Low | `MarkdownToFlowDocumentConverter` (`src/UI/Converters/MarkdownConverter.cs:12`) is fully written but referenced by nothing — dead code. Markdig is a live dependency used only for Word insertion. |
 | **D-9** | Low | `RibbonCallback.OnTranslate` (`:121-151`) implements 9 languages but **has no corresponding ribbon XML** — orphaned and unreachable. |
 | **D-10** | Low | Dead methods with no callers: `ExcelController.CreatePreviewDescription` (duplicates the UI's own `DescribeSpreadsheetAction`), `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`. |
-| **D-11** | Low | `README.md` documented the non-existent `build.bat` and `register.cmd` until this revision. |
+| ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
 
 ---
 
@@ -496,6 +526,37 @@ feed the Planner; they do not execute.
 Ordering is deliberate: Phase 0 is a prerequisite, A and B are low-risk and parallel, C introduces
 new mutation pathways, D introduces multi-step autonomy.
 
+### Next slice — From document → briefing deck (ship first)
+
+Ships ahead of Phase 0 because it is nearly free: the pipeline already exists end to end and only
+the entry point is missing. It is also the clearest Copilot-parity win available without Graph,
+Designer, or any new API family, and it works identically on every provider including local Ollama.
+
+**Already built — verified against the code:**
+
+| Capability | Where |
+|---|---|
+| `.docx` / `.pdf` / `.pptx` / `.xlsx` extraction | `AttachmentExtractor.ExtractAsync` |
+| Word outline + prompt-relevant context | `WordController.GetDocumentOutline`, `GetRelevantDocumentContext` |
+| Outline → slide model (title, bullets, notes, visual) | `PowerPointActionParser.ParseSlideData:113` |
+| Layout-aware slide creation | `PowerPointController.AddSlideUsingPresentationLayout:708` |
+| Speaker notes | `PowerPointController.SetSpeakerNotesForSlide:471` |
+| Deck apply | `PowerPointController.CreateOrUpdateDeckFromOutline:368` |
+| **A "Build deck" chip, PowerPoint-only** | `ChatSidebar.xaml:307`, gated at `ChatSidebar.xaml.cs:239` |
+| **Confirm → apply already wired** | `ChatSidebar.xaml.cs:1125` |
+
+**Actually missing — the whole scope of this slice:**
+
+1. A **"From document…"** chip and ribbon button that sources content from the open Word document
+   *or* a selected attachment, rather than from the chat transcript.
+2. A fixed **briefing-deck prompt** ("5–10 slides: executive summary, findings, actions…") that
+   emits the outline shape `ParseSlideData` already understands.
+3. A **preview card** listing the proposed slide titles before anything is created — reusing the
+   Excel action-card pattern rather than the current prose-only `MessageBox`.
+
+**Depends on 0.4.** The PowerPoint approval hole (D-1) must be closed first, or this feature ships
+on top of a path where structured actions execute without being shown. Do 0.4, then this slice.
+
 ### Phase 0 — Foundation (no user-visible change)
 
 Without this, every later phase adds logic to a 1,463-line code-behind.
@@ -587,6 +648,24 @@ that executes across hosts under approval with a full audit trail.
 
 AI Pages · model routing (fast vs reasoning) · local knowledge library · document-comparison skill ·
 local feedback capture. Documented as **not activated**; requires §11 change control to start.
+
+### Feature backlog — ranked
+
+Assessed for fit against this add-in's actual constraints (COM, Office 2010+, BYOK, provider-neutral,
+confirm-before-write), not against Copilot's feature list.
+
+| Rank | Feature | Verdict |
+|---|---|---|
+| 1 | **Doc-to-deck** | Ship first (above). Pipeline exists; only the entry point is missing. |
+| 2 | **Word Review → native comments** | Build next. Genuinely new — `grep` finds **no** Comments API in any host controller. `Document.Comments.Add(Range, Text)` works from Office 2010 onward, and it is non-destructive, so it fits the existing safety model without new risk tiers. |
+| 3 | **`@` mention local files** | Same local grounding, better UX. Pure WPF work over `AttachmentExtractor`. Delivers the "Copilot `/file`" feel with no cloud dependency. Helps Word, Excel and doc-to-deck alike. |
+| 4 | Chart/Pivot "explain + suggest" | Cheap. Prompt work over the existing `excel_actions` chart/pivot types. A chip, not a project. |
+| 5 | Persistent memory | **Largely already done** — `ConversationStore` is per-document DPAPI history. Only worth revisiting for cross-document memory or a user-editable fact list. |
+| 6 | Outlook summarise/reply | Feasible (`OutlookController` exists, see D-4) but widens the product to a fourth host with its own Explorer/Inspector lifecycles and registration surface. Tighten the three-app loop first. |
+| 7 | Plan/agent loop | Highest effort; this is Phases C–D. Bounded action XML already covers the common cases. |
+| ✗ | **Web search / grounding** | **Rejected for now.** Not provider-neutral: Gemini has native search grounding, Groq/Mistral/Ollama have none (`grep` finds zero grounding code in `src/Providers`), so it would fork `IAIProvider` for one vendor. It also fights the BYOK/no-middleman guarantee, and for official correspondence the citations that matter are the attached circular or specification — not a public web page that merely *looks* authoritative. Revisit only as an opt-in, Gemini-only research mode, after local-file grounding is first-class. |
+| ✗ | PowerPoint text-to-image | Rejected. Needs paid image endpoints, adds content-policy surface, and contradicts the deliberate "Insert image = a local file you approved" rule. |
+| ✗ | Graph / Work IQ / Designer | Not feasible. Requires Microsoft cloud infrastructure and tenant licensing, abandoning both Office 2010–2021 support and the local-key design. |
 
 ---
 
@@ -699,13 +778,13 @@ upgraded from a pre-0.4.0 build did.
 
 ## Appendix B — Troubleshooting
 
-**Diagnostic logs:** `%LOCALAPPDATA%\MistralOfficeAddin\addin.log`, fallback
-`%TEMP%\MistralAddinLog.txt`.
+**Diagnostic logs:** `%LOCALAPPDATA%\MSOfficeAIAssistant\addin.log`, fallback
+`%TEMP%\MSOfficeAIAssistant.log`.
 
 **1. Ribbon tab does not appear.** Usually a bitness mismatch or a disabled `LoadBehavior`.
 Register the 32-bit DLL for 32-bit Office and the 64-bit DLL for 64-bit Office. Check
 **File → Options → Add-ins → COM Add-ins → Go…** and confirm the add-in is checked. Verify
-`HKCU\Software\Microsoft\Office\<App>\Addins\MistralAI.Addin\LoadBehavior` is DWORD `3`. Also check
+`HKCU\Software\Microsoft\Office\<App>\Addins\MSOfficeAIAssistant.Addin\LoadBehavior` is DWORD `3`. Also check
 the Office *disabled items* and *crash-disabled* lists — `install.ps1` clears both.
 
 **2. "Task pane factory is not available."** The host has not yet exposed `ICustomTaskPaneConsumer`,

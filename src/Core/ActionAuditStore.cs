@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.Core
+namespace MSOfficeAIAssistant.Core
 {
     /// <summary>
     /// Stores a compact, local, encrypted audit trail of user-approved AI actions.
@@ -36,10 +36,7 @@ namespace MistralOfficeAddin.Core
 
         public ActionAuditStore()
         {
-            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string directory = Path.Combine(localAppData, "MistralOfficeAddin");
-            if (!Directory.Exists(directory)) Directory.CreateDirectory(directory);
-            _filePath = Path.Combine(directory, "action-audit.dat");
+            _filePath = AppPaths.InDataDirectory("action-audit.dat");
         }
 
         public ActionAuditStore(string customFilePath)

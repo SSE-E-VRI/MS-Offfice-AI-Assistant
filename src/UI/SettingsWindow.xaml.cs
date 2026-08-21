@@ -8,11 +8,11 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using System.Windows.Navigation;
-using MistralOfficeAddin.Core;
-using MistralOfficeAddin.Providers;
+using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.Providers;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.UI
+namespace MSOfficeAIAssistant.UI
 {
     public partial class SettingsWindow : Window
     {
