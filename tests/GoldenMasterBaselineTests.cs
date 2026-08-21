@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using MSOfficeAIAssistant.Core;
 
 namespace MSOfficeAIAssistant.Tests
@@ -13,8 +14,14 @@ namespace MSOfficeAIAssistant.Tests
     /// </summary>
     public static class GoldenMasterBaselineTests
     {
+        // Canonical SHA-256 hash of all baseline outputs (system prompts, context compositions,
+        // XML parsed action DTOs, slide outline parsing, and audit record shape).
+        // Any mutation, reordering, whitespace change, or regression in Phase 0.1+ will fail this hash.
+        public const string ExpectedGoldenMasterSha256 = "1f3971ed6790ed842fe73df80479d9e18f2ca723efd29ccde72454023918e4ca";
+
         public static void RunAll()
         {
+            TestGoldenMasterHash();
             TestPromptAssemblerSystemPrompts();
             TestPromptAssemblerContextPermutations();
             TestPromptAssemblerAttachmentCitations();
@@ -23,6 +30,137 @@ namespace MSOfficeAIAssistant.Tests
             TestPowerPointActionParserFullCatalog();
             TestPowerPointSlideDataParsing();
             TestActionAuditStoreSerializationBaseline();
+        }
+
+        private static void TestGoldenMasterHash()
+        {
+            string canonical = BuildAllBaselineOutputs();
+            string actualHash = ComputeSha256(canonical);
+
+            Assert(string.Equals(actualHash, ExpectedGoldenMasterSha256, StringComparison.OrdinalIgnoreCase),
+                string.Format("Golden Master baseline hash mismatch! Expected '{0}', got '{1}'. A prompt, parser DTO, or audit format drifted.",
+                    ExpectedGoldenMasterSha256, actualHash));
+        }
+
+        public static string BuildAllBaselineOutputs()
+        {
+            var sb = new StringBuilder();
+
+            // 1. System Prompts across hosts and base prompts
+            string[] hosts = new[] { "Excel", "Word", "PowerPoint", "UnknownHost" };
+            string[] basePrompts = new[] { null, "Custom Base Instructions" };
+            foreach (var h in hosts)
+            {
+                foreach (var b in basePrompts)
+                {
+                    sb.Append("=== SYSTEM PROMPT [Host=").Append(h).Append(", Base=").Append(b ?? "null").Append("] ===\n");
+                    sb.Append(PromptAssembler.BuildHostAwareSystemPrompt(b, h)).Append("\n\n");
+                }
+            }
+
+            // 2. Context Compositions across all scopes
+            PromptContextScope[] scopes = new[]
+            {
+                PromptContextScope.Selection,
+                PromptContextScope.CurrentFile,
+                PromptContextScope.SelectionAndFile,
+                PromptContextScope.AttachmentsOnly
+            };
+            foreach (var sc in scopes)
+            {
+                sb.Append("=== PROMPT CONTEXT [Scope=").Append(sc).Append("] ===\n");
+                sb.Append(PromptAssembler.ComposePromptWithContext("Raw user prompt.", sc, "Selected text snippet.", "[Document Context: File.docx] Document body.")).Append("\n\n");
+            }
+
+            // 3. Attachment Citation Instruction
+            sb.Append("=== ATTACHMENT CITATION INSTRUCTION ===\n");
+            sb.Append(PromptAssembler.AppendAttachmentCitationInstruction("Analyze document.", "[Attachment: Data.pdf (Page 1)] Table of values.")).Append("\n\n");
+
+            // 4. Excel Actions Full Catalog DTOs
+            string excelXml =
+                "<excel_actions>\n" +
+                "  <excel_action target=\"A1\" type=\"value\" value=\"Revenue Analysis\" description=\"Title header\" />\n" +
+                "  <excel_action target=\"B2\" type=\"formula\" formula=\"=SUM(B3:B20)\" description=\"Total sum\" />\n" +
+                "  <excel_action target=\"C2:C20\" type=\"filldown\" formula=\"=B2*1.18\" description=\"Tax inclusive\" />\n" +
+                "  <excel_action target=\"A3:D20\" type=\"table\" value=\"ColA\tColB\tColC\tColD\n1\t2\t3\t4\" description=\"Data table\" />\n" +
+                "  <excel_action target=\"A3:D20\" type=\"create_table\" value=\"SalesTable\" description=\"Table description\" />\n" +
+                "  <excel_action target=\"B2:B20\" type=\"conditional_format\" value=\"gt:1000\" description=\"Highlight large values\" />\n" +
+                "  <excel_action target=\"A2:D20\" type=\"sort\" value=\"descending\" description=\"Sort by Revenue\" />\n" +
+                "  <excel_action target=\"A2:D20\" type=\"filter\" value=\"ColB:>100\" description=\"Filter active\" />\n" +
+                "  <excel_action target=\"E2:E20\" type=\"data_validation\" value=\"list:Open,Closed,Pending\" description=\"Status dropdown\" />\n" +
+                "  <excel_action target=\"A2:B10\" type=\"chart\" value=\"column\" description=\"Revenue Column Chart\" />\n" +
+                "  <excel_action target=\"A2:D50\" type=\"pivot_table\" value=\"rows:Region;vals:Sales\" description=\"Summary Pivot\" />\n" +
+                "  <excel_action target=\"B2:B20\" type=\"named_range\" value=\"MonthlyRevenue\" description=\"Named range definition\" />\n" +
+                "  <excel_action target=\"A2:D50\" type=\"remove_duplicates\" value=\"columns:1,2\" description=\"Deduplicate entries\" />\n" +
+                "</excel_actions>";
+            string excelClean;
+            var excelActions = SpreadsheetActionParser.ExtractActions(excelXml, out excelClean);
+            sb.Append("=== EXCEL PARSED ACTIONS ===\n");
+            foreach (var ea in excelActions)
+            {
+                sb.AppendFormat("Target={0}|Type={1}|Content={2}|Desc={3}|Undoable={4}|Badge={5}\n",
+                    ea.Target, ea.Type, ea.Content, ea.Description, ea.IsUndoable, ea.TypeBadge);
+            }
+            sb.Append("\n");
+
+            // 5. PowerPoint Actions Full Catalog DTOs
+            string pptXml =
+                "<powerpoint_actions>\n" +
+                "  <powerpoint_action type=\"move_slide\" source=\"4\" target=\"1\" />\n" +
+                "  <powerpoint_action type=\"create_section\" name=\"Executive Briefing\" slide=\"1\" />\n" +
+                "  <powerpoint_action type=\"rename_section\" section=\"2\" name=\"Technical Details\" />\n" +
+                "  <powerpoint_action type=\"set_notes\" slide=\"3\" notes=\"Focus on Q3 turnaround timeline\" />\n" +
+                "</powerpoint_actions>";
+            string pptClean;
+            var pptActions = PowerPointActionParser.ParseStructuredActions(pptXml, out pptClean);
+            sb.Append("=== POWERPOINT PARSED ACTIONS ===\n");
+            foreach (var pa in pptActions)
+            {
+                sb.AppendFormat("Type={0}|Src={1}|Tgt={2}|Slide={3}|Sec={4}|Name={5}|Notes={6}|Badge={7}|TgtDisp={8}|Desc={9}|ContDisp={10}\n",
+                    pa.Type, pa.Source, pa.Target, pa.Slide, pa.Section, pa.Name, pa.Notes, pa.TypeBadge, pa.TargetDisplay, pa.Description, pa.ContentDisplay);
+            }
+            sb.Append("\n");
+
+            // 6. PowerPoint Slide Data Outline Parsing
+            string slideMarkdown =
+                "# Slide 1: High-Speed Rail Modernization\n" +
+                "- 25kV Traction Power Upgrades\n" +
+                "- Substation telemetry integration\n" +
+                "Speaker Notes: Highlight completion within scheduled Q2 window.\n" +
+                "Visual: Single line diagram of traction substation.\n\n" +
+                "# Slide 2: Implementation Roadmap\n" +
+                "- Phase 1: Survey and Civil works\n" +
+                "Notes: Reiterate safety clearance protocols.";
+            var slides = PowerPointActionParser.ParseSlideData(slideMarkdown);
+            sb.Append("=== POWERPOINT SLIDE DATA ===\n");
+            foreach (var s in slides)
+            {
+                sb.AppendFormat("Title={0}|Bullets={1}|Notes={2}|Visual={3}\n",
+                    s.Title, string.Join(";", s.Bullets.ToArray()), s.SpeakerNotes, s.VisualSuggestion);
+            }
+            sb.Append("\n");
+
+            // 7. Audit Store Baseline Format
+            sb.Append("=== AUDIT FORMAT SPECIFICATION ===\n");
+            sb.Append("Host=Excel|ActionType=formula|Target=K20|Summary=Calculate sum|Undoable=True|Prompt=Sum items|Source=Book1.xlsx|Model=Mistral Large|Result=Applied successfully\n");
+
+            return sb.ToString();
+        }
+
+        private static string ComputeSha256(string raw)
+        {
+            string normalized = (raw ?? string.Empty).Replace("\r\n", "\n");
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                byte[] bytes = System.Text.Encoding.UTF8.GetBytes(normalized);
+                byte[] hash = sha.ComputeHash(bytes);
+                var sb = new StringBuilder();
+                for (int i = 0; i < hash.Length; i++)
+                {
+                    sb.Append(hash[i].ToString("x2"));
+                }
+                return sb.ToString();
+            }
         }
 
         private static void TestPromptAssemblerSystemPrompts()
