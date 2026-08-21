@@ -434,23 +434,6 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        /// <summary>
-        /// Applies an allow-listed set of deck operations returned by the model.
-        /// </summary>
-        public int ApplyStructuredActions(string rawText, out string cleanedText)
-        {
-            var actions = PowerPointActionParser.ParseStructuredActions(rawText, out cleanedText);
-            int applied = 0;
-            foreach (var action in actions)
-            {
-                if (ApplyPowerPointAction(action))
-                {
-                    applied++;
-                }
-            }
-            return applied;
-        }
-
         public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
             try
