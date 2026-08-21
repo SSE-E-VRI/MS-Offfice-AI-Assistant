@@ -1,0 +1,50 @@
+================================================================================
+  MS OFFICE AI ASSISTANT - ROOT CAUSE IDENTIFIED AND FIXED
+================================================================================
+
+ISSUE:
+------
+Add-in fails to load on Office 2021 and machines with prior builds installed.
+Ribbon does not appear; LoadBehavior is demoted to 2 after activation failure.
+
+ROOT CAUSE:
+-----------
+Stale COM class registration from older build versions. Orphaned version
+subkeys (1.0.0.0) point to obsolete assembly identities. The COM activation
+engine selects the HIGHEST version, causing manifest-mismatch (0x80131040).
+
+THIS WAS NOT A VERSION-COMPATIBILITY BUG. It was a REGISTRATION-CLEANUP BUG
+affecting any machine with prior builds installed.
+
+================================================================================
+  FIXES APPLIED (4 TOTAL)
+================================================================================
+
+[1] CRITICAL: install.ps1 - Delete stale CLSID registrations before merging
+    Lines: 83-98
+    Purpose: Prevents orphan version subkeys from persisting during upgrade
+
+[2] DEFENSIVE: install.ps1 - Selective CodeBase stamping
+    Lines: 151-167
+    Purpose: Only stamp current version (0.4.0.0), never arbitrary child keys
+
+[3] QUALITY: src/Core/VersionDetector.cs - Fix Office 2021 detection
+    Lines: 52-75
+    Purpose: Properly discriminate Office 2021 (16.0.2xxxx) from Office 365
+    Bonus: Makes OfficeVersion.Office2021 reachable (was dead code)
+
+[4] CRITICAL: installer/setup-x64.iss & setup-x86.iss - Unregister before register
+    Lines: 59-66 (both files)
+    Purpose: Ensures .exe installers also clean stale registrations
+
+================================================================================
+  IMPACT
+================================================================================
+
+Scope:  Affects all machines that had any prior version installed
+Type:   Automatic cleanup during reinstall (no manual steps needed)
+Status: READY FOR RELEASE
+
+No user action required. Just reinstall using updated scripts/installer.
+
+================================================================================

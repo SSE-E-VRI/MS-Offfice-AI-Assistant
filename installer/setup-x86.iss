@@ -57,6 +57,10 @@ Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B
 Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{40FC6ED4-2438-11CF-A3DB-080036F12502}"; Flags: uninsdeletekey
 
 [Run]
+; Unregister any old COM registration first to avoid stale assembly version conflicts.
+; This prevents manifest-mismatch COM activation failures (HRESULT 0x80131040) when
+; upgrading from older build versions where assembly versions differed.
+Filename: "{dotnet4032}\regasm.exe"; Parameters: "/unregister ""{app}\MSOfficeAIAssistant.dll"""; StatusMsg: "Cleaning old COM registration..."; Flags: runhidden skipifsilent
 ; Register COM Server via 32-bit RegAsm
 Filename: "{dotnet4032}\regasm.exe"; Parameters: "/codebase ""{app}\MSOfficeAIAssistant.dll"""; StatusMsg: "Registering 32-bit COM components..."; Flags: runhidden
 
