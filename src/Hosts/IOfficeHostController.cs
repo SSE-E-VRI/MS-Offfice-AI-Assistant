@@ -13,7 +13,7 @@ namespace MSOfficeAIAssistant.Hosts
         string HostType { get; }
         string GetActiveDocumentName();
         string GetSelectedText();
-        string GetDocumentContext(string prompt = null, int maxCharacters = 4000);
+        string GetDocumentContext(string prompt, int maxCharacters);
         bool InsertText(string text);
         bool Undo();
     }
