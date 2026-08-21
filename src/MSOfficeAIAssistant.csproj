@@ -191,6 +191,8 @@
     <Compile Include="Core\SpreadsheetAction.cs" />
     <Compile Include="Core\PowerPointActionParser.cs" />
     <Compile Include="Core\PromptAssembler.cs" />
+    <Compile Include="Core\Session\StreamCoordinator.cs" />
+    <Compile Include="Core\Session\AssistantSession.cs" />
     <Compile Include="Hosts\WordController.cs" />
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />
     <Compile Include="Hosts\ExcelController.cs" />

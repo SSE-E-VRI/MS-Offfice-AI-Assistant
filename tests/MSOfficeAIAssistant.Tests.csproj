@@ -83,6 +83,7 @@
     <Compile Include="PowerPointActionParserTests.cs" />
     <Compile Include="ActionAuditStoreTests.cs" />
     <Compile Include="ChatMessageSerializationTests.cs" />
+    <Compile Include="SessionOrchestratorTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

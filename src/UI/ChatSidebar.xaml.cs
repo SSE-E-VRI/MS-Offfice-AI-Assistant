@@ -16,6 +16,7 @@ using MSOfficeAIAssistant.API;
 using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.Core.Session;
 using MSOfficeAIAssistant.Hosts;
 using MSOfficeAIAssistant.Providers;
 
@@ -47,11 +48,10 @@ namespace MSOfficeAIAssistant.UI
         private readonly ObservableCollection<ChatMessage> _messages = new ObservableCollection<ChatMessage>();
         private readonly ObservableCollection<AttachmentItemViewModel> _pendingAttachments = new ObservableCollection<AttachmentItemViewModel>();
         private readonly ChatOrchestrator _orchestrator;
-        private CancellationTokenSource _streamingCts;
+        private readonly AssistantSession _session;
         private string _currentDocumentKey = "OfficeSession";
         private object _hostAppObj;
         private string _hostType = "Office";
-        private bool _isSending = false;
 
         // Host Controllers — created lazily, not during startup
         private WordController _wordCtrl;
@@ -68,6 +68,8 @@ namespace MSOfficeAIAssistant.UI
             this.Loaded += ChatSidebar_Loaded;
 
             _orchestrator = new ChatOrchestrator(ProviderFactory.CreateFromConfig(ConfigManager.Instance));
+            _session = new AssistantSession(_orchestrator, _messages);
+            _session.HostType = _hostType;
 
             SelectConfiguredModel();
 
@@ -86,10 +88,10 @@ namespace MSOfficeAIAssistant.UI
         {
             try
             {
-                if (_orchestrator != null)
+                if (_session != null && _session.Orchestrator != null)
                 {
                     var newProvider = ProviderFactory.CreateFromConfig(ConfigManager.Instance);
-                    _orchestrator.UpdateProvider(newProvider);
+                    _session.Orchestrator.UpdateProvider(newProvider);
                 }
                 SelectConfiguredModel();
             }
@@ -209,6 +211,8 @@ namespace MSOfficeAIAssistant.UI
                 }
 
                 _currentDocumentKey = string.IsNullOrWhiteSpace(docName) ? "Document" : docName;
+                _session.HostType = _hostType;
+                _session.CurrentDocumentKey = _currentDocumentKey;
                 _hostInitialized = true;
                 TxtDocumentBadge.Text = string.Format("{0}: {1}", _hostType, _currentDocumentKey);
                 UpdateHostSpecificControls();
@@ -243,40 +247,17 @@ namespace MSOfficeAIAssistant.UI
 
         private void LoadConversationHistory()
         {
-            _messages.Clear();
-            try
+            _session.LoadHistory(_currentDocumentKey);
+            if (_messages.Count == 0)
             {
-                var history = ConversationStore.Instance.GetHistory(_currentDocumentKey);
-                if (history != null && history.Count > 0)
-                {
-                    foreach (var msg in history)
-                    {
-                        _messages.Add(msg);
-                    }
-                }
-                else
-                {
-                    _messages.Add(new ChatMessage("system", string.Format("Welcome to AI Assistant for {0}! Ask anything or use ribbon buttons to draft, rewrite, or summarize.", _hostType)));
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("LoadConversationHistory failed: {0}", ex.Message));
+                _messages.Add(new ChatMessage("system", string.Format("Welcome to AI Assistant for {0}! Ask anything or use ribbon buttons to draft, rewrite, or summarize.", _hostType)));
             }
             ScrollToBottom();
         }
 
         private void SaveConversationHistory()
         {
-            try
-            {
-                var list = _messages.Where(m => !m.IsSystem).ToList();
-                ConversationStore.Instance.SaveHistory(_currentDocumentKey, list);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("SaveConversationHistory failed: {0}", ex.Message));
-            }
+            _session.SaveHistory();
         }
 
         public async void ExecuteExternalPrompt(string prompt, string promptTitle)
@@ -288,18 +269,13 @@ namespace MSOfficeAIAssistant.UI
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
-            // Cancel any in-flight stream and wait for isSending to clear
-            if (_isSending)
+            var coordinator = _session.StreamCoordinator;
+            if (coordinator.IsSending)
             {
-                if (_streamingCts != null)
-                {
-                    try { _streamingCts.Cancel(); } catch { }
-                }
-                // Brief yield to allow the in-flight finally block to run and reset _isSending
+                coordinator.Cancel();
                 await Task.Delay(100).ConfigureAwait(true);
             }
-            // If still sending after grace period, skip — don't layer concurrent streams
-            if (_isSending) return;
+            if (coordinator.IsSending) return;
 
             string selectedText = PromptAssembler.IncludesSelection(scope) ? GetSelectedTextOnly() : string.Empty;
             string documentContext = PromptAssembler.IncludesCurrentFile(scope) ? GetCurrentFileContext(prompt) : string.Empty;
@@ -358,7 +334,7 @@ namespace MSOfficeAIAssistant.UI
 
         private async void BtnSend_Click(object sender, RoutedEventArgs e)
         {
-            if (_isSending) return;
+            if (_session.StreamCoordinator.IsSending) return;
             string text = TxtInput.Text.Trim();
             if (string.IsNullOrWhiteSpace(text)) return;
             TxtInput.Clear();
@@ -378,15 +354,14 @@ namespace MSOfficeAIAssistant.UI
                 return;
             }
 
-            if (_isSending && _streamingCts != null)
+            var coordinator = _session.StreamCoordinator;
+            if (coordinator.IsSending)
             {
-                try { _streamingCts.Cancel(); } catch { }
+                coordinator.Cancel();
             }
 
-            _isSending = true;
             string displayUserMessage = customDisplayTitle ?? promptToSend;
-            var userMsg = new ChatMessage("user", displayUserMessage);
-            userMsg.FullContent = promptToSend;
+            var userMsg = new ChatMessage("user", displayUserMessage) { FullContent = promptToSend };
             _messages.Add(userMsg);
             ScrollToBottom();
 
@@ -397,13 +372,7 @@ namespace MSOfficeAIAssistant.UI
             BtnSend.IsEnabled = false;
             TypingIndicator.Visibility = Visibility.Visible;
 
-            if (_streamingCts != null)
-            {
-                try { _streamingCts.Cancel(); } catch { }
-                try { _streamingCts.Dispose(); } catch { }
-            }
-            _streamingCts = new CancellationTokenSource();
-            var myStreamCts = _streamingCts;
+            var streamCts = coordinator.BeginStream();
 
             string selectedModel = !string.IsNullOrWhiteSpace(CmbModel.Text)
                 ? CmbModel.Text.Trim()
@@ -411,162 +380,40 @@ namespace MSOfficeAIAssistant.UI
 
             try
             {
-                // Process pending attachments without leaving UI thread
-                var extractedAttachments = new List<AttachmentBlock>();
-                var textAttachmentContext = new StringBuilder();
+                var attachmentPaths = _pendingAttachments.Select(a => a.FilePath).ToList();
+                var prepared = await _session.PreparePayloadAsync(selectedModel, attachmentPaths, assistantMsg);
 
-                if (_pendingAttachments.Count > 0)
+                if (prepared.DroppedImagesCount > 0)
                 {
-                    bool providerSupportsVision = _orchestrator != null && _orchestrator.CheckVisionSupport(selectedModel);
-                    int droppedImagesCount = 0;
-
-                    foreach (var att in _pendingAttachments)
-                    {
-                        try
-                        {
-                            var block = await AttachmentExtractor.ExtractAsync(att.FilePath);
-                            if (block.IsImage)
-                            {
-                                if (providerSupportsVision)
-                                {
-                                    extractedAttachments.Add(block);
-                                }
-                                else
-                                {
-                                    droppedImagesCount++;
-                                }
-                            }
-                            else
-                            {
-                                textAttachmentContext.AppendLine(string.Format(
-                                    "\n[Source: {0}]\n{1}\n[End Source: {0}]",
-                                    block.FileName,
-                                    block.ExtractedText));
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            Logger.Warn(string.Format("Failed to extract attachment '{0}': {1}", att.FileName, ex.Message));
-                        }
-                    }
-
-                    if (droppedImagesCount > 0)
-                    {
-                        _messages.Insert(_messages.IndexOf(assistantMsg), new ChatMessage("system", "⚠ Note: Image attachments were omitted — the selected model does not support vision analysis."));
-                    }
+                    _messages.Insert(_messages.IndexOf(assistantMsg), new ChatMessage("system", "⚠ Note: Image attachments were omitted — the selected model does not support vision analysis."));
                 }
 
-                // Clone message list for API request to avoid mutating bound UI user messages
-                var historyForApi = _messages
-                    .Where(m => (m.IsUser || m.IsAssistant) && m != assistantMsg)
-                    .Select(m => new ChatMessage(m.Role, !string.IsNullOrEmpty(m.FullContent) ? m.FullContent : m.Content))
-                    .ToList();
-
-                // If attachments produced extracted text, augment the last user message copy
-                if (textAttachmentContext.Length > 0 && historyForApi.Count > 0)
-                {
-                    var lastUser = historyForApi.LastOrDefault(m => m.IsUser);
-                    if (lastUser != null)
-                    {
-                        lastUser.Content = PromptAssembler.AppendAttachmentCitationInstruction(lastUser.Content, textAttachmentContext.ToString());
-                    }
-                }
-
-                string effectiveSystemPrompt = BuildHostAwareSystemPrompt(config.SystemPrompt);
-                var boundedMessages = TokenCounter.TruncateToFit(historyForApi, 24000, effectiveSystemPrompt);
-
-                var aiRequest = new AIRequest
-                {
-                    Model = selectedModel,
-                    Messages = boundedMessages,
-                    Temperature = config.Temperature,
-                    MaxTokens = config.MaxTokens,
-                    SystemPrompt = effectiveSystemPrompt,
-                    Attachments = extractedAttachments
-                };
-
-                var tokenAccumulator = new StringBuilder();
-                int _deltaCount = 0;
-                bool streamFinished = false;
-
-                await _orchestrator.StreamChatAsync(
-                    aiRequest,
+                await _session.Orchestrator.StreamChatAsync(
+                    prepared.Request,
                     delta =>
                     {
-                        if (string.IsNullOrEmpty(delta)) return;
-                        lock (tokenAccumulator)
+                        coordinator.AccumulateDelta(delta, snapshot =>
                         {
-                            tokenAccumulator.Append(delta);
-                            _deltaCount++;
-                        }
-                        // Throttled UI update: only update display every 5 deltas to reduce dispatcher pressure
-                        if (_deltaCount % 5 == 0)
-                        {
-                            string snapshot;
-                            lock (tokenAccumulator)
-                            {
-                                snapshot = tokenAccumulator.ToString();
-                            }
                             Dispatcher.BeginInvoke(new Action(() =>
                             {
-                                // Ignore queued updates after the stream has completed so a stale
-                                // snapshot never overwrites the final content.
-                                if (!streamFinished)
+                                if (!coordinator.IsStreamFinished)
                                 {
                                     assistantMsg.Content = snapshot;
                                 }
                             }), DispatcherPriority.Background);
-                        }
+                        });
                     },
-                    myStreamCts.Token);
+                    streamCts.Token);
 
-                string fullAssistantText;
-                lock (tokenAccumulator)
-                {
-                    fullAssistantText = tokenAccumulator.ToString();
-                }
+                string fullAssistantText = coordinator.FinishStream();
 
                 Dispatcher.Invoke(new Action(() =>
                 {
-                    streamFinished = true;
-                    assistantMsg.Content = fullAssistantText;
-                    assistantMsg.IsStreaming = false;
+                    _session.ProcessAssistantResponse(fullAssistantText, assistantMsg);
 
-                    // Parse structured spreadsheet actions from Excel responses
-                    if (_excelCtrl != null)
-                    {
-                        string cleanContent;
-                        var extractedActions = SpreadsheetActionParser.ExtractActions(fullAssistantText, out cleanContent);
-                        if (extractedActions != null && extractedActions.Count > 0)
-                        {
-                            assistantMsg.Content = cleanContent;
-                            foreach (var act in extractedActions)
-                            {
-                                assistantMsg.Actions.Add(act);
-                            }
-                            assistantMsg.NotifyActionsChanged();
-                        }
-                    }
-                    else if (_pptCtrl != null)
-                    {
-                        string cleanContent;
-                        var pptActions = PowerPointActionParser.ParseStructuredActions(fullAssistantText, out cleanContent);
-                        if (pptActions != null && pptActions.Count > 0)
-                        {
-                            assistantMsg.Content = cleanContent;
-                            foreach (var act in pptActions)
-                            {
-                                assistantMsg.PowerPointActions.Add(act);
-                            }
-                            assistantMsg.NotifyPowerPointActionsChanged();
-                        }
-                    }
-
-                    // Scroll once at the end, not on every token
                     ScrollToBottom();
-                    SaveConversationHistory();
+                    _session.SaveHistory();
 
-                    // Clear attachments on UI thread after send
                     _pendingAttachments.Clear();
                     UpdateAttachmentState();
                 }));
@@ -590,7 +437,7 @@ namespace MSOfficeAIAssistant.UI
             }
             finally
             {
-                _isSending = false;
+                coordinator.EndSending();
                 Dispatcher.Invoke(new Action(() =>
                 {
                     BtnSend.IsEnabled = true;
@@ -780,13 +627,13 @@ namespace MSOfficeAIAssistant.UI
 
         private void BtnStopStreaming_Click(object sender, RoutedEventArgs e)
         {
-            if (_streamingCts != null)
+            if (_session != null)
             {
-                _streamingCts.Cancel();
-            }
-            if (_orchestrator != null)
-            {
-                _orchestrator.CancelCurrentStream();
+                _session.StreamCoordinator.Cancel();
+                if (_session.Orchestrator != null)
+                {
+                    _session.Orchestrator.CancelCurrentStream();
+                }
             }
         }
 
