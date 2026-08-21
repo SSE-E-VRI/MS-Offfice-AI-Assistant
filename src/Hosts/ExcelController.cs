@@ -6,14 +6,44 @@ using MSOfficeAIAssistant.Core;
 
 namespace MSOfficeAIAssistant.Hosts
 {
-    public class ExcelController
+    public class ExcelController : IOfficeHostController
     {
         private readonly object _rawAppObj;
         private static readonly Regex ExcelNameRegex = new Regex(@"^[A-Za-z_][A-Za-z0-9_]{0,249}$", RegexOptions.Compiled);
 
+        public string HostType
+        {
+            get { return "Excel"; }
+        }
+
         public ExcelController(object appObj)
         {
             _rawAppObj = appObj;
+        }
+
+        public string GetActiveDocumentName()
+        {
+            return GetActiveWorkbookName();
+        }
+
+        public string GetSelectedText()
+        {
+            return GetSelectedRangeValues();
+        }
+
+        public string GetDocumentContext(string prompt = null, int maxCharacters = 4000)
+        {
+            string snapshot = GetWorksheetSnapshot(70, 26);
+            if (maxCharacters > 0 && snapshot.Length > maxCharacters)
+            {
+                return snapshot.Substring(0, maxCharacters);
+            }
+            return snapshot;
+        }
+
+        public bool Undo()
+        {
+            return UndoLastAction();
         }
 
         public static string IndexToColumnLetter(int colIndex)
@@ -722,13 +752,13 @@ namespace MSOfficeAIAssistant.Hosts
             return columns;
         }
 
-        public void InsertText(string text)
+        public bool InsertText(string text)
         {
-            if (string.IsNullOrWhiteSpace(text)) return;
+            if (string.IsNullOrWhiteSpace(text)) return false;
             try
             {
                 dynamic app = _rawAppObj;
-                if (app == null) return;
+                if (app == null) return false;
                 EnsureWorksheetEditable(app.ActiveSheet);
 
                 string targetCellAddress;
@@ -751,7 +781,7 @@ namespace MSOfficeAIAssistant.Hosts
                     try { targetRange = app.ActiveSheet.Range("A1"); } catch { }
                 }
 
-                if (targetRange == null) return;
+                if (targetRange == null) return false;
 
                 // 1. If value is an Excel formula, write Formula property
                 if (valueToInsert.StartsWith("=") && !valueToInsert.Contains("\n"))
@@ -770,7 +800,7 @@ namespace MSOfficeAIAssistant.Hosts
                         }
                     }
                     targetRange.Formula = valueToInsert;
-                    return;
+                    return true;
                 }
 
                 // 2. If text contains a markdown table (| Col 1 | Col 2 |), route through WriteTable
@@ -779,16 +809,17 @@ namespace MSOfficeAIAssistant.Hosts
                 {
                     dynamic ws = targetRange.Worksheet;
                     WriteTable(ws, targetRange, valueToInsert);
-                    return;
+                    return true;
                 }
 
                 // 3. Otherwise write clean text/value into target cell
                 targetRange.Value2 = valueToInsert;
+                return true;
             }
             catch (Exception ex)
             {
                 Logger.Error("ExcelController.InsertText failed", ex);
-                throw;
+                return false;
             }
         }
 
