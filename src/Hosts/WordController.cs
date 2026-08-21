@@ -157,9 +157,9 @@ namespace MSOfficeAIAssistant.Hosts
             return false;
         }
 
-        public string GetDocumentContext(string prompt = null, int maxCharacters = 4000)
+        public string GetDocumentContext(string prompt, int maxCharacters)
         {
-            return GetRelevantDocumentContext(prompt, maxCharacters > 0 ? maxCharacters : 4000);
+            return GetRelevantDocumentContext(prompt, maxCharacters > 0 ? maxCharacters : 24000);
         }
 
         public void ReplaceSelection(string text)

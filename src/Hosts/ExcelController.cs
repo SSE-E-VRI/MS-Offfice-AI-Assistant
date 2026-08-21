@@ -31,7 +31,7 @@ namespace MSOfficeAIAssistant.Hosts
             return GetSelectedRangeValues();
         }
 
-        public string GetDocumentContext(string prompt = null, int maxCharacters = 4000)
+        public string GetDocumentContext(string prompt, int maxCharacters)
         {
             string snapshot = GetWorksheetSnapshot(70, 26);
             if (maxCharacters > 0 && snapshot.Length > maxCharacters)

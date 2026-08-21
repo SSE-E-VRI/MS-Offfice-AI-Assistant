@@ -48,7 +48,7 @@ namespace MSOfficeAIAssistant.Hosts
             return GetSlideText();
         }
 
-        public string GetDocumentContext(string prompt = null, int maxCharacters = 4000)
+        public string GetDocumentContext(string prompt, int maxCharacters)
         {
             return GetPresentationReviewContext(maxCharacters > 0 ? maxCharacters : 28000);
         }
