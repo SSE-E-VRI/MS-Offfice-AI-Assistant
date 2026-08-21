@@ -12,13 +12,18 @@ namespace MSOfficeAIAssistant.Hosts
     /// Word host operations.  The context helpers deliberately keep their ranking logic
     /// separate from COM so it can be exercised without an Office installation.
     /// </summary>
-    public class WordController
+    public class WordController : IOfficeHostController
     {
         private const int DefaultDocumentContextCharacters = 32000;
 
         // Store as raw object; wrap lazily only when needed.
         private readonly object _rawAppObj;
         private Word.Application _wordApp;
+
+        public string HostType
+        {
+            get { return "Word"; }
+        }
 
         public WordController(object appObj)
         {
@@ -115,6 +120,46 @@ namespace MSOfficeAIAssistant.Hosts
                 Logger.Error("WordController.InsertTextAtCursor failed", ex);
                 throw;
             }
+        }
+
+        public bool InsertText(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return false;
+            try
+            {
+                var app = GetApp();
+                if (app == null) return false;
+                InsertTextAtCursor(text);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.InsertText failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        public bool Undo()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app != null && app.ActiveDocument != null)
+                {
+                    app.ActiveDocument.Undo();
+                    return true;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.Undo failed: {0}", ex.Message));
+            }
+            return false;
+        }
+
+        public string GetDocumentContext(string prompt = null, int maxCharacters = 4000)
+        {
+            return GetRelevantDocumentContext(prompt, maxCharacters > 0 ? maxCharacters : 4000);
         }
 
         public void ReplaceSelection(string text)
