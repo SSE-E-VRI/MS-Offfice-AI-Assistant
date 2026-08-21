@@ -23,7 +23,8 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("ActionAuditStoreTests", ActionAuditStoreTests.RunAll),
                 Tuple.Create<string, Action>("ChatMessageSerializationTests", ChatMessageSerializationTests.RunAll),
                 Tuple.Create<string, Action>("SessionOrchestratorTests", SessionOrchestratorTests.RunAll),
-                Tuple.Create<string, Action>("ComResilienceTests", ComResilienceTests.RunAll)
+                Tuple.Create<string, Action>("ComResilienceTests", ComResilienceTests.RunAll),
+                Tuple.Create<string, Action>("ProviderCapabilitiesTests", ProviderCapabilitiesTests.RunAll)
             };
 
             foreach (var suite in suites)

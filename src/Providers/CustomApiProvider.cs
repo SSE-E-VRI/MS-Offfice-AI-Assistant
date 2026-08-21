@@ -27,7 +27,10 @@ namespace MSOfficeAIAssistant.Providers
                        AICapabilities.Streaming |
                        AICapabilities.Vision |
                        AICapabilities.ModelListing |
-                       AICapabilities.ConnectionTest;
+                       AICapabilities.ConnectionTest |
+                       AICapabilities.StructuredOutput |
+                       AICapabilities.ToolCalling |
+                       AICapabilities.JsonMode;
             }
         }
 
@@ -62,14 +65,7 @@ namespace MSOfficeAIAssistant.Providers
         public async Task<AIResponse> ChatAsync(AIRequest request, CancellationToken ct = default(CancellationToken))
         {
             if (request == null) throw new ArgumentNullException("request");
-            string content = await _client.ChatAsync(
-                request.Model,
-                request.Messages,
-                request.Temperature,
-                request.MaxTokens,
-                request.Attachments,
-                ct,
-                request.SystemPrompt).ConfigureAwait(false);
+            string content = await _client.ChatAsync(request, ct).ConfigureAwait(false);
 
             return new AIResponse(content) { Model = request.Model };
         }
@@ -77,15 +73,7 @@ namespace MSOfficeAIAssistant.Providers
         public async Task StreamChatAsync(AIRequest request, Action<string> onDeltaReceived, CancellationToken ct = default(CancellationToken))
         {
             if (request == null) throw new ArgumentNullException("request");
-            await _client.StreamChatCallbackAsync(
-                request.Model,
-                request.Messages,
-                request.Temperature,
-                request.MaxTokens,
-                onDeltaReceived,
-                request.Attachments,
-                ct,
-                request.SystemPrompt).ConfigureAwait(false);
+            await _client.StreamChatCallbackAsync(request, onDeltaReceived, ct).ConfigureAwait(false);
         }
 
         public bool CheckVisionSupport(string model)

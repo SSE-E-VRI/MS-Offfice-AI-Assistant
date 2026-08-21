@@ -190,10 +190,7 @@ parsers exist (`src/API/StreamingParser.cs`, `src/Providers/GeminiStreamingParse
 `ChatOrchestrator` (235 lines) is **only** a thread-safe provider-lifetime wrapper — provider swap,
 cancellation, streaming pass-through. It contains no prompt, Office, or action logic.
 
-> ⚠️ **No provider supports structured output, JSON mode, or tool calling.** `AICapabilities`
-> (`IAIProvider.cs:17-26`) has no such flags, and `OpenAICompatibleClient.BuildPayload` (`:260-267`)
-> emits a sealed anonymous type with no extension point. `StreamingParser.TryParseLine` silently
-> discards anything that is not `choices[0].delta.content`.
+> **Provider Capabilities:** `AICapabilities` (`IAIProvider.cs:17-29`) supports `StructuredOutput`, `ToolCalling`, and `JsonMode` flags. `OpenAICompatibleClient.BuildPayload` and `GeminiProvider.BuildGeminiPayload` support structured JSON mode (`response_format`/`responseMimeType`), `tools`, `tool_choice`, and arbitrary extra parameters. `StreamingParser.TryParseLine` extracts `choices[0].delta.content`.
 
 ### 2.6 Office context extraction
 
@@ -614,7 +611,7 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 | 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Implemented |
 | 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; ElementHost DPI handling; re-enable list virtualization; incremental markdown. | D-7, D-8 | Planned |
 | 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing null-check dispatch. Resolve `OutlookController`. | D-4 | Planned |
-| 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Planned |
+| 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Implemented |
 
 **Exit:** identical responses, actions and audit entries before and after extraction; PowerPoint
 structured actions visible in approval dialog; Excel in-cell edit rejections handled gracefully.

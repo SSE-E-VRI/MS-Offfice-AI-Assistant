@@ -48,8 +48,14 @@ namespace MSOfficeAIAssistant.Providers
 
     public class GeminiGenerationConfig
     {
-        [JsonProperty("maxOutputTokens")]
-        public int MaxOutputTokens { get; set; }
+        [JsonProperty("maxOutputTokens", NullValueHandling = NullValueHandling.Ignore)]
+        public int? MaxOutputTokens { get; set; }
+
+        [JsonProperty("temperature", NullValueHandling = NullValueHandling.Ignore)]
+        public double? Temperature { get; set; }
+
+        [JsonProperty("responseMimeType", NullValueHandling = NullValueHandling.Ignore)]
+        public string ResponseMimeType { get; set; }
     }
 
     public class GeminiSystemInstruction
@@ -73,6 +79,9 @@ namespace MSOfficeAIAssistant.Providers
 
         [JsonProperty("systemInstruction", NullValueHandling = NullValueHandling.Ignore)]
         public GeminiSystemInstruction SystemInstruction { get; set; }
+
+        [JsonProperty("tools", NullValueHandling = NullValueHandling.Ignore)]
+        public object Tools { get; set; }
     }
 
     public class GeminiProvider : IAIProvider
@@ -97,7 +106,10 @@ namespace MSOfficeAIAssistant.Providers
                        AICapabilities.Streaming |
                        AICapabilities.Vision |
                        AICapabilities.ModelListing |
-                       AICapabilities.ConnectionTest;
+                       AICapabilities.ConnectionTest |
+                       AICapabilities.StructuredOutput |
+                       AICapabilities.ToolCalling |
+                       AICapabilities.JsonMode;
             }
         }
 
@@ -488,13 +500,26 @@ namespace MSOfficeAIAssistant.Providers
                 });
             }
 
+            var genConfig = new GeminiGenerationConfig
+            {
+                MaxOutputTokens = request.MaxTokens > 0 ? request.MaxTokens : 4096,
+                Temperature = request.Temperature
+            };
+
+            if (!string.IsNullOrWhiteSpace(request.ResponseFormat))
+            {
+                if (string.Equals(request.ResponseFormat, "json_object", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(request.ResponseFormat, "application/json", StringComparison.OrdinalIgnoreCase))
+                {
+                    genConfig.ResponseMimeType = "application/json";
+                }
+            }
+
             var payload = new GeminiRequestPayload
             {
                 Contents = contents,
-                GenerationConfig = new GeminiGenerationConfig
-                {
-                    MaxOutputTokens = request.MaxTokens > 0 ? request.MaxTokens : 4096
-                }
+                GenerationConfig = genConfig,
+                Tools = request.Tools
             };
 
             if (!string.IsNullOrWhiteSpace(systemPrompt))

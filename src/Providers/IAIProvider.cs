@@ -22,7 +22,10 @@ namespace MSOfficeAIAssistant.Providers
         Streaming = 2,
         Vision = 4,
         ModelListing = 8,
-        ConnectionTest = 16
+        ConnectionTest = 16,
+        StructuredOutput = 32,
+        ToolCalling = 64,
+        JsonMode = 128
     }
 
     public class AIModelInfo
@@ -69,6 +72,10 @@ namespace MSOfficeAIAssistant.Providers
         public int MaxTokens { get; set; }
         public string SystemPrompt { get; set; }
         public List<AttachmentBlock> Attachments { get; set; }
+        public string ResponseFormat { get; set; }
+        public object Tools { get; set; }
+        public object ToolChoice { get; set; }
+        public Dictionary<string, object> ExtraParameters { get; set; }
 
         public AIRequest()
         {
@@ -76,6 +83,7 @@ namespace MSOfficeAIAssistant.Providers
             Attachments = new List<AttachmentBlock>();
             Temperature = 0.7;
             MaxTokens = 4096;
+            ExtraParameters = new Dictionary<string, object>();
         }
     }
 
