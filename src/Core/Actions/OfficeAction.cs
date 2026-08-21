@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Text;
 using Newtonsoft.Json;
 
@@ -75,8 +76,13 @@ namespace MSOfficeAIAssistant.Core.Actions
     /// Unified structured action model implementing SSOT §5.3 across Word, Excel, and PowerPoint.
     /// Acts as the single authoritative action schema for validation, risk gating, UI presentation, and verification.
     /// </summary>
-    public class OfficeAction
+    public class OfficeAction : INotifyPropertyChanged
     {
+        private OfficeActionStatus _status;
+        private string _resultText;
+        private string _errorMessage;
+        private bool _isUndoable;
+
         [JsonProperty("action_id")]
         public string ActionId { get; set; }
 
@@ -112,16 +118,65 @@ namespace MSOfficeAIAssistant.Core.Actions
 
         // Execution & Presentation state
         [JsonIgnore]
-        public OfficeActionStatus Status { get; set; }
+        public OfficeActionStatus Status
+        {
+            get { return _status; }
+            set
+            {
+                if (_status != value)
+                {
+                    _status = value;
+                    OnPropertyChanged("Status");
+                    OnPropertyChanged("StatusDisplay");
+                    OnPropertyChanged("StatusForegroundBrush");
+                }
+            }
+        }
 
         [JsonIgnore]
-        public string ResultText { get; set; }
+        public string ResultText
+        {
+            get { return _resultText; }
+            set
+            {
+                if (_resultText != value)
+                {
+                    _resultText = value;
+                    OnPropertyChanged("ResultText");
+                    OnPropertyChanged("StatusDisplay");
+                }
+            }
+        }
 
         [JsonIgnore]
-        public string ErrorMessage { get; set; }
+        public string ErrorMessage
+        {
+            get { return _errorMessage; }
+            set
+            {
+                if (_errorMessage != value)
+                {
+                    _errorMessage = value;
+                    OnPropertyChanged("ErrorMessage");
+                    OnPropertyChanged("StatusDisplay");
+                    OnPropertyChanged("StatusForegroundBrush");
+                }
+            }
+        }
 
         [JsonIgnore]
-        public bool IsUndoable { get; set; }
+        public bool IsUndoable
+        {
+            get { return _isUndoable; }
+            set
+            {
+                if (_isUndoable != value)
+                {
+                    _isUndoable = value;
+                    OnPropertyChanged("IsUndoable");
+                }
+            }
+        }
 
         [JsonIgnore]
         public string ActionBadge
@@ -146,6 +201,8 @@ namespace MSOfficeAIAssistant.Core.Actions
                     case "conditionalformat": return "fmt";
                     case "sort": return "sort";
                     case "filter": return "fltr";
+                    case "data_validation":
+                    case "datavalidation": return "valid";
                     case "create_chart":
                     case "chart": return "chrt";
                     case "create_pivot_table":
@@ -162,9 +219,16 @@ namespace MSOfficeAIAssistant.Core.Actions
                     case "move_slide": return "sld";
                     case "create_section":
                     case "rename_section": return "sec";
+                    case "set_notes": return "note";
                     default: return "act";
                 }
             }
+        }
+
+        [JsonIgnore]
+        public string TypeBadge
+        {
+            get { return ActionBadge; }
         }
 
         [JsonIgnore]
@@ -178,15 +242,112 @@ namespace MSOfficeAIAssistant.Core.Actions
             }
         }
 
+        [JsonIgnore]
+        public string Description
+        {
+            get { return PreviewDescription; }
+        }
+
+        [JsonIgnore]
+        public string TargetDisplay
+        {
+            get { return Target != null ? Target.ToString() : "Document"; }
+        }
+
+        [JsonIgnore]
+        public string ContentDisplay
+        {
+            get
+            {
+                if (Parameters == null || Parameters.Count == 0) return string.Empty;
+                if (Parameters.ContainsKey("formula") && Parameters["formula"] != null) return Convert.ToString(Parameters["formula"]);
+                if (Parameters.ContainsKey("value") && Parameters["value"] != null) return Convert.ToString(Parameters["value"]);
+                if (Parameters.ContainsKey("content") && Parameters["content"] != null) return Convert.ToString(Parameters["content"]);
+                if (Parameters.ContainsKey("comment_text") && Parameters["comment_text"] != null) return Convert.ToString(Parameters["comment_text"]);
+                if (Parameters.ContainsKey("notes") && Parameters["notes"] != null) return Convert.ToString(Parameters["notes"]);
+                if (Parameters.ContainsKey("outline") && Parameters["outline"] != null) return Convert.ToString(Parameters["outline"]);
+
+                var sb = new StringBuilder();
+                foreach (var kvp in Parameters)
+                {
+                    if (kvp.Value == null) continue;
+                    if (sb.Length > 0) sb.Append(", ");
+                    sb.Append(kvp.Key).Append("=").Append(kvp.Value);
+                }
+                return sb.ToString();
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasContentDisplay
+        {
+            get { return !string.IsNullOrWhiteSpace(ContentDisplay); }
+        }
+
+        [JsonIgnore]
+        public string StatusDisplay
+        {
+            get
+            {
+                switch (_status)
+                {
+                    case OfficeActionStatus.Pending:
+                        return string.Empty;
+                    case OfficeActionStatus.Approved:
+                        return "Approved";
+                    case OfficeActionStatus.Applying:
+                        return "Applying...";
+                    case OfficeActionStatus.Applied:
+                        return !string.IsNullOrEmpty(_resultText) ? ("✔ " + _resultText) : "✔ Applied";
+                    case OfficeActionStatus.Failed:
+                        return !string.IsNullOrEmpty(_errorMessage) ? ("⚠ Error: " + _errorMessage) : "⚠ Error";
+                    case OfficeActionStatus.Rejected:
+                        return "Rejected";
+                    default:
+                        return _status.ToString();
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public string StatusForegroundBrush
+        {
+            get
+            {
+                switch (_status)
+                {
+                    case OfficeActionStatus.Applied:
+                        return "#059669"; // Emerald
+                    case OfficeActionStatus.Failed:
+                        return "#DC2626"; // Red
+                    case OfficeActionStatus.Applying:
+                        return "#2563EB"; // Blue
+                    default:
+                        return "#475569"; // Slate
+                }
+            }
+        }
+
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            var handler = PropertyChanged;
+            if (handler != null)
+            {
+                handler(this, new PropertyChangedEventArgs(propertyName));
+            }
+        }
+
         public OfficeAction()
         {
             ActionId = Guid.NewGuid().ToString("N");
             Target = new ActionTarget();
             Parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
             Evidence = new List<EvidenceClaim>();
-            Status = OfficeActionStatus.Pending;
+            _status = OfficeActionStatus.Pending;
             RequiresApproval = true;
-            IsUndoable = true;
+            _isUndoable = true;
         }
 
         #region Legacy Compatibility Adapters
@@ -235,11 +396,29 @@ namespace MSOfficeAIAssistant.Core.Actions
         /// </summary>
         public static OfficeAction FromSpreadsheetAction(SpreadsheetAction sa)
         {
-            if (sa == null) return null;
+            string opName;
+            switch (sa.Type)
+            {
+                case SpreadsheetActionType.Formula: opName = "excel.write_formula"; break;
+                case SpreadsheetActionType.Value: opName = "excel.write_value"; break;
+                case SpreadsheetActionType.FillDown: opName = "excel.fill_down"; break;
+                case SpreadsheetActionType.Table: opName = "excel.table"; break;
+                case SpreadsheetActionType.CreateTable: opName = "excel.create_table"; break;
+                case SpreadsheetActionType.ConditionalFormat: opName = "excel.conditional_format"; break;
+                case SpreadsheetActionType.Sort: opName = "excel.sort"; break;
+                case SpreadsheetActionType.Filter: opName = "excel.filter"; break;
+                case SpreadsheetActionType.DataValidation: opName = "excel.data_validation"; break;
+                case SpreadsheetActionType.Chart: opName = "excel.create_chart"; break;
+                case SpreadsheetActionType.PivotTable: opName = "excel.create_pivot_table"; break;
+                case SpreadsheetActionType.NamedRange: opName = "excel.named_range"; break;
+                case SpreadsheetActionType.RemoveDuplicates: opName = "excel.remove_duplicates"; break;
+                default: opName = "excel." + sa.Type.ToString().ToLowerInvariant(); break;
+            }
+
             var action = new OfficeAction
             {
                 Host = "Excel",
-                Operation = "excel." + sa.Type.ToString().ToLowerInvariant(),
+                Operation = opName,
                 ExpectedResult = sa.Description,
                 SourceReason = sa.Description,
                 IsUndoable = sa.IsUndoable,

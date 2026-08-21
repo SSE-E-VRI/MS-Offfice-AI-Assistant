@@ -16,6 +16,7 @@ using MSOfficeAIAssistant.API;
 using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.Core.Actions;
 using MSOfficeAIAssistant.Core.Session;
 using MSOfficeAIAssistant.Hosts;
 using MSOfficeAIAssistant.Providers;
@@ -749,93 +750,210 @@ namespace MSOfficeAIAssistant.UI
             return btn.DataContext as ChatMessage;
         }
 
-        private void BtnApplyAction_Click(object sender, RoutedEventArgs e)
+        private void BtnApplyOfficeAction_Click(object sender, RoutedEventArgs e)
         {
             var btn = sender as Button;
-            var action = btn != null ? btn.Tag as SpreadsheetAction : null;
+            var action = btn != null ? btn.Tag as OfficeAction : null;
             if (action == null) return;
 
-            if (_excelCtrl != null)
-            {
-                if (!ConfirmSpreadsheetAction(action)) return;
-                bool ok = _excelCtrl.ApplySpreadsheetAction(action);
-                if (!ok && !string.IsNullOrEmpty(action.ErrorMessage))
-                {
-                    MessageBox.Show(action.ErrorMessage, "Spreadsheet Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
-                }
-                else if (ok)
-                {
-                    ActionAuditStore.Instance.Record(
-                        "Excel",
-                        action.Type.ToString(),
-                        action.Target,
-                        DescribeSpreadsheetAction(action),
-                        action.IsUndoable,
-                        GetLastUserPrompt(),
-                        _currentDocumentKey,
-                        GetSelectedModelName(),
-                        action.Content,
-                        !string.IsNullOrEmpty(action.ResultText) ? action.ResultText : "Applied successfully");
-                }
-            }
-            else
-            {
-                MessageBox.Show("No active Excel spreadsheet found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
+            if (!ConfirmOfficeAction(action)) return;
+            ExecuteOfficeAction(action);
         }
 
-        private void BtnApplyAllActions_Click(object sender, RoutedEventArgs e)
+        private void BtnApplyAllOfficeActions_Click(object sender, RoutedEventArgs e)
         {
             var msg = GetMessageFromSender(sender);
-            if (msg == null || msg.Actions == null || msg.Actions.Count == 0) return;
+            if (msg == null || msg.OfficeActions == null || msg.OfficeActions.Count == 0) return;
 
-            if (_excelCtrl == null)
-            {
-                MessageBox.Show("No active Excel spreadsheet found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
+            var pendingActions = msg.OfficeActions.Where(a => a.Status == OfficeActionStatus.Pending || a.Status == OfficeActionStatus.Failed).ToList();
+            if (pendingActions.Count == 0) return;
 
             var preview = new StringBuilder();
-            preview.AppendLine("Review the following Excel changes before applying:");
+            preview.AppendLine("Review the following Office actions before applying:\n");
             bool hasNonUndoable = false;
-            foreach (var pendingAction in msg.Actions)
+            foreach (var act in pendingActions)
             {
-                if (pendingAction.Status == SpreadsheetActionStatus.Pending || pendingAction.Status == SpreadsheetActionStatus.Error)
-                {
-                    preview.AppendLine(DescribeSpreadsheetAction(pendingAction));
-                    if (!pendingAction.IsUndoable) hasNonUndoable = true;
-                }
+                preview.AppendLine(DescribeOfficeAction(act));
+                preview.AppendLine();
+                if (!act.IsUndoable) hasNonUndoable = true;
             }
-            if (hasNonUndoable)
-            {
-                preview.AppendLine("\n⚠ Note: One or more actions cannot be undone by Excel Undo.");
-            }
-            if (MessageBox.Show(preview.ToString(), "Review Spreadsheet Actions", MessageBoxButton.YesNo,
+
+            if (MessageBox.Show(preview.ToString().TrimEnd(), "Review All Actions", MessageBoxButton.YesNo,
                 hasNonUndoable ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
-            int appliedCount = 0;
-            foreach (var act in msg.Actions)
+            foreach (var act in pendingActions)
             {
-                if (act.Status == SpreadsheetActionStatus.Pending || act.Status == SpreadsheetActionStatus.Error)
+                ExecuteOfficeAction(act);
+            }
+        }
+
+        private bool ExecuteOfficeAction(OfficeAction action)
+        {
+            if (action == null) return false;
+
+            string host = !string.IsNullOrEmpty(action.Host) ? action.Host : _hostType;
+
+            if (string.Equals(host, "Excel", StringComparison.OrdinalIgnoreCase) || (action.Operation != null && action.Operation.StartsWith("excel.", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (_excelCtrl == null)
                 {
-                    if (_excelCtrl.ApplySpreadsheetAction(act))
+                    MessageBox.Show("No active Excel workbook found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return false;
+                }
+
+                var sa = action.ToSpreadsheetAction();
+                if (sa == null)
+                {
+                    MessageBox.Show(string.Format("Unsupported spreadsheet action '{0}'.", action.Operation), "Spreadsheet Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                var res = _excelCtrl.ExecuteSpreadsheetAction(sa);
+                if (res.Success)
+                {
+                    string msgText = res.Value != null ? Convert.ToString(res.Value) : "Applied successfully";
+                    action.Status = OfficeActionStatus.Applied;
+                    action.ResultText = msgText;
+                    action.ErrorMessage = null;
+                    RecordOfficeActionAudit(action, msgText);
+                    return true;
+                }
+                else
+                {
+                    action.Status = OfficeActionStatus.Failed;
+                    action.ErrorMessage = res.ErrorMessage;
+                    MessageBox.Show(res.ErrorMessage ?? "Spreadsheet action failed.", "Spreadsheet Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+            }
+            else if (string.Equals(host, "PowerPoint", StringComparison.OrdinalIgnoreCase) || (action.Operation != null && action.Operation.StartsWith("powerpoint.", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (_pptCtrl == null)
+                {
+                    MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return false;
+                }
+
+                var pa = action.ToPowerPointAction();
+                if (pa == null)
+                {
+                    MessageBox.Show(string.Format("Unsupported PowerPoint action '{0}'.", action.Operation), "PowerPoint Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                var res = _pptCtrl.ExecutePowerPointAction(pa);
+                if (res.Success)
+                {
+                    string msgText = res.Value != null ? Convert.ToString(res.Value) : "Applied successfully";
+                    action.Status = OfficeActionStatus.Applied;
+                    action.ResultText = msgText;
+                    action.ErrorMessage = null;
+                    RecordOfficeActionAudit(action, msgText);
+                    return true;
+                }
+                else
+                {
+                    action.Status = OfficeActionStatus.Failed;
+                    action.ErrorMessage = res.ErrorMessage;
+                    MessageBox.Show(res.ErrorMessage ?? "PowerPoint action failed.", "PowerPoint Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+            }
+            else if (string.Equals(host, "Word", StringComparison.OrdinalIgnoreCase) || (action.Operation != null && action.Operation.StartsWith("word.", StringComparison.OrdinalIgnoreCase)))
+            {
+                if (_wordCtrl == null)
+                {
+                    MessageBox.Show("No active Word document found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return false;
+                }
+
+                HostOperationResult res = null;
+                if (string.Equals(action.Operation, "word.add_comment", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(action.Operation, "add_comment", StringComparison.OrdinalIgnoreCase))
+                {
+                    string comment = action.Parameters != null && action.Parameters.ContainsKey("comment_text") ? Convert.ToString(action.Parameters["comment_text"]) : "";
+                    string targetText = action.Parameters != null && action.Parameters.ContainsKey("target_text") ? Convert.ToString(action.Parameters["target_text"]) : null;
+                    res = _wordCtrl.ExecuteAddComment(comment, targetText);
+                }
+                else if (string.Equals(action.Operation, "word.insert_table", StringComparison.OrdinalIgnoreCase) ||
+                         string.Equals(action.Operation, "insert_table", StringComparison.OrdinalIgnoreCase))
+                {
+                    int rows = action.Parameters != null && action.Parameters.ContainsKey("rows") ? Convert.ToInt32(action.Parameters["rows"]) : 2;
+                    int cols = action.Parameters != null && action.Parameters.ContainsKey("cols") ? Convert.ToInt32(action.Parameters["cols"]) : 2;
+                    res = _wordCtrl.ExecuteInsertTable(rows, cols);
+                }
+                else
+                {
+                    MessageBox.Show(string.Format("Unsupported Word action '{0}'.", action.Operation), "Word Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+
+                if (res != null)
+                {
+                    if (res.Success)
                     {
-                        appliedCount++;
-                        ActionAuditStore.Instance.Record(
-                            "Excel",
-                            act.Type.ToString(),
-                            act.Target,
-                            DescribeSpreadsheetAction(act),
-                            act.IsUndoable,
-                            GetLastUserPrompt(),
-                            _currentDocumentKey,
-                            GetSelectedModelName(),
-                            act.Content,
-                            !string.IsNullOrEmpty(act.ResultText) ? act.ResultText : "Applied successfully");
+                        string msgText = res.Value != null ? Convert.ToString(res.Value) : "Applied successfully";
+                        action.Status = OfficeActionStatus.Applied;
+                        action.ResultText = msgText;
+                        action.ErrorMessage = null;
+                        RecordOfficeActionAudit(action, msgText);
+                        return true;
+                    }
+                    else
+                    {
+                        action.Status = OfficeActionStatus.Failed;
+                        action.ErrorMessage = res.ErrorMessage;
+                        MessageBox.Show(res.ErrorMessage ?? "Word action failed.", "Word Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        return false;
                     }
                 }
             }
+
+            MessageBox.Show(string.Format("Unsupported action '{0}' for host {1}.", action.Operation, host), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+
+        private bool ConfirmOfficeAction(OfficeAction action)
+        {
+            if (action == null) return false;
+            return MessageBox.Show(
+                DescribeOfficeAction(action),
+                string.Format("Review {0} Action", action.Host ?? _hostType),
+                MessageBoxButton.YesNo,
+                action.IsUndoable ? MessageBoxImage.Question : MessageBoxImage.Warning) == MessageBoxResult.Yes;
+        }
+
+        private string DescribeOfficeAction(OfficeAction action)
+        {
+            if (action == null) return "No Office action is available.";
+            string host = !string.IsNullOrEmpty(action.Host) ? action.Host : _hostType;
+            string desc = !string.IsNullOrWhiteSpace(action.PreviewDescription) ? action.PreviewDescription : "No description provided.";
+            string undoWarning = action.IsUndoable
+                ? string.Empty
+                : "\n\n⚠ WARNING: This action cannot be reliably undone by Office Undo.";
+            return string.Format("{0} will apply a {1} action on {2}.\n\nDescription: {3}\n\nProposed change:\n{4}{5}",
+                host,
+                action.Operation,
+                action.TargetDisplay,
+                desc,
+                action.ContentDisplay,
+                undoWarning);
+        }
+
+        private void RecordOfficeActionAudit(OfficeAction action, string resultText)
+        {
+            ActionAuditStore.Instance.Record(
+                action.Host ?? _hostType,
+                action.Operation ?? "Action",
+                action.TargetDisplay,
+                DescribeOfficeAction(action),
+                action.IsUndoable,
+                GetLastUserPrompt(),
+                _currentDocumentKey,
+                GetSelectedModelName(),
+                action.ContentDisplay,
+                !string.IsNullOrEmpty(resultText) ? resultText : "Applied successfully");
         }
 
         private void BtnCopyMessage_Click(object sender, RoutedEventArgs e)
@@ -933,116 +1051,6 @@ namespace MSOfficeAIAssistant.UI
             {
                 MessageBox.Show(string.Format("Could not insert text: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Error);
             }
-        }
-
-        private bool ConfirmSpreadsheetAction(SpreadsheetAction action)
-        {
-            return MessageBox.Show(DescribeSpreadsheetAction(action), "Review Spreadsheet Action", MessageBoxButton.YesNo,
-                action.IsUndoable ? MessageBoxImage.Question : MessageBoxImage.Warning) == MessageBoxResult.Yes;
-        }
-
-        private static string DescribeSpreadsheetAction(SpreadsheetAction action)
-        {
-            if (action == null) return "No spreadsheet action is available.";
-            string description = string.IsNullOrWhiteSpace(action.Description) ? "No additional description provided." : action.Description;
-            string undoWarning = action.IsUndoable
-                ? string.Empty
-                : "\n\n⚠ WARNING: This action cannot be reliably undone by Excel Undo.";
-            return string.Format("Excel will apply a {0} action to {1}.\n\nDescription: {2}\n\nProposed change:\n{3}{4}",
-                action.Type, action.Target, description, action.Content, undoWarning);
-        }
-
-        private void BtnApplyPowerPointAction_Click(object sender, RoutedEventArgs e)
-        {
-            var btn = sender as Button;
-            if (btn == null) return;
-            var action = btn.Tag as PowerPointAction;
-            if (action == null) return;
-
-            if (_pptCtrl != null)
-            {
-                if (!ConfirmPowerPointAction(action)) return;
-                if (_pptCtrl.ApplyPowerPointAction(action))
-                {
-                    ActionAuditStore.Instance.Record(
-                        "PowerPoint",
-                        action.Type,
-                        action.TargetDisplay,
-                        DescribePowerPointAction(action),
-                        action.IsUndoable,
-                        GetLastUserPrompt(),
-                        _currentDocumentKey,
-                        GetSelectedModelName(),
-                        action.ContentDisplay,
-                        !string.IsNullOrEmpty(action.ResultText) ? action.ResultText : "Applied successfully");
-                }
-            }
-            else
-            {
-                MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-        }
-
-        private void BtnApplyAllPowerPointActions_Click(object sender, RoutedEventArgs e)
-        {
-            var msg = GetMessageFromSender(sender);
-            if (msg == null || msg.PowerPointActions == null || msg.PowerPointActions.Count == 0) return;
-
-            if (_pptCtrl == null)
-            {
-                MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-            var preview = new StringBuilder();
-            preview.AppendLine("Review the following PowerPoint changes before applying:");
-            foreach (var pendingAction in msg.PowerPointActions)
-            {
-                if (pendingAction.Status == PowerPointActionStatus.Pending || pendingAction.Status == PowerPointActionStatus.Error)
-                {
-                    preview.AppendLine(DescribePowerPointAction(pendingAction));
-                }
-            }
-
-            if (MessageBox.Show(preview.ToString(), "Review PowerPoint Actions", MessageBoxButton.YesNo,
-                MessageBoxImage.Question) != MessageBoxResult.Yes)
-                return;
-
-            int appliedCount = 0;
-            foreach (var act in msg.PowerPointActions)
-            {
-                if (act.Status == PowerPointActionStatus.Pending || act.Status == PowerPointActionStatus.Error)
-                {
-                    if (_pptCtrl.ApplyPowerPointAction(act))
-                    {
-                        appliedCount++;
-                        ActionAuditStore.Instance.Record(
-                            "PowerPoint",
-                            act.Type,
-                            act.TargetDisplay,
-                            DescribePowerPointAction(act),
-                            act.IsUndoable,
-                            GetLastUserPrompt(),
-                            _currentDocumentKey,
-                            GetSelectedModelName(),
-                            act.ContentDisplay,
-                            !string.IsNullOrEmpty(act.ResultText) ? act.ResultText : "Applied successfully");
-                    }
-                }
-            }
-        }
-
-        private bool ConfirmPowerPointAction(PowerPointAction action)
-        {
-            return MessageBox.Show(DescribePowerPointAction(action), "Review PowerPoint Action", MessageBoxButton.YesNo,
-                MessageBoxImage.Question) == MessageBoxResult.Yes;
-        }
-
-        private static string DescribePowerPointAction(PowerPointAction action)
-        {
-            if (action == null) return "No PowerPoint action is available.";
-            return string.Format("PowerPoint will apply a {0} action.\n\nDescription: {1}\n\nProposed change:\n{2}",
-                action.Type, action.Description, action.ContentDisplay);
         }
 
         private bool ConfirmInsert(string content)
