@@ -4,10 +4,10 @@ using Markdig;
 using Markdig.Extensions.Tables;
 using Markdig.Syntax;
 using Markdig.Syntax.Inlines;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 using Word = NetOffice.WordApi;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     /// <summary>
     /// Converts Markdown text into native Word document formatting using Markdig's AST.

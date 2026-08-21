@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 using Word = NetOffice.WordApi;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     /// <summary>
     /// Word host operations.  The context helpers deliberately keep their ranking logic
@@ -640,35 +640,25 @@ namespace MistralOfficeAddin.Hosts
 
         private static bool TryStartUndoRecord(Word.Application app, string name)
         {
-            // UndoRecord was introduced in Word 2010.  Older Word versions retain their normal
-            // undo behavior, while newer versions collapse one AI operation into one undo step.
-            try
+            return SafeOfficeProbe.Probe(() =>
             {
                 if (app != null && app.UndoRecord != null)
                 {
                     app.UndoRecord.StartCustomRecord(name);
                     return true;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("WordController could not start custom undo record: {0}", ex.Message));
-            }
-            return false;
+                return false;
+            }, false, "Word.TryStartUndoRecord");
         }
 
         private static void EndUndoRecord(Word.Application app, bool recordStarted)
         {
             if (!recordStarted) return;
-            try
+            SafeOfficeProbe.TryExecute(() =>
             {
                 if (app != null && app.UndoRecord != null)
                     app.UndoRecord.EndCustomRecord();
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("WordController could not end custom undo record: {0}", ex.Message));
-            }
+            }, "Word.EndUndoRecord");
         }
 
         private static string CleanWordText(string text)

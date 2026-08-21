@@ -80,9 +80,14 @@ $reg32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
 $guidConnect = "{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}"
 $guidTaskPane = "{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}"
 
+# ProgIDs used by builds before the MistralAI -> MSOfficeAIAssistant rename. These must be
+# purged, not merely superseded: an orphaned ProgID still resolves to our CLSID, so Office
+# can end up trying to load the add-in twice under two different names.
+$legacyProgIds = @("MistralAI.Addin", "MistralAI.Connect", "MistralAI.TaskPaneControl", "MistralAI.ChatPane")
+
 # Clean stale registrations BEFORE importing new ones to avoid merging orphan subkeys.
-# This prevents old assembly versions (e.g., 1.0.0.0) from persisting and overriding
-# the current version (0.4.0.0), which would cause manifest-mismatch COM activation failures.
+# This prevents old assembly versions (e.g., 1.0.0.0, 0.4.0.0) from persisting and overriding
+# the current version (0.5.0.0), which would cause manifest-mismatch COM activation failures.
 Write-Host "      Cleaning stale COM registrations..." -ForegroundColor DarkGray
 $roots = @("HKCU:\Software\Classes")
 if (Test-Path "HKCU:\Software\Classes\Wow6432Node") {
@@ -97,9 +102,18 @@ foreach ($root in $roots) {
     }
 }
 
+foreach ($root in $roots) {
+    foreach ($progId in $legacyProgIds) {
+        $k = "$root\$progId"
+        if (Test-Path $k) {
+            Remove-Item -Path $k -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # 64-bit COM Registration
 if (Test-Path $dll64) {
-    $regFile64 = "$env:TEMP\MistralAI64.reg"
+    $regFile64 = "$env:TEMP\MSOfficeAIAssistant64.reg"
     & $reg64 $dll64 /nologo /codebase /regfile:$regFile64 | Out-Null
     if (Test-Path $regFile64) {
         $content = Get-Content -Raw $regFile64
@@ -116,7 +130,7 @@ if (Test-Path $dll64) {
 # leaves InprocServer32\<version>\CodeBase pointing at the x86 DLL, which
 # makes 64-bit Excel/Word fail with 0x8007000B (Bad Image Format).
 if (Test-Path $dll32) {
-    $regFile32 = "$env:TEMP\MistralAI32.reg"
+    $regFile32 = "$env:TEMP\MSOfficeAIAssistant32.reg"
     & $reg32 $dll32 /nologo /codebase /regfile:$regFile32 | Out-Null
     if (Test-Path $regFile32) {
         $content = Get-Content -Raw $regFile32
@@ -155,10 +169,10 @@ foreach ($root in $roots) {
     foreach ($c in $clsids) {
         $inproc = "$root\CLSID\$c\InprocServer32"
         if (Test-Path $inproc) {
-            # Set CodeBase on parent and current version subkey (0.4.0.0).
+            # Set CodeBase on parent and current version subkey (0.5.0.0).
             # Do NOT stamp CodeBase on arbitrary child keys to avoid poisoning stale versions.
             $inprocKeys = @($inproc)
-            $currentVersion = "$inproc\0.4.0.0"
+            $currentVersion = "$inproc\0.5.0.0"
             if (Test-Path $currentVersion) {
                 $inprocKeys += $currentVersion
             }
@@ -189,8 +203,8 @@ try {
     $regExe = Join-Path $env:WINDIR "System32\reg.exe"
     $hkcuClsid = "HKCU\Software\Classes\CLSID\$guidTaskPane"
     $hklmClsid = "HKLM\Software\Classes\CLSID\$guidTaskPane"
-    $hkcuProg = "HKCU\Software\Classes\MistralAI.TaskPaneControl"
-    $hklmProg = "HKLM\Software\Classes\MistralAI.TaskPaneControl"
+    $hkcuProg = "HKCU\Software\Classes\MSOfficeAIAssistant.TaskPaneControl"
+    $hklmProg = "HKLM\Software\Classes\MSOfficeAIAssistant.TaskPaneControl"
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     & $regExe copy $hkcuClsid $hklmClsid /s /f 2>$null | Out-Null
@@ -222,7 +236,10 @@ foreach ($ver in $versions) {
                     New-Item -Path $doNotDisable -Force -ErrorAction SilentlyContinue | Out-Null
                 }
                 if (Test-Path $doNotDisable) {
-                    Set-ItemProperty -Path $doNotDisable -Name "MistralAI.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+                    Set-ItemProperty -Path $doNotDisable -Name "MSOfficeAIAssistant.Addin" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+                    foreach ($legacy in $legacyProgIds) {
+                        Remove-ItemProperty -Path $doNotDisable -Name $legacy -ErrorAction SilentlyContinue
+                    }
                 }
             }
         } catch {
@@ -234,16 +251,23 @@ foreach ($ver in $versions) {
 $addinRegistered = $false
 foreach ($app in $apps) {
     try {
-        $oldKey = "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Connect"
-        if (Test-Path $oldKey) {
-            Remove-Item -Path $oldKey -Recurse -Force -ErrorAction SilentlyContinue
+        foreach ($legacy in $legacyProgIds) {
+            $oldKeys = @("HKCU:\Software\Microsoft\Office\$app\Addins\$legacy")
+            foreach ($ver in $versions) {
+                $oldKeys += "HKCU:\Software\Microsoft\Office\$ver\$app\Addins\$legacy"
+            }
+            foreach ($oldKey in $oldKeys) {
+                if (Test-Path $oldKey) {
+                    Remove-Item -Path $oldKey -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
         }
 
         $keys = @(
-            "HKCU:\Software\Microsoft\Office\$app\Addins\MistralAI.Addin"
+            "HKCU:\Software\Microsoft\Office\$app\Addins\MSOfficeAIAssistant.Addin"
         )
         foreach ($ver in $versions) {
-            $keys += "HKCU:\Software\Microsoft\Office\$ver\$app\Addins\MistralAI.Addin"
+            $keys += "HKCU:\Software\Microsoft\Office\$ver\$app\Addins\MSOfficeAIAssistant.Addin"
         }
 
         foreach ($key in $keys) {
@@ -270,11 +294,11 @@ foreach ($ver in $versions) {
         try {
             $disabled = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\DisabledItems"
             if (Test-Path $disabled) {
-                Remove-ItemProperty -Path $disabled -Name "MistralAI.Addin" -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $disabled -Name "MSOfficeAIAssistant.Addin" -ErrorAction SilentlyContinue
             }
             $crash = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\CrashingAddinList"
             if (Test-Path $crash) {
-                Remove-ItemProperty -Path $crash -Name "MistralAI.Addin" -ErrorAction SilentlyContinue
+                Remove-ItemProperty -Path $crash -Name "MSOfficeAIAssistant.Addin" -ErrorAction SilentlyContinue
             }
         } catch { }
     }

@@ -77,11 +77,18 @@
 
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="GoldenMasterBaselineTests.cs" />
     <Compile Include="WordDocumentContextBuilderTests.cs" />
     <Compile Include="SpreadsheetActionParserTests.cs" />
     <Compile Include="PowerPointActionParserTests.cs" />
     <Compile Include="ActionAuditStoreTests.cs" />
     <Compile Include="ChatMessageSerializationTests.cs" />
+    <Compile Include="SessionOrchestratorTests.cs" />
+    <Compile Include="ComResilienceTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Fixtures\golden_master_baseline.txt" />
   </ItemGroup>
 
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

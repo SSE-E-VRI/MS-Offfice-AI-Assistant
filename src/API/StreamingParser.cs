@@ -1,9 +1,9 @@
 using System;
-using MistralOfficeAddin.API.Models;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.API.Models;
+using MSOfficeAIAssistant.Core;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.API
+namespace MSOfficeAIAssistant.API
 {
     public static class StreamingParser
     {

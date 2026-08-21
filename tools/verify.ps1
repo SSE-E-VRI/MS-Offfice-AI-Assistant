@@ -26,7 +26,7 @@ foreach ($a in $apps) {
     $desc = ''
     try {
         foreach ($ai in $app.COMAddIns) {
-            if ($ai.ProgId -eq 'MistralAI.Connect') {
+            if ($ai.ProgId -eq 'MSOfficeAIAssistant.Addin') {
                 $found = $true
                 $connected = $ai.Connect
                 $desc = $ai.Description
@@ -36,12 +36,12 @@ foreach ($a in $apps) {
     } catch { }
 
     if ($found -and $connected) {
-        Write-Output ("PASS {0}: MistralAI.Connect is loaded and connected ({1})" -f $a.Name, $desc)
+        Write-Output ("PASS {0}: MSOfficeAIAssistant.Addin is loaded and connected ({1})" -f $a.Name, $desc)
     } elseif ($found) {
-        Write-Output ("WARN {0}: MistralAI.Connect is registered but NOT connected - check LoadBehavior" -f $a.Name)
+        Write-Output ("WARN {0}: MSOfficeAIAssistant.Addin is registered but NOT connected - check LoadBehavior" -f $a.Name)
         $failures++
     } else {
-        Write-Output ("FAIL {0}: MistralAI.Connect not present in COMAddIns - run register.cmd" -f $a.Name)
+        Write-Output ("FAIL {0}: MSOfficeAIAssistant.Addin not present in COMAddIns - run install.cmd" -f $a.Name)
         $failures++
     }
 
