@@ -366,25 +366,30 @@ namespace MSOfficeAIAssistant.Core
         private static bool TryParseActionType(string typeText, out SpreadsheetActionType actionType)
         {
             actionType = SpreadsheetActionType.Value;
-            string type = (typeText ?? "formula").Trim().ToLowerInvariant();
-            switch (type)
+            if (string.IsNullOrWhiteSpace(typeText)) return false;
+
+            var tool = ToolRegistry.GetTool(typeText, "Excel");
+            if (tool == null)
             {
-                case "formula": actionType = SpreadsheetActionType.Formula; return true;
-                case "value": actionType = SpreadsheetActionType.Value; return true;
-                case "filldown":
-                case "fill_down": actionType = SpreadsheetActionType.FillDown; return true;
-                case "table": actionType = SpreadsheetActionType.Table; return true;
-                case "create_table": actionType = SpreadsheetActionType.CreateTable; return true;
-                case "conditional_format": actionType = SpreadsheetActionType.ConditionalFormat; return true;
-                case "sort": actionType = SpreadsheetActionType.Sort; return true;
-                case "filter": actionType = SpreadsheetActionType.Filter; return true;
-                case "data_validation": actionType = SpreadsheetActionType.DataValidation; return true;
-                case "chart": actionType = SpreadsheetActionType.Chart; return true;
-                case "pivot_table": actionType = SpreadsheetActionType.PivotTable; return true;
-                case "named_range": actionType = SpreadsheetActionType.NamedRange; return true;
-                case "remove_duplicates": actionType = SpreadsheetActionType.RemoveDuplicates; return true;
-                default: return false;
+                return false;
             }
+
+            string op = tool.Name.ToLowerInvariant();
+            if (op == "excel.write_formula") { actionType = SpreadsheetActionType.Formula; return true; }
+            if (op == "excel.write_value") { actionType = SpreadsheetActionType.Value; return true; }
+            if (op == "excel.fill_down") { actionType = SpreadsheetActionType.FillDown; return true; }
+            if (op == "excel.table") { actionType = SpreadsheetActionType.Table; return true; }
+            if (op == "excel.create_table") { actionType = SpreadsheetActionType.CreateTable; return true; }
+            if (op == "excel.conditional_format") { actionType = SpreadsheetActionType.ConditionalFormat; return true; }
+            if (op == "excel.sort") { actionType = SpreadsheetActionType.Sort; return true; }
+            if (op == "excel.filter") { actionType = SpreadsheetActionType.Filter; return true; }
+            if (op == "excel.data_validation") { actionType = SpreadsheetActionType.DataValidation; return true; }
+            if (op == "excel.create_chart") { actionType = SpreadsheetActionType.Chart; return true; }
+            if (op == "excel.create_pivot_table") { actionType = SpreadsheetActionType.PivotTable; return true; }
+            if (op == "excel.named_range") { actionType = SpreadsheetActionType.NamedRange; return true; }
+            if (op == "excel.remove_duplicates") { actionType = SpreadsheetActionType.RemoveDuplicates; return true; }
+
+            return false;
         }
 
         private static bool RequiresContent(SpreadsheetActionType actionType)
