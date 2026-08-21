@@ -278,6 +278,14 @@ Consequence: new Excel/PowerPoint operations need no references but get **zero c
 checking** — a typo becomes a runtime `RuntimeBinderException`. Enum constants must be looked up by
 hand. No Office PIAs are used anywhere.
 
+#### Host isolation and controller exclusivity
+
+Each Office host (Word, Excel, PowerPoint) executes as an independent OS process and instantiates
+its own isolated add-in COM instance. Consequently, `_wordCtrl`, `_excelCtrl`, and `_pptCtrl` are
+**strictly mutually exclusive** — live Word and PowerPoint controllers never coexist in memory.
+Cross-document workflows like doc-to-deck operate via COM-free file extraction (`AttachmentExtractor`),
+never through cross-process live COM.
+
 ### 2.12 Error handling conventions
 
 **No `COMException` is caught anywhere in the codebase** — everything catches bare `Exception`. Three
@@ -310,7 +318,7 @@ invisible**, which any future verification layer must account for.
 - **Uninstall:** `uninstall.cmd` / `uninstall.ps1`.
 - **Distribution:** `installer/setup-x86.iss`, `installer/setup-x64.iss` (Inno Setup 6).
 - **Smoke check:** `tools/verify.ps1` — COM-creates each host and asserts the add-in is loaded.
-  Requires Office installed. **See defect D-3 below.**
+  Requires Office installed.
 
 #### Project file constraints
 
@@ -335,6 +343,14 @@ Anything testable must therefore be COM-free. Existing COM-free seams:
 `WordDocumentContextBuilder`, `SpreadsheetActionParser`, `PowerPointActionParser`, `ActionAuditStore`
 (via its custom-path constructor), `ExcelController.ExtractCleanExcelContent`.
 
+#### Golden Master test fixture (Phase 0.0 Gate)
+
+`BuildHostAwareSystemPrompt` inspects `_hostType` and null-checks controller references without
+calling COM, allowing prompt construction to be lifted to a pure function immediately. A headless
+**Golden Master test fixture** records baseline prompt strings, XML action parsing DTOs, and DPAPI
+audit serialization outputs into a JSON baseline fixture before refactoring. The console test runner
+asserts zero diff against this baseline to mechanistically verify behavior parity during Phase 0.1 extraction.
+
 There is **no CI**.
 
 ---
@@ -355,13 +371,14 @@ There is **no CI**.
 | Embedded offline User Manual | Implemented |
 | Office 2021 stale-COM-registration fix | Implemented (see Appendix A) |
 | Mistral-neutral identity rename + legacy purge + data migration | Implemented |
-| From document → briefing deck (doc-to-deck) | Planned — next slice |
+| From document → briefing deck (doc-to-deck) | Planned — builds on Phase 0 foundation |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
 | Chat / Plan / Edit modes | Planned — Phase A |
 | Context bar, source citations, response cards | Planned — Phase A |
 | Skills and domain packs | Planned — Phase B |
 | Unified action schema, tool registry, risk levels, verification, rollback | Planned — Phase C |
 | Multi-step planner, cross-host workflows | Planned — Phase D |
+| Web search / external grounding | Deferred (Post-Phase D) — opt-in BYOK client-side search |
 | AI Pages, model routing, knowledge library, feedback capture | Not Implemented — deferred past Phase D |
 | GSSMS / CMMS / IoT / connectors / RAG | **Out of scope** (§1) |
 
@@ -382,6 +399,7 @@ There is **no CI**.
 | **D-9** | Low | `RibbonCallback.OnTranslate` (`:121-151`) implements 9 languages but **has no corresponding ribbon XML** — orphaned and unreachable. |
 | **D-10** | Low | Dead methods with no callers: `ExcelController.CreatePreviewDescription` (duplicates the UI's own `DescribeSpreadsheetAction`), `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`. |
 | ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
+| **D-12** | **High** | Missing `IOleMessageFilter` (`CoRegisterMessageFilter`). When Excel is in in-cell edit mode or displaying a modal dialog, inbound COM calls are rejected with `0x800AC472` (`VBA_E_IGNORE` / `RPC_E_SERVERCALL_RETRYLATER`). Bare `try/catch` swallows this, causing silent mutation and verification failures. |
 
 ---
 
@@ -523,14 +541,38 @@ feed the Planner; they do not execute.
 
 ## 7. Implementation roadmap
 
-Ordering is deliberate: Phase 0 is a prerequisite, A and B are low-risk and parallel, C introduces
-new mutation pathways, D introduces multi-step autonomy.
+Ordering is deliberate: Step 0 merges pending work and bumps version; Step 1 fixes live approval defects;
+Phase 0 establishes the test baseline, extracts orchestration, hardens COM resilience, and provides the
+clean core upon which doc-to-deck and subsequent phases are built.
 
-### Next slice — From document → briefing deck (ship first)
+### Immediate Execution Sequence
 
-Ships ahead of Phase 0 because it is nearly free: the pipeline already exists end to end and only
-the entry point is missing. It is also the clearest Copilot-parity win available without Graph,
-Designer, or any new API family, and it works identically on every provider including local Ollama.
+1. **Step 0 — Merge & Version Bump:** Merge pending work; bump assembly and package version `0.4.0` → `0.5.0`.
+2. **Step 1 — Fix D-1 (PowerPoint Approval Hole):** Pull `ApplyStructuredActions` out of `InsertText`; route
+   through the response pipeline and approval dialog showing parsed actions before execution.
+3. **Phase 0.0 — Golden Master Baseline Fixture:** Lift `BuildHostAwareSystemPrompt` to a pure function.
+   Record prompt strings, XML parsing DTOs, and DPAPI audit serialization outputs into a JSON baseline fixture
+   in the COM-free test runner.
+4. **Phase 0.1 — Extract Orchestrator (D-6):** Extract orchestration out of `ChatSidebar.xaml.cs` into
+   `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). Verify bit-for-bit parity
+   against the Phase 0.0 baseline.
+5. **Phase 0.2 — COM Resilience (D-12):** Implement `IOleMessageFilter` (`CoRegisterMessageFilter`) to handle
+   Excel `0x800AC472` (`VBA_E_IGNORE`) modal formula-edit rejections. Replace bare swallows with typed
+   `SafeOfficeProbe<T>` helpers; mutations must never catch bare `Exception`.
+6. **Next Slice — From Document → Briefing Deck (Doc-to-Deck):** Build the "From document…" entry point and
+   briefing deck generator directly on the clean `AssistantSession` core with a structured slide preview card.
+7. **Phase 0.3 — UI Foundation & Performance:** Design system (`Tokens.xaml` + `Controls.xaml`), Win32/ElementHost
+   DPI awareness handling, re-enable list virtualization, and incremental markdown rendering (D-7, D-8).
+8. **Phase C — Safe Execution:** Unified JSON `OfficeAction` schema, single-source Tool Registry (D-5),
+   risk levels 0–3, preview cards, post-execution verification engine, and before-state rollback.
+9. **Phase A / B / D — Copilot UX, Domain Packs & Multi-Step Planner:** Chat/Plan/Edit modes, context bar,
+   source citations, `general` and `railway` domain packs, multi-step execution state machine.
+
+---
+
+### Next slice — From document → briefing deck (doc-to-deck)
+
+Built on the clean `AssistantSession` core following Phase 0.2. The pipeline already exists end to end:
 
 **Already built — verified against the code:**
 
@@ -545,34 +587,37 @@ Designer, or any new API family, and it works identically on every provider incl
 | **A "Build deck" chip, PowerPoint-only** | `ChatSidebar.xaml:307`, gated at `ChatSidebar.xaml.cs:239` |
 | **Confirm → apply already wired** | `ChatSidebar.xaml.cs:1125` |
 
-**Actually missing — the whole scope of this slice:**
+**Scope to build in this slice:**
 
-1. A **"From document…"** chip and ribbon button that sources content from the open Word document
-   *or* a selected attachment, rather than from the chat transcript.
+1. A **"From document…"** chip and ribbon button sourcing content from a **selected attachment**
+   (`.docx` / `.pdf`) rather than from the chat transcript.
+
+   > **Scope boundary.** Controllers are host-exclusive (§2.11), so from the PowerPoint host there
+   > is no live `WordController` to read an open document through. Attachment-sourced generation is
+   > the v1 scope. A Word-host-initiated *"turn this document into a deck"* is a different and
+   > heavier feature — it requires launching and automating a **separate PowerPoint process** over
+   > cross-process COM, with its own lifetime, visibility and failure modes. It is explicitly **not**
+   > in this slice; schedule it separately if wanted.
 2. A fixed **briefing-deck prompt** ("5–10 slides: executive summary, findings, actions…") that
    emits the outline shape `ParseSlideData` already understands.
 3. A **preview card** listing the proposed slide titles before anything is created — reusing the
    Excel action-card pattern rather than the current prose-only `MessageBox`.
 
-**Depends on 0.4.** The PowerPoint approval hole (D-1) must be closed first, or this feature ships
-on top of a path where structured actions execute without being shown. Do 0.4, then this slice.
+---
 
-### Phase 0 — Foundation (no user-visible change)
-
-Without this, every later phase adds logic to a 1,463-line code-behind.
+### Phase 0 — Foundation breakdown
 
 | # | Work | Addresses |
 |---|---|---|
-| 0.1 | Extract orchestration into `src/Core/Session/` — `AssistantSession`, `PromptAssembler`, `StreamCoordinator`. The view keeps rendering and the focus/HWND plumbing only. Extracted logic must be COM-free and therefore testable. | D-6 |
-| 0.2 | Design system: `src/UI/Theme/Tokens.xaml` + `Controls.xaml` from the existing palette. Reuse the `SettingsWindow` card idiom. | — |
-| 0.3 | `IOfficeHostController` over the three controllers, replacing null-check dispatch. Resolve `OutlookController`. | D-4 |
-| 0.4 | Pull `ApplyStructuredActions` out of `InsertText`; route through the same confirm path as Excel actions, showing parsed actions. | **D-1** |
-| 0.5 | Re-enable virtualization; make markdown rendering incremental, or adopt the dead `MarkdownToFlowDocumentConverter`. | D-7, D-8 |
-| 0.6 | Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. Declare per-provider truthfully. | §2.5 |
-| 0.7 | Fix `tools/verify.ps1` ProgID and its stale remedy message. | **D-3** |
+| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. | Verification Gate |
+| 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 |
+| 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 |
+| 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; ElementHost DPI handling; re-enable list virtualization; incremental markdown. | D-7, D-8 |
+| 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing null-check dispatch. Resolve `OutlookController`. | D-4 |
+| 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 |
 
 **Exit:** identical responses, actions and audit entries before and after extraction; PowerPoint
-structured actions now visible in their approval dialog.
+structured actions visible in approval dialog; Excel in-cell edit rejections handled gracefully.
 
 ### Phase A — Copilot UX (low risk, no new mutation pathways)
 
@@ -663,7 +708,7 @@ confirm-before-write), not against Copilot's feature list.
 | 5 | Persistent memory | **Largely already done** — `ConversationStore` is per-document DPAPI history. Only worth revisiting for cross-document memory or a user-editable fact list. |
 | 6 | Outlook summarise/reply | Feasible (`OutlookController` exists, see D-4) but widens the product to a fourth host with its own Explorer/Inspector lifecycles and registration surface. Tighten the three-app loop first. |
 | 7 | Plan/agent loop | Highest effort; this is Phases C–D. Bounded action XML already covers the common cases. |
-| ✗ | **Web search / grounding** | **Rejected for now.** Not provider-neutral: Gemini has native search grounding, Groq/Mistral/Ollama have none (`grep` finds zero grounding code in `src/Providers`), so it would fork `IAIProvider` for one vendor. It also fights the BYOK/no-middleman guarantee, and for official correspondence the citations that matter are the attached circular or specification — not a public web page that merely *looks* authoritative. Revisit only as an opt-in, Gemini-only research mode, after local-file grounding is first-class. |
+| ↓ | **Web search / external grounding** | **Deferred (Post-Phase D).** Client-side, provider-neutral, opt-in BYOK search (e.g. Brave Search / SearXNG HTTP API), off by default to maintain zero-middleman and privacy guarantees. Enables drafting tasks citing external statutes, tax codes, and ISO standards without cloud lock-in. |
 | ✗ | PowerPoint text-to-image | Rejected. Needs paid image endpoints, adds content-policy surface, and contradicts the deliberate "Insert image = a local file you approved" rule. |
 | ✗ | Graph / Work IQ / Designer | Not feasible. Requires Microsoft cloud infrastructure and tenant licensing, abandoning both Office 2010–2021 support and the local-key design. |
 
@@ -678,7 +723,7 @@ Applies to every phase before merge.
    compiles clean and silently omits the file (see D-4).
 2. **Tests** — build and run `MSOfficeAIAssistant.Tests.exe`; expect exit 0. Register a new suite in
    `tests/Program.cs` for each new parser, registry or validator. Keep the logic COM-free.
-3. **Install and smoke** — `install.cmd`, then `tools/verify.ps1` (after D-3 is fixed), then manual
+3. **Install and smoke** — `install.cmd`, then `tools/verify.ps1`, then manual
    exercise in Word, Excel and PowerPoint — and specifically **Excel 2010**, whose docked-pane path
    and keyboard hook are the highest-regression-risk area in the product.
 4. **Provider matrix** — exercise the feature against Mistral, Gemini, Groq **and** a Custom/local
