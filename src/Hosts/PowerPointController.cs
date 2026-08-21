@@ -674,6 +674,35 @@ namespace MSOfficeAIAssistant.Hosts
             return false;
         }
 
+        public string GetSpeakerNotesForSlide(int slideNumber)
+        {
+            if (slideNumber < 1) return string.Empty;
+            try
+            {
+                dynamic presentation = GetActivePresentation(false);
+                if (presentation == null || presentation.Slides == null) return string.Empty;
+                int count = Convert.ToInt32(presentation.Slides.Count);
+                if (slideNumber > count) return string.Empty;
+                dynamic slide = presentation.Slides[slideNumber];
+                dynamic shapes = slide.NotesPage != null ? slide.NotesPage.Shapes : null;
+                int shapeCount = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+                for (int i = 1; i <= shapeCount; i++)
+                {
+                    dynamic shape = shapes[i];
+                    if (shape == null || shape.PlaceholderFormat == null) continue;
+                    if (Convert.ToInt32(shape.PlaceholderFormat.Type) == 2 && Convert.ToInt32(shape.HasTextFrame) != 0)
+                    {
+                        return shape.TextFrame.TextRange.Text ?? string.Empty;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetSpeakerNotesForSlide failed: {0}", ex.Message));
+            }
+            return string.Empty;
+        }
+
         /// <summary>
         /// Supports safe, local visual insertion. Generation/search is deliberately provider-neutral;
         /// callers can create a local image and pass its verified path here.

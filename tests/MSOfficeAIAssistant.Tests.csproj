@@ -92,6 +92,7 @@
     <Compile Include="ActionExtractorTests.cs" />
     <Compile Include="ToolRegistryTests.cs" />
     <Compile Include="ActionVerifierTests.cs" />
+    <Compile Include="RollbackExecutorTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -543,6 +543,125 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        public const int MaxBeforeStateSnapshotCells = 5000;
+
+        public HostOperationResult CaptureRangeFormulas(string targetAddress, out object capturedFormulas)
+        {
+            capturedFormulas = null;
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                int cellCount = 1;
+                try { cellCount = Convert.ToInt32(targetRange.Count); } catch { }
+
+                if (cellCount > MaxBeforeStateSnapshotCells)
+                {
+                    return HostOperationResult.Failed(
+                        string.Format("Target range ({0} cells) exceeds snapshot capacity limit of {1} cells.", cellCount, MaxBeforeStateSnapshotCells),
+                        0, targetAddress);
+                }
+
+                object formulaVal = targetRange.Formula;
+                if (formulaVal is object[,])
+                {
+                    object[,] arr = (object[,])formulaVal;
+                    int rows = arr.GetLength(0);
+                    int cols = arr.GetLength(1);
+                    var list2D = new List<List<string>>();
+                    for (int r = 1; r <= rows; r++)
+                    {
+                        var rowList = new List<string>();
+                        for (int c = 1; c <= cols; c++)
+                        {
+                            rowList.Add(Convert.ToString(arr[r, c]));
+                        }
+                        list2D.Add(rowList);
+                    }
+                    capturedFormulas = list2D;
+                }
+                else
+                {
+                    capturedFormulas = Convert.ToString(formulaVal);
+                }
+
+                return HostOperationResult.Ok(capturedFormulas, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.CaptureRangeFormulas failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.CaptureRangeFormulas", targetAddress);
+            }
+        }
+
+        public HostOperationResult RestoreRangeFormulas(string targetAddress, object formulas)
+        {
+            if (formulas == null)
+                return HostOperationResult.Failed("Formulas to restore cannot be null.", 0, targetAddress);
+
+            dynamic app, ws, targetRange;
+            var res = ResolveTargetRange(targetAddress, out app, out ws, out targetRange);
+            if (!res.Success) return res;
+
+            try
+            {
+                if (formulas is List<List<string>>)
+                {
+                    var list2D = (List<List<string>>)formulas;
+                    int rows = list2D.Count;
+                    int cols = rows > 0 ? list2D[0].Count : 0;
+                    if (rows > 0 && cols > 0)
+                    {
+                        object[,] arr = new object[rows, cols];
+                        for (int r = 0; r < rows; r++)
+                        {
+                            for (int c = 0; c < cols; c++)
+                            {
+                                arr[r, c] = list2D[r][c];
+                            }
+                        }
+                        targetRange.Formula = arr;
+                    }
+                }
+                else if (formulas is Newtonsoft.Json.Linq.JArray)
+                {
+                    var jarr = (Newtonsoft.Json.Linq.JArray)formulas;
+                    int rows = jarr.Count;
+                    if (rows > 0 && jarr[0] is Newtonsoft.Json.Linq.JArray)
+                    {
+                        int cols = ((Newtonsoft.Json.Linq.JArray)jarr[0]).Count;
+                        object[,] arr = new object[rows, cols];
+                        for (int r = 0; r < rows; r++)
+                        {
+                            var rowJ = (Newtonsoft.Json.Linq.JArray)jarr[r];
+                            for (int c = 0; c < cols; c++)
+                            {
+                                arr[r, c] = Convert.ToString(rowJ[c]);
+                            }
+                        }
+                        targetRange.Formula = arr;
+                    }
+                    else
+                    {
+                        targetRange.Formula = Convert.ToString(formulas);
+                    }
+                }
+                else
+                {
+                    targetRange.Formula = Convert.ToString(formulas);
+                }
+
+                return HostOperationResult.Ok("Restored formulas for " + targetAddress, targetAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.RestoreRangeFormulas failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.RestoreRangeFormulas", targetAddress);
+            }
+        }
+
         public bool UndoLastAction()
         {
             try
