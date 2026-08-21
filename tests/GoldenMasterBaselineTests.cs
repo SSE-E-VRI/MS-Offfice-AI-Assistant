@@ -37,9 +37,41 @@ namespace MSOfficeAIAssistant.Tests
             string canonical = BuildAllBaselineOutputs();
             string actualHash = ComputeSha256(canonical);
 
+            TryWriteBaselineFixtureFile(canonical);
+
             Assert(string.Equals(actualHash, ExpectedGoldenMasterSha256, StringComparison.OrdinalIgnoreCase),
                 string.Format("Golden Master baseline hash mismatch! Expected '{0}', got '{1}'. A prompt, parser DTO, or audit format drifted.",
                     ExpectedGoldenMasterSha256, actualHash));
+        }
+
+        private static void TryWriteBaselineFixtureFile(string canonical)
+        {
+            try
+            {
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] candidates = new[]
+                {
+                    Path.Combine(baseDir, @"..\..\..\tests\Fixtures\golden_master_baseline.txt"),
+                    Path.Combine(baseDir, @"..\..\tests\Fixtures\golden_master_baseline.txt"),
+                    Path.Combine(Environment.CurrentDirectory, @"tests\Fixtures\golden_master_baseline.txt")
+                };
+
+                foreach (var candidate in candidates)
+                {
+                    string fullPath = Path.GetFullPath(candidate);
+                    string dir = Path.GetDirectoryName(fullPath);
+                    if (Directory.Exists(dir))
+                    {
+                        string normalized = (canonical ?? string.Empty).Replace("\r\n", "\n");
+                        File.WriteAllText(fullPath, normalized, new UTF8Encoding(false));
+                        break;
+                    }
+                }
+            }
+            catch
+            {
+                // Non-fatal if file system is read-only or in restricted test environment
+            }
         }
 
         public static string BuildAllBaselineOutputs()
