@@ -80,6 +80,23 @@ $reg32 = "$env:WINDIR\Microsoft.NET\Framework\v4.0.30319\RegAsm.exe"
 $guidConnect = "{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}"
 $guidTaskPane = "{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}"
 
+# Clean stale registrations BEFORE importing new ones to avoid merging orphan subkeys.
+# This prevents old assembly versions (e.g., 1.0.0.0) from persisting and overriding
+# the current version (0.4.0.0), which would cause manifest-mismatch COM activation failures.
+Write-Host "      Cleaning stale COM registrations..." -ForegroundColor DarkGray
+$roots = @("HKCU:\Software\Classes")
+if (Test-Path "HKCU:\Software\Classes\Wow6432Node") {
+    $roots += "HKCU:\Software\Classes\Wow6432Node"
+}
+foreach ($root in $roots) {
+    foreach ($clsid in @($guidConnect, $guidTaskPane)) {
+        $k = "$root\CLSID\$clsid"
+        if (Test-Path $k) {
+            Remove-Item -Path $k -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # 64-bit COM Registration
 if (Test-Path $dll64) {
     $regFile64 = "$env:TEMP\MistralAI64.reg"
@@ -138,10 +155,12 @@ foreach ($root in $roots) {
     foreach ($c in $clsids) {
         $inproc = "$root\CLSID\$c\InprocServer32"
         if (Test-Path $inproc) {
-            # Parent + versioned subkeys (CLR prefers InprocServer32\<version>\CodeBase).
+            # Set CodeBase on parent and current version subkey (0.4.0.0).
+            # Do NOT stamp CodeBase on arbitrary child keys to avoid poisoning stale versions.
             $inprocKeys = @($inproc)
-            Get-ChildItem -Path $inproc -ErrorAction SilentlyContinue | ForEach-Object {
-                $inprocKeys += $_.PSPath
+            $currentVersion = "$inproc\0.4.0.0"
+            if (Test-Path $currentVersion) {
+                $inprocKeys += $currentVersion
             }
             foreach ($ik in $inprocKeys) {
                 Set-ItemProperty -Path $ik -Name "CodeBase" -Value $codebase -ErrorAction SilentlyContinue

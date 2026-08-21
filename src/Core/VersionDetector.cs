@@ -56,11 +56,18 @@ namespace MistralOfficeAddin.Core
                                 if (!string.IsNullOrEmpty(buildStr))
                                 {
                                     string[] buildParts = buildStr.Split('.');
-                                    string buildToken = buildParts.Length > 2 ? buildParts[2] : buildParts[buildParts.Length - 1];
-                                    int build;
-                                    if (int.TryParse(buildToken, out build))
+                                    // Office version discrimination via build number (16.0.xxxx format):
+                                    // 16.0.2xxxx (20000+) = Office 2021 (perpetual license)
+                                    // 16.0.1xxxx (10000+) = Office 365 / Office 2019 (subscription or recent perpetual)
+                                    // 16.0.xxxx  (<10000) = Office 2016
+                                    if (buildParts.Length > 1)
                                     {
-                                        if (build >= 10000) return OfficeVersion.Office365;
+                                        int buildNumber;
+                                        if (int.TryParse(buildParts[1], out buildNumber))
+                                        {
+                                            if (buildNumber >= 20000) return OfficeVersion.Office2021;
+                                            if (buildNumber >= 10000) return OfficeVersion.Office365;
+                                        }
                                     }
                                 }
                             }
