@@ -388,7 +388,7 @@ There is **no CI**.
 | ~~D-1~~ | — | **RESOLVED.** `PowerPointController.InsertText` strips action XML without executing. `<powerpoint_actions>` XML is parsed on response completion into `ChatMessage.PowerPointActions`, and actions are reviewed and approved via dedicated UI cards with typed status and audit logging. |
 | **D-2** | Medium | `GetOrCreateActiveSlide(createIfNone:true)` and `GetActivePresentation(createIfNone:true)` are read-shaped names that **create a presentation or slide as a side effect** (`PowerPointController.cs:34,96`). Any risk classification must treat them as mutating. |
 | ~~D-3~~ | — | **RESOLVED.** `tools/verify.ps1` checked ProgID `MistralAI.Connect` while the add-in registered `MistralAI.Addin`, so the smoke check always reported FAIL and pointed at the deleted `register.cmd`. Now checks `MSOfficeAIAssistant.Addin` and recommends `install.cmd`. |
-| **D-4** | Medium | `src/Hosts/OutlookController.cs` is on disk and git-tracked but **absent from the csproj compile list** — it is silently never built. Either compile it or delete it. |
+| ~~D-4~~ | — | **RESOLVED.** Deleted orphaned `OutlookController.cs` and unified controller dispatch under `IOfficeHostController`. |
 | **D-5** | Medium | Action-type allow-lists are duplicated in **four** places — `SpreadsheetAction.cs:366`, `PowerPointActionParser.cs:36`, the `ExcelController.cs:250` switch, and a **prompt string literal** at `ChatSidebar.xaml.cs:729` — and must be kept in sync by hand. |
 | ~~D-6~~ | — | **RESOLVED.** Session orchestration extracted from `ChatSidebar.xaml.cs` into `src/Core/Session/` (`AssistantSession`, `StreamCoordinator`, `PromptAssembler`). View code-behind handles rendering and HWND routing only. Headlessly verified with dedicated session tests and Golden Master hash gate. |
 | **D-7** | Low | Streaming re-parses the **entire** markdown string every 5th delta, and `VirtualizingStackPanel.IsVirtualizing` is explicitly `False` (`ChatSidebar.xaml:104`). Both degrade long conversations. |
@@ -397,6 +397,7 @@ There is **no CI**.
 | **D-10** | Low | Dead methods with no callers: `ExcelController.CreatePreviewDescription` (duplicates the UI's own `DescribeSpreadsheetAction`), `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`. |
 | ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
 | ~~D-12~~ | — | **RESOLVED.** Implemented `OleMessageFilter` (`CoRegisterMessageFilter` on STA thread) to handle Excel in-cell edit busy rejections (`0x800AC472` / `RPC_E_SERVERCALL_RETRYLATER`) with 10s retry window; previous filter restored on add-in disconnect. Added typed `SafeOfficeProbe` helpers. |
+| **D-13** | Medium | Legacy mutation paths across controllers contain ~60 bare exception swallows pending complete routing through `Execute*` returning `HostOperationResult` in Phase C4. Phase C5 verification cannot ship while any UI-reachable mutation swallows. |
 
 ---
 
