@@ -415,13 +415,19 @@ namespace MSOfficeAIAssistant.UI
                     _focusRetryCount++;
                     this.BeginInvoke(new MethodInvoker(ActivatePromptKeyboardRouting));
                 }
+                else if (_focusRetryCount >= 10)
+                {
+                    Logger.Warn(string.Format("OfficeDockedPane: ActivatePromptKeyboardRouting exhausted {0} HWND retries; keyboard bridge inactive.", _focusRetryCount));
+                }
                 return;
             }
 
+            int retriesNeeded = _focusRetryCount;
             _focusRetryCount = 0;
             _promptInputHwnd = promptWindow;
             _routeKeysToPrompt = true;
             NativeWnd.SetFocus(promptWindow);
+            Logger.Info(string.Format("OfficeDockedPane: ActivatePromptKeyboardRouting active (HWND 0x{0:X8}, required {1} retries).", promptWindow.ToInt64(), retriesNeeded));
         }
 
         private bool IsInPane(IntPtr hwnd)
