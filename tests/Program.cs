@@ -16,6 +16,7 @@ namespace MSOfficeAIAssistant.Tests
             int failed = 0;
             var suites = new List<Tuple<string, Action>>
             {
+                Tuple.Create<string, Action>("GoldenMasterBaselineTests", GoldenMasterBaselineTests.RunAll),
                 Tuple.Create<string, Action>("WordDocumentContextBuilderTests", WordDocumentContextBuilderTests.RunAll),
                 Tuple.Create<string, Action>("SpreadsheetActionParserTests", SpreadsheetActionParserTests.RunAll),
                 Tuple.Create<string, Action>("PowerPointActionParserTests", PowerPointActionParserTests.RunAll),
