@@ -782,10 +782,50 @@ namespace MSOfficeAIAssistant.UI
                 hasNonUndoable ? MessageBoxImage.Warning : MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
+            var appliedInBatch = new List<OfficeAction>();
             foreach (var act in pendingActions)
             {
-                ExecuteOfficeAction(act);
+                bool ok = ExecuteOfficeAction(act);
+                if (ok)
+                {
+                    appliedInBatch.Add(act);
+                }
+                else
+                {
+                    if (appliedInBatch.Count > 0)
+                    {
+                        var rollbackChoice = MessageBox.Show(
+                            string.Format("Action '{0}' on {1} failed.\n\nWould you like to rollback the {2} previously applied action(s) in this batch?",
+                                act.Operation, act.TargetDisplay, appliedInBatch.Count),
+                            "Batch Execution Interrupted",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+
+                        if (rollbackChoice == MessageBoxResult.Yes)
+                        {
+                            object ctrl = GetControllerForHost(act.Host ?? _hostType);
+                            var rollbackRes = RollbackExecutor.RollbackBatch(ctrl, appliedInBatch);
+                            if (!rollbackRes.Success)
+                            {
+                                MessageBox.Show(rollbackRes.ErrorMessage, "Batch Rollback Incomplete", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            }
+                            else
+                            {
+                                MessageBox.Show(Convert.ToString(rollbackRes.Value), "Batch Rollback Successful", MessageBoxButton.OK, MessageBoxImage.Information);
+                            }
+                        }
+                    }
+                    break;
+                }
             }
+        }
+
+        private object GetControllerForHost(string host)
+        {
+            if (string.Equals(host, "Excel", StringComparison.OrdinalIgnoreCase)) return _excelCtrl;
+            if (string.Equals(host, "PowerPoint", StringComparison.OrdinalIgnoreCase)) return _pptCtrl;
+            if (string.Equals(host, "Word", StringComparison.OrdinalIgnoreCase)) return _wordCtrl;
+            return _hostController;
         }
 
         private bool ExecuteOfficeAction(OfficeAction action)
@@ -803,37 +843,20 @@ namespace MSOfficeAIAssistant.UI
                 return false;
             }
 
-            object controller = null;
-            if (string.Equals(host, "Excel", StringComparison.OrdinalIgnoreCase))
+            object controller = GetControllerForHost(host);
+            if (controller == null)
             {
-                if (_excelCtrl == null)
-                {
-                    MessageBox.Show("No active Excel workbook found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return false;
-                }
-                controller = _excelCtrl;
+                MessageBox.Show(string.Format("No active {0} host found.", host), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
             }
-            else if (string.Equals(host, "PowerPoint", StringComparison.OrdinalIgnoreCase))
+
+            // Capture BeforeState prior to mutation
+            var captureRes = RollbackExecutor.CaptureBeforeState(controller, action);
+            if (!captureRes.Success && action.RiskLevel >= 2)
             {
-                if (_pptCtrl == null)
-                {
-                    MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return false;
-                }
-                controller = _pptCtrl;
-            }
-            else if (string.Equals(host, "Word", StringComparison.OrdinalIgnoreCase))
-            {
-                if (_wordCtrl == null)
-                {
-                    MessageBox.Show("No active Word document found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
-                    return false;
-                }
-                controller = _wordCtrl;
-            }
-            else
-            {
-                MessageBox.Show(string.Format("Unsupported host '{0}'.", host), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                action.Status = OfficeActionStatus.Failed;
+                action.ErrorMessage = captureRes.ErrorMessage;
+                MessageBox.Show(action.ErrorMessage, "BeforeState Capture Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
 
@@ -914,17 +937,11 @@ namespace MSOfficeAIAssistant.UI
 
         private void RecordOfficeActionAudit(OfficeAction action, string resultText)
         {
-            ActionAuditStore.Instance.Record(
-                action.Host ?? _hostType,
-                action.Operation ?? "Action",
-                action.TargetDisplay,
-                DescribeOfficeAction(action),
-                action.IsUndoable,
+            ActionAuditStore.Instance.RecordOfficeAction(
+                action,
                 GetLastUserPrompt(),
                 _currentDocumentKey,
-                GetSelectedModelName(),
-                action.ContentDisplay,
-                !string.IsNullOrEmpty(resultText) ? resultText : "Applied successfully");
+                GetSelectedModelName());
         }
 
         private void BtnCopyMessage_Click(object sender, RoutedEventArgs e)
