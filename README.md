@@ -58,32 +58,47 @@ Office Application (Word, Excel, PowerPoint)
 - .NET Framework 4.8
 - Microsoft Office 2010, 2013, 2016, 2019, 2021, or Microsoft 365
 
-### Build Command
-Run `build.bat` from the root directory:
+### Build and install
+Run `install.cmd` from the root directory:
 ```cmd
-build.bat
+install.cmd
 ```
 This script will:
-1. Download `nuget.exe` if not present.
+1. Locate MSBuild and download `nuget.exe` if not present.
 2. Restore all required NuGet packages.
 3. Compile both `x86` (32-bit) and `x64` (64-bit) Release assemblies into `bin\x86\Release\` and `bin\x64\Release\`.
+4. Register the COM components for the current user (HKCU, `LoadBehavior=3`) — no administrator elevation required.
+
+To uninstall:
+```cmd
+uninstall.cmd
+```
+
+### Build only
+`install.cmd` always registers as well. For a build-only loop, invoke MSBuild directly — once per platform:
+```cmd
+msbuild src\MSOfficeAIAssistant.csproj /p:Configuration=Release /p:Platform=x86
+msbuild src\MSOfficeAIAssistant.csproj /p:Configuration=Release /p:Platform=x64
+```
+
+### Tests
+Build `tests\MSOfficeAIAssistant.Tests.csproj` and run the resulting console runner:
+```cmd
+bin\x86\Release\MSOfficeAIAssistant.Tests.exe
+```
 
 ---
 
-## 📦 Registration & Distribution
+## 📦 Distribution
 
-### Developer Local Registration
-Run `register.cmd` to register both 32-bit and 64-bit COM components for the current user:
-```cmd
-register.cmd
-```
-To unregister:
-```cmd
-unregister.cmd
-```
+Compile `installer/setup-x86.iss` or `installer/setup-x64.iss` with Inno Setup 6 to produce standalone installer `.exe` files.
 
-### Inno Setup Installer
-Compile `installer/setup-x86.iss` or `installer/setup-x64.iss` using Inno Setup 6 to produce standalone installer `.exe` files.
+---
+
+## 📘 Documentation
+
+- **In-app User Manual** — the **User Manual** button on the AI Assistant ribbon, or **?** in the chat panel.
+- **[AI_Assistant_SSOT.md](AI_Assistant_SSOT.md)** — the single source of truth: architecture, COM contracts, roadmap, troubleshooting (Appendix B), and change-control rules.
 
 ---
 
