@@ -323,6 +323,14 @@ namespace MSOfficeAIAssistant.Core.Actions
                 }
             }
 
+            var tool = ToolRegistry.GetTool(action.Operation, action.Host);
+            if (tool != null)
+            {
+                action.RiskLevel = tool.RiskLevel;
+                action.RequiresApproval = tool.RequiresApproval;
+                action.IsUndoable = tool.IsUndoable;
+            }
+
             return action;
         }
     }

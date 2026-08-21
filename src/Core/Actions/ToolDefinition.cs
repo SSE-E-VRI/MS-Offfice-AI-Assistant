@@ -71,6 +71,14 @@ namespace MSOfficeAIAssistant.Core
             return this;
         }
 
+        public Func<object, MSOfficeAIAssistant.Core.Actions.OfficeAction, MSOfficeAIAssistant.Hosts.HostOperationResult> Handler { get; set; }
+
+        public ToolDefinition WithHandler(Func<object, MSOfficeAIAssistant.Core.Actions.OfficeAction, MSOfficeAIAssistant.Hosts.HostOperationResult> handler)
+        {
+            Handler = handler;
+            return this;
+        }
+
         public ToolDefinition WithAlias(string alias)
         {
             if (!string.IsNullOrEmpty(alias) && !Aliases.Contains(alias))
