@@ -269,6 +269,212 @@ namespace MSOfficeAIAssistant.Hosts
             return ApplyDocumentRevisionDecision(false);
         }
 
+        public HostOperationResult ExecuteInsertText(string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return HostOperationResult.Failed("Text to insert cannot be null or empty.");
+
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                InsertTextAtCursor(text);
+                return HostOperationResult.Ok("Text inserted at cursor.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertText failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertText");
+            }
+        }
+
+        public HostOperationResult ExecuteReplaceSelection(string text)
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                ReplaceSelection(text);
+                return HostOperationResult.Ok("Selection replaced.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteReplaceSelection failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteReplaceSelection");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertWithTrackChanges(string markdown, bool replaceSelection)
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                bool ok = RenderWithTrackChanges(markdown, replaceSelection);
+                if (ok)
+                    return HostOperationResult.Ok("Inserted text with Track Changes.");
+                else
+                    return HostOperationResult.Failed("Word Track Changes insertion returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertWithTrackChanges failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertWithTrackChanges");
+            }
+        }
+
+        public HostOperationResult ExecuteAcceptAllRevisions()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                bool ok = AcceptAllRevisions();
+                return ok ? HostOperationResult.Ok("Accepted all revisions in Word document.") : HostOperationResult.Failed("AcceptAllRevisions returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteAcceptAllRevisions failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteAcceptAllRevisions");
+            }
+        }
+
+        public HostOperationResult ExecuteRejectAllRevisions()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                bool ok = RejectAllRevisions();
+                return ok ? HostOperationResult.Ok("Rejected all revisions in Word document.") : HostOperationResult.Failed("RejectAllRevisions returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteRejectAllRevisions failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteRejectAllRevisions");
+            }
+        }
+
+        public HostOperationResult ExecuteAddComment(string commentText, string targetText = null)
+        {
+            if (string.IsNullOrWhiteSpace(commentText))
+                return HostOperationResult.Failed("Comment text cannot be empty.", 0, targetText);
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.", 0, targetText);
+
+                dynamic doc = app.ActiveDocument;
+                dynamic targetRange = null;
+
+                // 1. If target text is provided, search for it in document
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    try
+                    {
+                        dynamic contentRange = doc.Content;
+                        dynamic find = contentRange.Find;
+                        find.ClearFormatting();
+                        find.Text = targetText;
+                        find.Forward = true;
+                        find.Wrap = 0; // wdFindStop
+                        if (find.Execute())
+                        {
+                            targetRange = contentRange;
+                        }
+                    }
+                    catch { }
+                }
+
+                // 2. Fall back to current selection
+                if (targetRange == null)
+                {
+                    try { targetRange = app.Selection.Range; } catch { }
+                }
+
+                // 3. Fall back to whole document content
+                if (targetRange == null)
+                {
+                    try { targetRange = doc.Content; } catch { }
+                }
+
+                if (targetRange == null)
+                    return HostOperationResult.Failed("Could not resolve a valid target range for the comment in Word.", 0, targetText);
+
+                doc.Comments.Add(targetRange, commentText);
+                return HostOperationResult.Ok("Comment added successfully", targetText);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteAddComment failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteAddComment", targetText);
+            }
+        }
+
+        public HostOperationResult ExecuteInsertTable(int rows, int cols, List<List<string>> data = null)
+        {
+            if (rows <= 0 || cols <= 0)
+                return HostOperationResult.Failed(string.Format("Invalid table dimensions {0}x{1}.", rows, cols));
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                try { range = app.Selection != null ? app.Selection.Range : doc.Content; } catch { }
+                if (range == null)
+                {
+                    try { range = doc.Content; } catch { }
+                }
+                if (range == null)
+                    return HostOperationResult.Failed("Could not determine insertion range for Word table.");
+
+                dynamic tables = doc.Tables;
+                dynamic table = tables.Add(range, rows, cols, 1, 1);
+
+                if (data != null && data.Count > 0)
+                {
+                    int rLimit = Math.Min(rows, data.Count);
+                    for (int r = 0; r < rLimit; r++)
+                    {
+                        var rowData = data[r];
+                        if (rowData == null) continue;
+                        int cLimit = Math.Min(cols, rowData.Count);
+                        for (int c = 0; c < cLimit; c++)
+                        {
+                            try
+                            {
+                                table.Cell(r + 1, c + 1).Range.Text = rowData[c] ?? string.Empty;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+
+                return HostOperationResult.Ok(string.Format("Inserted {0}x{1} table into Word document", rows, cols));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertTable failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertTable");
+            }
+        }
+
         /// <summary>
         /// Uses Word's normal one-step undo stack.  This is deliberately a single, explicit
         /// undo rather than a broad rollback; it may undo the last document edit regardless of

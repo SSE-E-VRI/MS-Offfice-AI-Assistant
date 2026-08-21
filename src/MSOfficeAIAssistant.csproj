@@ -195,6 +195,7 @@
     <Compile Include="Core\SafeOfficeProbe.cs" />
     <Compile Include="Core\Session\StreamCoordinator.cs" />
     <Compile Include="Core\Session\AssistantSession.cs" />
+    <Compile Include="Hosts\HostOperationResult.cs" />
     <Compile Include="Hosts\IOfficeHostController.cs" />
     <Compile Include="Hosts\WordController.cs" />
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />

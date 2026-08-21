@@ -348,8 +348,81 @@ namespace MSOfficeAIAssistant.Hosts
             {
                 action.Status = SpreadsheetActionStatus.Error;
                 action.ErrorMessage = ex.Message;
-                Logger.Error(string.Format("ApplySpreadsheetAction failed on target {0}", action.Target), ex);
+                Logger.Error(string.Format("Failed to apply {0} to {1}", action.Type, action.Target), ex);
                 return false;
+            }
+        }
+
+        public HostOperationResult ExecuteSpreadsheetAction(SpreadsheetAction action)
+        {
+            if (action == null)
+                return HostOperationResult.Failed("Spreadsheet action cannot be null.");
+
+            if (!ApplySpreadsheetAction(action))
+            {
+                return HostOperationResult.Failed(
+                    !string.IsNullOrEmpty(action.ErrorMessage) ? action.ErrorMessage : "Spreadsheet action application failed.",
+                    0,
+                    action.Target);
+            }
+
+            return HostOperationResult.Ok(action.ResultText, action.Target);
+        }
+
+        public HostOperationResult ExecuteWriteFormula(string formula, string cellAddress)
+        {
+            if (string.IsNullOrEmpty(formula))
+                return HostOperationResult.Failed("Formula cannot be empty.", 0, cellAddress);
+
+            if (string.IsNullOrEmpty(cellAddress) || !SpreadsheetActionParser.IsSafeTarget(cellAddress))
+                return HostOperationResult.Failed(string.Format("Invalid or unsafe cell address: {0}", cellAddress), 0, cellAddress);
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveSheet == null)
+                    return HostOperationResult.Failed("No active Excel worksheet found.", 0, cellAddress);
+
+                EnsureWorksheetEditable(app.ActiveSheet);
+                dynamic targetRange = app.ActiveSheet.Range(cellAddress);
+                if (targetRange == null)
+                    return HostOperationResult.Failed(string.Format("Could not resolve cell address: {0}", cellAddress), 0, cellAddress);
+
+                if (!formula.StartsWith("=")) formula = "=" + formula;
+                targetRange.Formula = formula;
+                string res = ReadRangeResult(targetRange);
+                return HostOperationResult.Ok(res, cellAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteWriteFormula failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteWriteFormula", cellAddress);
+            }
+        }
+
+        public HostOperationResult ExecuteWriteValue(string value, string cellAddress)
+        {
+            if (string.IsNullOrEmpty(cellAddress) || !SpreadsheetActionParser.IsSafeTarget(cellAddress))
+                return HostOperationResult.Failed(string.Format("Invalid or unsafe cell address: {0}", cellAddress), 0, cellAddress);
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveSheet == null)
+                    return HostOperationResult.Failed("No active Excel worksheet found.", 0, cellAddress);
+
+                EnsureWorksheetEditable(app.ActiveSheet);
+                dynamic targetRange = app.ActiveSheet.Range(cellAddress);
+                if (targetRange == null)
+                    return HostOperationResult.Failed(string.Format("Could not resolve cell address: {0}", cellAddress), 0, cellAddress);
+
+                targetRange.Value2 = value ?? string.Empty;
+                return HostOperationResult.Ok("Value written", cellAddress);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteWriteValue failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteWriteValue", cellAddress);
             }
         }
 
