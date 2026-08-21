@@ -69,7 +69,7 @@ namespace MSOfficeAIAssistant.Core.Actions
         /// <summary>
         /// Extracts actions from assistant text and optional native tool calls.
         /// </summary>
-        public static ExtractionResult Extract(string text, string currentHost = null, IEnumerable<dynamic> nativeToolCalls = null)
+        public static ExtractionResult Extract(string text, string currentHost = null, IEnumerable<MSOfficeAIAssistant.Providers.ToolCallDto> nativeToolCalls = null)
         {
             var result = new ExtractionResult();
             if (string.IsNullOrEmpty(text) && nativeToolCalls == null)
@@ -87,29 +87,10 @@ namespace MSOfficeAIAssistant.Core.Actions
                     if (tc == null) continue;
                     try
                     {
-                        string name = GetPropertyValue(tc, "Name") ?? GetPropertyValue(tc, "name");
-                        if (string.IsNullOrEmpty(name))
-                        {
-                            object fn = GetPropertyObj(tc, "function") ?? GetPropertyObj(tc, "Function");
-                            if (fn != null)
-                            {
-                                name = GetPropertyValue(fn, "name") ?? GetPropertyValue(fn, "Name");
-                            }
-                        }
-
-                        string argsJson = GetPropertyValue(tc, "Arguments") ?? GetPropertyValue(tc, "arguments");
-                        if (string.IsNullOrEmpty(argsJson))
-                        {
-                            object fn = GetPropertyObj(tc, "function") ?? GetPropertyObj(tc, "Function");
-                            if (fn != null)
-                            {
-                                argsJson = GetPropertyValue(fn, "arguments") ?? GetPropertyValue(fn, "Arguments");
-                            }
-                        }
-
-                        var action = CreateActionFromNativeTool(name, argsJson, currentHost);
+                        var action = CreateActionFromNativeTool(tc.Name, tc.Arguments, currentHost);
                         if (action != null)
                         {
+                            if (!string.IsNullOrEmpty(tc.Id)) action.ActionId = tc.Id;
                             result.Actions.Add(action);
                         }
                     }
@@ -119,7 +100,7 @@ namespace MSOfficeAIAssistant.Core.Actions
                         {
                             FailureType = "NativeToolCallParseError",
                             ErrorMessage = ex.Message,
-                            RawSnippet = Convert.ToString(tc)
+                            RawSnippet = string.Format("{0}({1})", tc.Name, tc.Arguments)
                         };
                     }
                 }
@@ -343,37 +324,6 @@ namespace MSOfficeAIAssistant.Core.Actions
             }
 
             return action;
-        }
-
-        private static string GetPropertyValue(object obj, string propName)
-        {
-            if (obj == null || string.IsNullOrEmpty(propName)) return null;
-            try
-            {
-                var prop = obj.GetType().GetProperty(propName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-                if (prop != null)
-                {
-                    object val = prop.GetValue(obj, null);
-                    return val != null ? Convert.ToString(val) : null;
-                }
-            }
-            catch { }
-            return null;
-        }
-
-        private static object GetPropertyObj(object obj, string propName)
-        {
-            if (obj == null || string.IsNullOrEmpty(propName)) return null;
-            try
-            {
-                var prop = obj.GetType().GetProperty(propName, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
-                if (prop != null)
-                {
-                    return prop.GetValue(obj, null);
-                }
-            }
-            catch { }
-            return null;
         }
     }
 }

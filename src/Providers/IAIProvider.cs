@@ -87,21 +87,31 @@ namespace MSOfficeAIAssistant.Providers
         }
     }
 
+    public class ToolCallDto
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+        public string Arguments { get; set; }
+    }
+
     public class AIResponse
     {
         public string Content { get; set; }
         public string Model { get; set; }
         public int PromptTokens { get; set; }
         public int CompletionTokens { get; set; }
+        public List<ToolCallDto> ToolCalls { get; set; }
 
         public AIResponse()
         {
             Content = string.Empty;
+            ToolCalls = new List<ToolCallDto>();
         }
 
         public AIResponse(string content)
         {
             Content = content ?? string.Empty;
+            ToolCalls = new List<ToolCallDto>();
         }
     }
 
