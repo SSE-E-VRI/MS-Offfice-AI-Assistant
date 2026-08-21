@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace MSOfficeAIAssistant.Core
 {
     [ComImport]
-    [Guid("000000e0-0000-0000-C000-000000000046")]
+    [Guid("00000016-0000-0000-C000-000000000046")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     public interface IOleMessageFilter
     {
