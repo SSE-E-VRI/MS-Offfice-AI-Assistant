@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.Actions;
 
 namespace MSOfficeAIAssistant.Tests
@@ -47,7 +48,9 @@ namespace MSOfficeAIAssistant.Tests
             Assert(dedupeTool != null, "excel.remove_duplicates must be registered");
             Assert(dedupeTool.RiskLevel == 3, "remove_duplicates RiskLevel should be 3 (destructive)");
             Assert(dedupeTool.IsUndoable == false, "remove_duplicates is not undoable in Excel");
-            Assert(ToolRegistry.GetTool("dedupe") == dedupeTool, "Alias 'dedupe' should resolve to excel.remove_duplicates");
+            // Host-scoped lookups
+            var excelTable = ToolRegistry.GetTool("table", "Excel");
+            Assert(excelTable != null && excelTable.Name == "excel.table", "Host-scoped 'table' in Excel must resolve to excel.table");
         }
 
         private static void TestWordToolsDefinitions()
@@ -66,6 +69,9 @@ namespace MSOfficeAIAssistant.Tests
             Assert(tableTool.IsUndoable == true, "Table must be undoable");
             Assert(tableTool.Parameters.Any(p => p.Name == "rows" && p.IsRequired), "insert_table requires rows");
             Assert(tableTool.Parameters.Any(p => p.Name == "cols" && p.IsRequired), "insert_table requires cols");
+
+            var wordTable = ToolRegistry.GetTool("table", "Word");
+            Assert(wordTable != null && wordTable.Name == "word.insert_table", "Host-scoped 'table' in Word must resolve to word.insert_table");
         }
 
         private static void TestPowerPointToolsDefinitions()

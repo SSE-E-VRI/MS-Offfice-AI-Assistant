@@ -209,13 +209,12 @@ namespace MSOfficeAIAssistant.Core
 
     public static class PowerPointActionParser
     {
-        private static readonly HashSet<string> AllowedActionTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        private static bool IsAllowedActionType(string type)
         {
-            "move_slide",
-            "create_section",
-            "rename_section",
-            "set_notes"
-        };
+            if (string.IsNullOrWhiteSpace(type)) return false;
+            var tool = ToolRegistry.GetTool(type, "PowerPoint");
+            return tool != null;
+        }
 
         public static List<PowerPointAction> ParseStructuredActions(string rawText)
         {
@@ -254,7 +253,7 @@ namespace MSOfficeAIAssistant.Core
                             continue;
 
                         string type = (reader.GetAttribute("type") ?? string.Empty).Trim().ToLowerInvariant();
-                        if (!AllowedActionTypes.Contains(type))
+                        if (!IsAllowedActionType(type))
                         {
                             Logger.Warn(string.Format("PowerPointActionParser: Disallowed or unknown action type '{0}' skipped.", type));
                             continue;

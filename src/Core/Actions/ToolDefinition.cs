@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MSOfficeAIAssistant.Core.Actions
+namespace MSOfficeAIAssistant.Core
 {
     /// <summary>
     /// Describes one parameter of an Office tool/action.
