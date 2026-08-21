@@ -542,16 +542,33 @@ namespace MSOfficeAIAssistant.UI
                     assistantMsg.IsStreaming = false;
 
                     // Parse structured spreadsheet actions from Excel responses
-                    string cleanContent;
-                    var extractedActions = SpreadsheetActionParser.ExtractActions(fullAssistantText, out cleanContent);
-                    if (extractedActions != null && extractedActions.Count > 0)
+                    if (_excelCtrl != null)
                     {
-                        assistantMsg.Content = cleanContent;
-                        foreach (var act in extractedActions)
+                        string cleanContent;
+                        var extractedActions = SpreadsheetActionParser.ExtractActions(fullAssistantText, out cleanContent);
+                        if (extractedActions != null && extractedActions.Count > 0)
                         {
-                            assistantMsg.Actions.Add(act);
+                            assistantMsg.Content = cleanContent;
+                            foreach (var act in extractedActions)
+                            {
+                                assistantMsg.Actions.Add(act);
+                            }
+                            assistantMsg.NotifyActionsChanged();
                         }
-                        assistantMsg.NotifyActionsChanged();
+                    }
+                    else if (_pptCtrl != null)
+                    {
+                        string cleanContent;
+                        var pptActions = PowerPointActionParser.ParseStructuredActions(fullAssistantText, out cleanContent);
+                        if (pptActions != null && pptActions.Count > 0)
+                        {
+                            assistantMsg.Content = cleanContent;
+                            foreach (var act in pptActions)
+                            {
+                                assistantMsg.PowerPointActions.Add(act);
+                            }
+                            assistantMsg.NotifyPowerPointActionsChanged();
+                        }
                     }
 
                     // Scroll once at the end, not on every token
@@ -1159,6 +1176,99 @@ namespace MSOfficeAIAssistant.UI
                 : "\n\n⚠ WARNING: This action cannot be reliably undone by Excel Undo.";
             return string.Format("Excel will apply a {0} action to {1}.\n\nDescription: {2}\n\nProposed change:\n{3}{4}",
                 action.Type, action.Target, description, action.Content, undoWarning);
+        }
+
+        private void BtnApplyPowerPointAction_Click(object sender, RoutedEventArgs e)
+        {
+            var btn = sender as Button;
+            if (btn == null) return;
+            var action = btn.Tag as PowerPointAction;
+            if (action == null) return;
+
+            if (_pptCtrl != null)
+            {
+                if (!ConfirmPowerPointAction(action)) return;
+                if (_pptCtrl.ApplyPowerPointAction(action))
+                {
+                    ActionAuditStore.Instance.Record(
+                        "PowerPoint",
+                        action.Type,
+                        action.TargetDisplay,
+                        DescribePowerPointAction(action),
+                        action.IsUndoable,
+                        GetLastUserPrompt(),
+                        _currentDocumentKey,
+                        GetSelectedModelName(),
+                        action.ContentDisplay,
+                        !string.IsNullOrEmpty(action.ResultText) ? action.ResultText : "Applied successfully");
+                }
+            }
+            else
+            {
+                MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
+
+        private void BtnApplyAllPowerPointActions_Click(object sender, RoutedEventArgs e)
+        {
+            var msg = GetMessageFromSender(sender);
+            if (msg == null || msg.PowerPointActions == null || msg.PowerPointActions.Count == 0) return;
+
+            if (_pptCtrl == null)
+            {
+                MessageBox.Show("No active PowerPoint presentation found.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var preview = new StringBuilder();
+            preview.AppendLine("Review the following PowerPoint changes before applying:");
+            foreach (var pendingAction in msg.PowerPointActions)
+            {
+                if (pendingAction.Status == PowerPointActionStatus.Pending || pendingAction.Status == PowerPointActionStatus.Error)
+                {
+                    preview.AppendLine(DescribePowerPointAction(pendingAction));
+                }
+            }
+
+            if (MessageBox.Show(preview.ToString(), "Review PowerPoint Actions", MessageBoxButton.YesNo,
+                MessageBoxImage.Question) != MessageBoxResult.Yes)
+                return;
+
+            int appliedCount = 0;
+            foreach (var act in msg.PowerPointActions)
+            {
+                if (act.Status == PowerPointActionStatus.Pending || act.Status == PowerPointActionStatus.Error)
+                {
+                    if (_pptCtrl.ApplyPowerPointAction(act))
+                    {
+                        appliedCount++;
+                        ActionAuditStore.Instance.Record(
+                            "PowerPoint",
+                            act.Type,
+                            act.TargetDisplay,
+                            DescribePowerPointAction(act),
+                            act.IsUndoable,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            act.ContentDisplay,
+                            !string.IsNullOrEmpty(act.ResultText) ? act.ResultText : "Applied successfully");
+                    }
+                }
+            }
+        }
+
+        private bool ConfirmPowerPointAction(PowerPointAction action)
+        {
+            return MessageBox.Show(DescribePowerPointAction(action), "Review PowerPoint Action", MessageBoxButton.YesNo,
+                MessageBoxImage.Question) == MessageBoxResult.Yes;
+        }
+
+        private static string DescribePowerPointAction(PowerPointAction action)
+        {
+            if (action == null) return "No PowerPoint action is available.";
+            return string.Format("PowerPoint will apply a {0} action.\n\nDescription: {1}\n\nProposed change:\n{2}",
+                action.Type, action.Description, action.ContentDisplay);
         }
 
         private bool ConfirmInsert(string content)
