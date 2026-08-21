@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
 using System.Windows.Forms.Integration;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.UI
+namespace MSOfficeAIAssistant.UI
 {
     /// <summary>
     /// Hosts ChatSidebar as a child of the Office document window, docked on the right
@@ -415,13 +415,19 @@ namespace MistralOfficeAddin.UI
                     _focusRetryCount++;
                     this.BeginInvoke(new MethodInvoker(ActivatePromptKeyboardRouting));
                 }
+                else if (_focusRetryCount >= 10)
+                {
+                    Logger.Warn(string.Format("OfficeDockedPane: ActivatePromptKeyboardRouting exhausted {0} HWND retries; keyboard bridge inactive.", _focusRetryCount));
+                }
                 return;
             }
 
+            int retriesNeeded = _focusRetryCount;
             _focusRetryCount = 0;
             _promptInputHwnd = promptWindow;
             _routeKeysToPrompt = true;
             NativeWnd.SetFocus(promptWindow);
+            Logger.Info(string.Format("OfficeDockedPane: ActivatePromptKeyboardRouting active (HWND 0x{0:X8}, required {1} retries).", promptWindow.ToInt64(), retriesNeeded));
         }
 
         private bool IsInPane(IntPtr hwnd)

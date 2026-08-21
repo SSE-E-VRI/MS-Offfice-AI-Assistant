@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using Newtonsoft.Json;
 
-namespace MistralOfficeAddin.API.Models
+namespace MSOfficeAIAssistant.API.Models
 {
     public class ChatMessage : INotifyPropertyChanged
     {
@@ -93,10 +93,11 @@ namespace MistralOfficeAddin.API.Models
         [JsonProperty("fullContent", NullValueHandling = NullValueHandling.Ignore)]
         public string FullContent { get; set; }
 
-        private System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> _actions;
+        private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> _actions;
+        private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> _powerPointActions;
 
         [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]
-        public System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction> Actions
+        public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> Actions
         {
             get { return _actions; }
             set { _actions = value; OnPropertyChanged("Actions"); OnPropertyChanged("HasActions"); }
@@ -114,6 +115,25 @@ namespace MistralOfficeAddin.API.Models
             OnPropertyChanged("HasActions");
         }
 
+        [JsonProperty("powerPointActions", NullValueHandling = NullValueHandling.Ignore)]
+        public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> PowerPointActions
+        {
+            get { return _powerPointActions; }
+            set { _powerPointActions = value; OnPropertyChanged("PowerPointActions"); OnPropertyChanged("HasPowerPointActions"); }
+        }
+
+        [JsonIgnore]
+        public bool HasPowerPointActions
+        {
+            get { return _powerPointActions != null && _powerPointActions.Count > 0; }
+        }
+
+        public void NotifyPowerPointActionsChanged()
+        {
+            OnPropertyChanged("PowerPointActions");
+            OnPropertyChanged("HasPowerPointActions");
+        }
+
         public event PropertyChangedEventHandler PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
@@ -127,7 +147,8 @@ namespace MistralOfficeAddin.API.Models
 
         public ChatMessage()
         {
-            _actions = new System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction>();
+            _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
+            _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
         }
 
@@ -135,7 +156,8 @@ namespace MistralOfficeAddin.API.Models
         {
             Role = role;
             Content = content;
-            _actions = new System.Collections.ObjectModel.ObservableCollection<MistralOfficeAddin.Core.SpreadsheetAction>();
+            _actions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction>();
+            _powerPointActions = new System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction>();
             _timestamp = DateTime.Now;
         }
     }

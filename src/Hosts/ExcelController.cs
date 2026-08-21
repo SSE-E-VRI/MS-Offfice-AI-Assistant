@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     public class ExcelController
     {

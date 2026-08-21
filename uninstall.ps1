@@ -6,7 +6,8 @@ Write-Host "  AI Assistant Office Add-in - Uninstall                   " -Foregr
 Write-Host "============================================================" -ForegroundColor Cyan
 
 $apps = @("Word", "Excel", "PowerPoint")
-$progIds = @("MistralAI.Addin", "MistralAI.Connect", "MistralAI.TaskPaneControl")
+$progIds = @("MSOfficeAIAssistant.Addin", "MSOfficeAIAssistant.TaskPaneControl",
+             "MistralAI.Addin", "MistralAI.Connect", "MistralAI.TaskPaneControl", "MistralAI.ChatPane")
 $clsids = @("{2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78}", "{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}")
 
 # 1. Remove Office Add-in Registrations
@@ -64,7 +65,7 @@ foreach ($ver in $versions) {
     foreach ($app in $apps) {
         $dndKey = "HKCU:\Software\Microsoft\Office\$ver\$app\Resiliency\DoNotDisableAddinList"
         if (Test-Path $dndKey) {
-            Remove-ItemProperty -Path $dndKey -Name "MistralAI.Addin" -ErrorAction SilentlyContinue
+            Remove-ItemProperty -Path $dndKey -Name "MSOfficeAIAssistant.Addin" -ErrorAction SilentlyContinue
         }
     }
 }

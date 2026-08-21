@@ -2,9 +2,9 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.Addin
+namespace MSOfficeAIAssistant.Addin
 {
     #region COM Interfaces for IDTExtensibility2 and IRibbonExtensibility
 
@@ -79,7 +79,7 @@ namespace MistralOfficeAddin.Addin
     /// </summary>
 
     [Guid("2F8D4B61-7C3E-4A59-9B2D-6E1F0A3C5E78")]
-    [ProgId("MistralAI.Addin")]
+    [ProgId("MSOfficeAIAssistant.Addin")]
     [ComVisible(true)]
     [ClassInterface(ClassInterfaceType.AutoDual)]
     public class Connect : IDTExtensibility2, IRibbonExtensibility, ICustomTaskPaneConsumer
@@ -147,10 +147,10 @@ namespace MistralOfficeAddin.Addin
                 {
                     foreach (var app in apps)
                     {
-                        WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\Addins\MistralAI.Addin", app));
+                        WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\Addins\MSOfficeAIAssistant.Addin", app));
                         foreach (var ver in versions)
                         {
-                            WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\{1}\Addins\MistralAI.Addin", ver, app));
+                            WriteAddinKey(hkcu, string.Format(@"Software\Microsoft\Office\{0}\{1}\Addins\MSOfficeAIAssistant.Addin", ver, app));
                         }
                     }
                 }
@@ -190,7 +190,7 @@ namespace MistralOfficeAddin.Addin
                             using (var dndKey = hkcu.CreateSubKey(dndPath))
                             {
                                 if (dndKey != null)
-                                    dndKey.SetValue("MistralAI.Addin", 1, Microsoft.Win32.RegistryValueKind.DWord);
+                                    dndKey.SetValue("MSOfficeAIAssistant.Addin", 1, Microsoft.Win32.RegistryValueKind.DWord);
                             }
 
                             string[] wipe = new string[] { "DisabledItems", "CrashingAddinList" };
@@ -216,6 +216,7 @@ namespace MistralOfficeAddin.Addin
         public void OnConnection(object Application, ext_ConnectMode ConnectMode, object AddInInst, ref Array custom)
         {
             EnsureResiliencyEnabled();
+            OleMessageFilter.Register();
             Logger.Info(string.Format("OnConnection ENTERED (Mode: {0})", ConnectMode));
             try
             {
@@ -268,6 +269,7 @@ namespace MistralOfficeAddin.Addin
             Logger.Info(string.Format("OnDisconnection (Mode: {0})", RemoveMode));
             try
             {
+                OleMessageFilter.Revoke();
                 if (_taskPaneManager != null)
                     _taskPaneManager.Cleanup();
             }
@@ -343,7 +345,7 @@ namespace MistralOfficeAddin.Addin
 <customUI xmlns=""http://schemas.microsoft.com/office/2006/01/customui"" onLoad=""OnRibbonLoad"">
   <ribbon>
     <tabs>
-      <tab id=""tabMistralAI"" label=""AI Assistant"">
+      <tab id=""tabAIAssistant"" label=""AI Assistant"">
         <group id=""grpChat"" label=""AI Chat"">
           <button id=""btnToggleSidebar"" label=""Open Chat"" imageMso=""FileOpen"" size=""large"" onAction=""OnToggleSidebar""/>
           <button id=""btnSettings"" label=""Configure"" imageMso=""FileSave"" size=""large"" onAction=""OnOpenSettings""/>

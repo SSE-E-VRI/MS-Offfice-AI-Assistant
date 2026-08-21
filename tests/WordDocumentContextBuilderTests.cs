@@ -1,5 +1,5 @@
 using System;
-using MistralOfficeAddin.Hosts;
+using MSOfficeAIAssistant.Hosts;
 
 namespace MSOfficeAIAssistant.Tests
 {

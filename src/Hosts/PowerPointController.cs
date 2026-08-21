@@ -4,9 +4,9 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.Hosts
+namespace MSOfficeAIAssistant.Hosts
 {
     public class PowerPointController
     {
@@ -294,7 +294,7 @@ namespace MistralOfficeAddin.Hosts
             try
             {
                 string cleanedText;
-                ApplyStructuredActions(text, out cleanedText);
+                PowerPointActionParser.ParseStructuredActions(text, out cleanedText);
                 text = cleanedText;
                 if (string.IsNullOrWhiteSpace(text)) return;
 
@@ -371,34 +371,67 @@ namespace MistralOfficeAddin.Hosts
         }
 
         /// <summary>
-        /// Applies an allow-listed set of deck operations returned by the model.
+        /// Applies a single structured deck action returned by the model, setting status and result/error on the action object.
         /// </summary>
-        public int ApplyStructuredActions(string rawText, out string cleanedText)
+        public bool ApplyPowerPointAction(PowerPointAction action)
         {
-            var actions = PowerPointActionParser.ParseStructuredActions(rawText, out cleanedText);
-            int applied = 0;
+            if (action == null) return false;
+            action.Status = PowerPointActionStatus.Applying;
+
             try
             {
-                foreach (var action in actions)
-                {
-                    bool success = false;
-                    if (action.Type == "move_slide")
-                        success = MoveSlide(action.Source, action.Target);
-                    else if (action.Type == "create_section")
-                        success = CreateSectionBeforeSlide(action.Name, action.Slide > 0 ? action.Slide : action.Target);
-                    else if (action.Type == "rename_section")
-                        success = RenameSection(action.Section, action.Name);
-                    else if (action.Type == "set_notes")
-                        success = SetSpeakerNotesForSlide(action.Slide, action.Notes);
+                bool success = false;
+                string result = null;
 
-                    if (success) applied++;
+                if (string.Equals(action.Type, "move_slide", StringComparison.OrdinalIgnoreCase))
+                {
+                    success = MoveSlide(action.Source, action.Target);
+                    if (success) result = string.Format("Moved slide {0} to {1}", action.Source, action.Target);
+                }
+                else if (string.Equals(action.Type, "create_section", StringComparison.OrdinalIgnoreCase))
+                {
+                    int targetSlide = action.Slide > 0 ? action.Slide : action.Target;
+                    success = CreateSectionBeforeSlide(action.Name, targetSlide);
+                    if (success) result = string.Format("Created section '{0}'", action.Name);
+                }
+                else if (string.Equals(action.Type, "rename_section", StringComparison.OrdinalIgnoreCase))
+                {
+                    success = RenameSection(action.Section, action.Name);
+                    if (success) result = string.Format("Renamed section {0} to '{1}'", action.Section, action.Name);
+                }
+                else if (string.Equals(action.Type, "set_notes", StringComparison.OrdinalIgnoreCase))
+                {
+                    success = SetSpeakerNotesForSlide(action.Slide, action.Notes);
+                    if (success) result = string.Format("Set speaker notes on slide {0}", action.Slide);
+                }
+                else
+                {
+                    action.Status = PowerPointActionStatus.Error;
+                    action.ErrorMessage = string.Format("Unsupported action type '{0}'", action.Type);
+                    return false;
+                }
+
+                if (success)
+                {
+                    action.ResultText = result;
+                    action.Status = PowerPointActionStatus.Applied;
+                    Logger.Info(string.Format("Applied PowerPoint action {0}: {1}", action.Type, result));
+                    return true;
+                }
+                else
+                {
+                    action.Status = PowerPointActionStatus.Error;
+                    action.ErrorMessage = string.Format("Failed to execute {0}", action.Type);
+                    return false;
                 }
             }
             catch (Exception ex)
             {
-                Logger.Warn(string.Format("PowerPointController.ApplyStructuredActions failed: {0}", ex.Message));
+                action.Status = PowerPointActionStatus.Error;
+                action.ErrorMessage = ex.Message;
+                Logger.Error(string.Format("ApplyPowerPointAction failed on {0}", action.Type), ex);
+                return false;
             }
-            return applied;
         }
 
         public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)

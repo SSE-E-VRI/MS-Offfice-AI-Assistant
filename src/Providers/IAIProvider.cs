@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using MistralOfficeAddin.API.Models;
+using MSOfficeAIAssistant.API.Models;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public enum AIProviderType
     {

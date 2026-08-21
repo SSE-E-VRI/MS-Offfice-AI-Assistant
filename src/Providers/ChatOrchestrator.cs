@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using MistralOfficeAddin.Core;
+using MSOfficeAIAssistant.Core;
 
-namespace MistralOfficeAddin.Providers
+namespace MSOfficeAIAssistant.Providers
 {
     public class ChatOrchestrator : IDisposable
     {
