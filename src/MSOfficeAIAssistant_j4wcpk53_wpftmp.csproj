@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -16,7 +16,6 @@
     <Deterministic>true</Deterministic>
     <LangVersion>5</LangVersion>
   </PropertyGroup>
-
   <!-- x86 Configurations -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -37,7 +36,6 @@
     <ErrorReport>prompt</ErrorReport>
     <RegisterForComInterop>false</RegisterForComInterop>
   </PropertyGroup>
-
   <!-- x64 Configurations -->
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
     <PlatformTarget>x64</PlatformTarget>
@@ -58,90 +56,9 @@
     <ErrorReport>prompt</ErrorReport>
     <RegisterForComInterop>false</RegisterForComInterop>
   </PropertyGroup>
-
   <ItemGroup>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Security" />
-    <Reference Include="System.Windows.Forms" />
-    <Reference Include="System.Xaml" />
-    <Reference Include="System.Xml" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="WindowsBase" />
-    <Reference Include="PresentationCore" />
-    <Reference Include="PresentationFramework" />
-    <Reference Include="WindowsFormsIntegration" />
-    <Reference Include="Microsoft.CSharp" />
-
     <!-- NuGet Packages -->
-    <Reference Include="NetOffice">
-      <HintPath>..\packages\NetOfficeFw.Core.1.9.10\lib\net462\NetOffice.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="OfficeApi">
-      <HintPath>..\packages\NetOfficeFw.Office.1.9.10\lib\net462\OfficeApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="WordApi">
-      <HintPath>..\packages\NetOfficeFw.Word.1.9.10\lib\net462\WordApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="ExcelApi">
-      <HintPath>..\packages\NetOfficeFw.Excel.1.9.10\lib\net462\ExcelApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="PowerPointApi">
-      <HintPath>..\packages\NetOfficeFw.PowerPoint.1.9.10\lib\net462\PowerPointApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-
-    <Reference Include="VBIDEApi">
-      <HintPath>..\packages\NetOfficeFw.VBIDE.1.9.10\lib\net462\VBIDEApi.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="stdole">
-      <HintPath>..\packages\stdole.7.0.3300\lib\net10\stdole.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="Markdig">
-      <HintPath>..\packages\Markdig.0.22.0\lib\net452\Markdig.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System.Buffers">
-      <HintPath>..\packages\System.Buffers.4.6.0\lib\net462\System.Buffers.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System.Memory">
-      <HintPath>..\packages\System.Memory.4.6.0\lib\net462\System.Memory.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System.Numerics.Vectors">
-      <HintPath>..\packages\System.Numerics.Vectors.4.6.0\lib\net462\System.Numerics.Vectors.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System.IO.Compression" />
-    <Reference Include="System.IO.Compression.FileSystem" />
-    <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.0\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="UglyToad.PdfPig">
-      <HintPath>..\packages\PdfPig.0.1.15\lib\net471\UglyToad.PdfPig.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="UglyToad.PdfPig.Core">
-      <HintPath>..\packages\PdfPig.0.1.15\lib\net471\UglyToad.PdfPig.Core.dll</HintPath>
-      <Private>True</Private>
-    </Reference>
   </ItemGroup>
-
   <ItemGroup>
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
@@ -206,28 +123,9 @@
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />
     <Compile Include="Hosts\ExcelController.cs" />
     <Compile Include="Hosts\PowerPointController.cs" />
-
   </ItemGroup>
-
   <ItemGroup>
-    <Page Include="UI\ChatSidebar.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="UI\SettingsWindow.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="UI\Theme\Tokens.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Include="UI\Theme\Controls.xaml">
-      <Generator>MSBuild:Compile</Generator>
-      <SubType>Designer</SubType>
-    </Page>
   </ItemGroup>
-
   <ItemGroup>
     <EmbeddedResource Include="Addin\Ribbon.xml" />
     <EmbeddedResource Include="Help\UserManual.html" />
@@ -236,14 +134,39 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
-
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="app.config" />
   </ItemGroup>
-
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Target Name="CopyAddinConfig" AfterTargets="Build">
     <Copy SourceFiles="$(ProjectDir)app.config" DestinationFiles="$(OutputPath)MSOfficeAIAssistant.dll.config" SkipUnchangedFiles="true" />
   </Target>
+  <ItemGroup>
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\Microsoft.CSharp\v4.0_4.0.0.0__b03f5f7f11d50a3a\Microsoft.CSharp.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.NET\Framework64\v4.0.30319\mscorlib.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_32\PresentationCore\v4.0_4.0.0.0__31bf3856ad364e35\PresentationCore.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\PresentationFramework\v4.0_4.0.0.0__31bf3856ad364e35\PresentationFramework.dll" />
+    <ReferencePath Include="C:\Windows\assembly\GAC\stdole\7.0.3300.0__b03f5f7f11d50a3a\stdole.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Core\v4.0_4.0.0.0__b77a5c561934e089\System.Core.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_32\System.Data\v4.0_4.0.0.0__b77a5c561934e089\System.Data.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System\v4.0_4.0.0.0__b77a5c561934e089\System.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Drawing\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Drawing.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.IO.Compression\v4.0_4.0.0.0__b77a5c561934e089\System.IO.Compression.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.IO.Compression.FileSystem\v4.0_4.0.0.0__b77a5c561934e089\System.IO.Compression.FileSystem.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Net.Http\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Net.Http.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Numerics.Vectors\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Numerics.Vectors.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Security\v4.0_4.0.0.0__b03f5f7f11d50a3a\System.Security.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Windows.Forms\v4.0_4.0.0.0__b77a5c561934e089\System.Windows.Forms.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Xaml\v4.0_4.0.0.0__b77a5c561934e089\System.Xaml.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Xml\v4.0_4.0.0.0__b77a5c561934e089\System.Xml.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\System.Xml.Linq\v4.0_4.0.0.0__b77a5c561934e089\System.Xml.Linq.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\WindowsBase\v4.0_4.0.0.0__31bf3856ad364e35\WindowsBase.dll" />
+    <ReferencePath Include="C:\Windows\Microsoft.Net\assembly\GAC_MSIL\WindowsFormsIntegration\v4.0_4.0.0.0__31bf3856ad364e35\WindowsFormsIntegration.dll" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="C:\Tools\MsOfficePlugin\.claude\worktrees\agent-a21bc5defe83f09f8\src\obj\x86\Release\UI\ChatSidebar.g.cs" />
+    <Compile Include="C:\Tools\MsOfficePlugin\.claude\worktrees\agent-a21bc5defe83f09f8\src\obj\x86\Release\UI\SettingsWindow.g.cs" />
+    <Compile Include="C:\Tools\MsOfficePlugin\.claude\worktrees\agent-a21bc5defe83f09f8\src\obj\x86\Release\GeneratedInternalTypeHelper.g.cs" />
+  </ItemGroup>
 </Project>
