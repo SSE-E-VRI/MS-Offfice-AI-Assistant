@@ -87,6 +87,8 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Model Selector -->
@@ -104,6 +106,20 @@
                 <CheckBox x:Name="ChkTrackChanges" Grid.Column="2" Content="Track edits"
                           VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" IsChecked="True"
                           ToolTip="When in Word, insert/rewrite responses as Track Changes."/>
+
+                <!-- Mode Selector: Chat / Plan / Edit -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                    <TextBlock Text="Mode:" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"/>
+                    <RadioButton x:Name="RdoChatMode" Content="Chat" GroupName="SessionMode" Click="RdoChatMode_Click"
+                                 VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
+                                 ToolTip="Read-only mode: AI can explain but not modify documents."/>
+                    <RadioButton x:Name="RdoPlanMode" Content="Plan" GroupName="SessionMode" Click="RdoPlanMode_Click"
+                                 VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
+                                 ToolTip="Planning mode: AI can propose and preview changes."/>
+                    <RadioButton x:Name="RdoEditMode" Content="Edit" GroupName="SessionMode" Click="RdoEditMode_Click" IsChecked="True"
+                                 VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}"
+                                 ToolTip="Editing mode: AI can apply changes directly to documents."/>
+                </StackPanel>
             </Grid>
         </Border>
 

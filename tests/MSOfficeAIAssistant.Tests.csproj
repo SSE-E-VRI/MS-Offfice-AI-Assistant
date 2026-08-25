@@ -100,6 +100,7 @@
     <Compile Include="PlanExecutorTests.cs" />
     <Compile Include="CrossHostPlanCoordinatorTests.cs" />
     <Compile Include="XamlLoadTests.cs" />
+    <Compile Include="AssistantSessionModeTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
