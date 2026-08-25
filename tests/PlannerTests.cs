@@ -17,7 +17,8 @@ namespace MSOfficeAIAssistant.Tests
             TestRenumberStepsAfterEdits();
             TestRemoveStepAndRenumber();
             TestInsertReasoningStepAtPosition();
-            TestIsFullyAutoRunnableTrueForRiskLevel0();
+            TestIsFullyAutoRunnableTrueForReasoningOnly();
+            TestIsFullyAutoRunnableFalseWhenRegistryRiskIgnoresLocalRiskLevel0();
             TestIsFullyAutoRunnableFalseForRiskLevel1();
             TestValidateEmptyListForValidPlan();
             TestValidateDetectsOrderGap();
@@ -156,25 +157,31 @@ namespace MSOfficeAIAssistant.Tests
             Assert(plan.Steps[2].Order == 3, "Last step Order should be 3");
         }
 
-        private static void TestIsFullyAutoRunnableTrueForRiskLevel0()
+        private static void TestIsFullyAutoRunnableTrueForReasoningOnly()
         {
+            var plan = new Plan();
+            Planner.InsertReasoningStep(plan, 1, "Prepare", "Excel");
+            Planner.InsertReasoningStep(plan, 2, "Summarize", "Word");
+
+            Assert(Planner.IsFullyAutoRunnable(plan) == true,
+                "Plan with only reasoning-only steps should be auto-runnable");
+        }
+
+        private static void TestIsFullyAutoRunnableFalseWhenRegistryRiskIgnoresLocalRiskLevel0()
+        {
+            // Regression: IsFullyAutoRunnable must consult ToolRegistry, not Action.RiskLevel.
+            // excel.write_formula is RiskLevel 2 / RequiresApproval in the registry; a stale
+            // RiskLevel=0 on the action object must NOT make the plan auto-runnable.
             var actions = new List<OfficeAction>();
-
-            // Add RiskLevel 0 actions
-            var action1 = CreateTestAction("excel.write_formula", "Excel", "Low risk");
+            var action1 = CreateTestAction("excel.write_formula", "Excel", "Spoofed low risk");
             action1.RiskLevel = 0;
+            action1.RequiresApproval = false;
             actions.Add(action1);
-
-            var action2 = CreateTestAction("word.add_comment", "Word", "Low risk");
-            action2.RiskLevel = 0;
-            actions.Add(action2);
 
             var plan = Planner.BuildPlanFromActions("Test", "Request", actions);
 
-            // Add a reasoning step
-            Planner.InsertReasoningStep(plan, 1, "Prepare", "Excel");
-
-            Assert(Planner.IsFullyAutoRunnable(plan) == true, "Plan with only RiskLevel 0 actions and reasoning steps should be auto-runnable");
+            Assert(Planner.IsFullyAutoRunnable(plan) == false,
+                "Stale Action.RiskLevel=0 must not override ToolRegistry RiskLevel for auto-run gating");
         }
 
         private static void TestIsFullyAutoRunnableFalseForRiskLevel1()
