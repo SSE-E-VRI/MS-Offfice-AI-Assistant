@@ -75,6 +75,16 @@ namespace MSOfficeAIAssistant.Tests
 
             var acceptRes = ctrl.ExecuteAcceptAllRevisions();
             Assert(!acceptRes.Success, "ExecuteAcceptAllRevisions on null app should fail cleanly");
+
+            // D-13 Tier 2: new Execute* wrappers, headless (no Word app), should fail cleanly not throw.
+            var acceptSelRes = ctrl.ExecuteAcceptRevisionsInSelection();
+            Assert(!acceptSelRes.Success, "ExecuteAcceptRevisionsInSelection on null app should fail cleanly");
+
+            var rejectSelRes = ctrl.ExecuteRejectRevisionsInSelection();
+            Assert(!rejectSelRes.Success, "ExecuteRejectRevisionsInSelection on null app should fail cleanly");
+
+            var undoRes = ctrl.ExecuteUndoLastChange();
+            Assert(!undoRes.Success, "ExecuteUndoLastChange on null app should fail cleanly");
         }
 
         private static void TestExcelControllerHeadlessOperationResults()
@@ -94,14 +104,22 @@ namespace MSOfficeAIAssistant.Tests
 
             var valueHeadlessRes = ctrl.ExecuteWriteValue("Test", "A1");
             Assert(!valueHeadlessRes.Success, "ExecuteWriteValue on null app should fail cleanly");
+
+            // D-13 Tier 2: new Execute* wrappers, headless (no Excel app), should fail cleanly not throw.
+            var undoRes = ctrl.ExecuteUndoLastAction();
+            Assert(!undoRes.Success, "ExecuteUndoLastAction on null app should fail cleanly");
+
+            var insertNullRes = ctrl.ExecuteInsertText(null);
+            Assert(!insertNullRes.Success, "ExecuteInsertText(null) should fail");
+            Assert(insertNullRes.ErrorMessage.Contains("empty"), "Expected validation message on null text");
+
+            var insertHeadlessRes = ctrl.ExecuteInsertText("Hello World");
+            Assert(!insertHeadlessRes.Success, "ExecuteInsertText on null app should fail cleanly");
         }
 
         private static void TestPowerPointControllerHeadlessOperationResults()
         {
             var ctrl = new PowerPointController(null);
-
-            var actionNullRes = ctrl.ExecutePowerPointAction(null);
-            Assert(!actionNullRes.Success, "ExecutePowerPointAction(null) should fail");
 
             var outlineEmptyRes = ctrl.ExecuteCreateDeckFromOutline("");
             Assert(!outlineEmptyRes.Success, "ExecuteCreateDeckFromOutline(empty) should fail");
@@ -115,6 +133,16 @@ namespace MSOfficeAIAssistant.Tests
             TestExecuteCreateSectionResults(ctrl);
             TestExecuteRenameSectionResults(ctrl);
             TestExecuteSetSpeakerNotesResults(ctrl);
+
+            // D-13 Tier 2: new Execute* wrappers, headless (no PowerPoint app), should fail cleanly not throw.
+            var undoRes = ctrl.ExecuteUndo();
+            Assert(!undoRes.Success, "ExecuteUndo on null app should fail cleanly");
+
+            var insertEmptyRes = ctrl.ExecuteInsertText("");
+            Assert(!insertEmptyRes.Success, "ExecuteInsertText(empty) should fail validation");
+
+            var insertHeadlessRes = ctrl.ExecuteInsertText("Hello World");
+            Assert(!insertHeadlessRes.Success, "ExecuteInsertText on null app should fail cleanly");
         }
 
         private static void TestExecuteMoveSlideResults(PowerPointController ctrl)

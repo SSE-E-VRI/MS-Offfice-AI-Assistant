@@ -293,17 +293,6 @@ namespace MSOfficeAIAssistant.Hosts
             return res;
         }
 
-        public bool ApplySpreadsheetAction(SpreadsheetAction action)
-        {
-            if (action == null) return false;
-            action.Status = SpreadsheetActionStatus.Applying;
-            action.ErrorMessage = string.Empty;
-            action.ResultText = string.Empty;
-
-            var res = ExecuteSpreadsheetAction(action);
-            return res.Success;
-        }
-
         public HostOperationResult ExecuteWriteFormula(string formula, string cellAddress)
         {
             if (string.IsNullOrEmpty(formula))
@@ -540,6 +529,38 @@ namespace MSOfficeAIAssistant.Hosts
             {
                 Logger.Error("ExcelController.ExecuteRemoveDuplicates failed", ex);
                 return HostOperationResult.FromException(ex, "ExcelController.ExecuteRemoveDuplicates", targetAddress);
+            }
+        }
+
+        // D-13 Tier 2: mutation methods that lacked a structured HostOperationResult wrapper.
+        public HostOperationResult ExecuteUndoLastAction()
+        {
+            try
+            {
+                bool ok = UndoLastAction();
+                return ok ? HostOperationResult.Ok("Undid the last Excel action.") : HostOperationResult.Failed("UndoLastAction returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteUndoLastAction failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteUndoLastAction");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return HostOperationResult.Failed("Text cannot be empty.");
+
+            try
+            {
+                bool ok = InsertText(text);
+                return ok ? HostOperationResult.Ok("Inserted text into the active worksheet.") : HostOperationResult.Failed("InsertText returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("ExcelController.ExecuteInsertText failed", ex);
+                return HostOperationResult.FromException(ex, "ExcelController.ExecuteInsertText");
             }
         }
 

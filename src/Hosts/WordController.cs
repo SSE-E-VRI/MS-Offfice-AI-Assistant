@@ -217,11 +217,6 @@ namespace MSOfficeAIAssistant.Hosts
 
         // Kept for compatibility with existing callers.  The prior implementation inserted
         // plain text; delegating here retains Markdown formatting as tracked revisions.
-        public void ApplyTrackChanges(string suggestedText)
-        {
-            ReplaceSelectionWithTrackChanges(suggestedText);
-        }
-
         public int GetPendingRevisionCount()
         {
             try
@@ -362,6 +357,61 @@ namespace MSOfficeAIAssistant.Hosts
             {
                 Logger.Error("WordController.ExecuteRejectAllRevisions failed", ex);
                 return HostOperationResult.FromException(ex, "WordController.ExecuteRejectAllRevisions");
+            }
+        }
+
+        // D-13 Tier 2: mutation methods that lacked a structured HostOperationResult wrapper.
+        public HostOperationResult ExecuteAcceptRevisionsInSelection()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                bool ok = AcceptRevisionsInSelection();
+                return ok ? HostOperationResult.Ok("Accepted revisions in the current selection.") : HostOperationResult.Failed("AcceptRevisionsInSelection returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteAcceptRevisionsInSelection failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteAcceptRevisionsInSelection");
+            }
+        }
+
+        public HostOperationResult ExecuteRejectRevisionsInSelection()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null)
+                    return HostOperationResult.Failed("Word application is not accessible.");
+
+                bool ok = RejectRevisionsInSelection();
+                return ok ? HostOperationResult.Ok("Rejected revisions in the current selection.") : HostOperationResult.Failed("RejectRevisionsInSelection returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteRejectRevisionsInSelection failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteRejectRevisionsInSelection");
+            }
+        }
+
+        public HostOperationResult ExecuteUndoLastChange()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("Word application or active document is not accessible.");
+
+                bool ok = UndoLastChange();
+                return ok ? HostOperationResult.Ok("Undid the last Word change.") : HostOperationResult.Failed("UndoLastChange returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteUndoLastChange failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteUndoLastChange");
             }
         }
 
@@ -556,94 +606,6 @@ namespace MSOfficeAIAssistant.Hosts
         /// Replaces a selected Markdown table with a native Word table.  The generated text is
         /// parsed first, so ordinary prose cannot accidentally be converted into a table.
         /// </summary>
-        public bool ConvertSelectedMarkdownTableToWordTable()
-        {
-            string selectedText = GetSelectedText();
-            if (string.IsNullOrWhiteSpace(selectedText)) return false;
-
-            try
-            {
-                var app = GetApp();
-                if (app == null) return false;
-                bool undoRecordStarted = TryStartUndoRecord(app, "AI Assistant convert table");
-                try
-                {
-                    return WordMarkdownRenderer.RenderFirstMarkdownTable(app, selectedText, true);
-                }
-                finally
-                {
-                    EndUndoRecord(app, undoRecordStarted);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.ConvertSelectedMarkdownTableToWordTable failed", ex);
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Inserts the first Markdown table in generated content as a native Word table.  A
-        /// selected range is replaced; at an insertion point the table is inserted there.
-        /// </summary>
-        public bool InsertMarkdownTableAtCursor(string markdown)
-        {
-            if (string.IsNullOrWhiteSpace(markdown)) return false;
-
-            try
-            {
-                var app = GetApp();
-                if (app == null) return false;
-                bool undoRecordStarted = TryStartUndoRecord(app, "AI Assistant insert table");
-                try
-                {
-                    return WordMarkdownRenderer.RenderFirstMarkdownTable(app, markdown, true);
-                }
-                finally
-                {
-                    EndUndoRecord(app, undoRecordStarted);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.InsertMarkdownTableAtCursor failed", ex);
-                throw;
-            }
-        }
-
-        /// <summary>
-        /// Converts a tab-delimited selection to a native Word table.  Markdown selections use
-        /// the richer Markdown-table path above; this is the safe native helper for plain text.
-        /// </summary>
-        public bool ConvertSelectedTextToWordTable()
-        {
-            string selectedText = GetSelectedText();
-            if (string.IsNullOrWhiteSpace(selectedText)) return false;
-
-            try
-            {
-                var app = GetApp();
-                if (app == null) return false;
-                bool undoRecordStarted = TryStartUndoRecord(app, "AI Assistant convert table");
-                try
-                {
-                    if (WordMarkdownRenderer.ContainsMarkdownTable(selectedText))
-                        return WordMarkdownRenderer.RenderFirstMarkdownTable(app, selectedText, true);
-
-                    return WordMarkdownRenderer.RenderDelimitedTable(app, selectedText, true);
-                }
-                finally
-                {
-                    EndUndoRecord(app, undoRecordStarted);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.ConvertSelectedTextToWordTable failed", ex);
-                throw;
-            }
-        }
-
         public string GetActiveDocumentName()
         {
             try
