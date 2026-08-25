@@ -98,6 +98,7 @@
     <Compile Include="WorkSessionStoreTests.cs" />
     <Compile Include="MarkdownHelperTests.cs" />
     <Compile Include="PlanExecutorTests.cs" />
+    <Compile Include="CrossHostPlanCoordinatorTests.cs" />
     <Compile Include="XamlLoadTests.cs" />
   </ItemGroup>
 

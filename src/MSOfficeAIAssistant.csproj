@@ -199,6 +199,7 @@
     <Compile Include="Core\Planning\Plan.cs" />
     <Compile Include="Core\Planning\Planner.cs" />
     <Compile Include="Core\Planning\PlanExecutor.cs" />
+    <Compile Include="Core\Planning\CrossHostPlanCoordinator.cs" />
     <Compile Include="Core\Session\StreamCoordinator.cs" />
     <Compile Include="Core\Session\AssistantSession.cs" />
     <Compile Include="Core\Session\WorkSession.cs" />
