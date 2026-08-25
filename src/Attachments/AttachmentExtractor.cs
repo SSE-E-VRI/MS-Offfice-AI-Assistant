@@ -138,13 +138,15 @@ namespace MSOfficeAIAssistant.Attachments
                     {
                         var doc = XDocument.Load(stream);
                         XNamespace w = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+                        int paragraphIndex = 1;
                         foreach (var p in doc.Descendants(w + "p"))
                         {
                             string paragraphText = string.Concat(p.Descendants(w + "t").Select(t => t.Value));
                             if (!string.IsNullOrWhiteSpace(paragraphText))
                             {
-                                sb.AppendLine(paragraphText);
+                                sb.AppendLine(string.Format("[¶{0}] {1}", paragraphIndex, paragraphText));
                             }
+                            paragraphIndex++;
                         }
                     }
                 }
@@ -156,12 +158,39 @@ namespace MSOfficeAIAssistant.Attachments
         {
             var sb = new StringBuilder();
             var sharedStrings = new List<string>();
+            var sheetNames = new List<string>();
 
             using (var zip = ZipFile.OpenRead(path))
             {
                 if (ArchiveDecompressedSizeExceedsLimit(zip))
                 {
                     return "[Attachment too large when decompressed to process safely.]";
+                }
+
+                // Read Sheet Names from workbook.xml
+                try
+                {
+                    var workbookEntry = zip.GetEntry("xl/workbook.xml");
+                    if (workbookEntry != null)
+                    {
+                        using (var stream = workbookEntry.Open())
+                        {
+                            var doc = XDocument.Load(stream);
+                            XNamespace s = "http://schemas.openxmlformats.org/spreadsheetml/2006/main";
+                            foreach (var sheet in doc.Descendants(s + "sheet"))
+                            {
+                                string name = (string)sheet.Attribute("name");
+                                if (!string.IsNullOrEmpty(name))
+                                {
+                                    sheetNames.Add(name);
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                    // If sheet name resolution fails, sheetNames remains empty and we'll fall back to ordinals
                 }
 
                 // Read Shared Strings
@@ -185,7 +214,18 @@ namespace MSOfficeAIAssistant.Attachments
                 int sheetNum = 1;
                 foreach (var sheetEntry in sheetEntries)
                 {
-                    sb.AppendLine(string.Format("--- Sheet {0} ---", sheetNum++));
+                    // Resolve sheet name: use real name if available, fall back to ordinal
+                    string sheetName;
+                    if (sheetNum - 1 < sheetNames.Count && !string.IsNullOrEmpty(sheetNames[sheetNum - 1]))
+                    {
+                        sheetName = sheetNames[sheetNum - 1];
+                    }
+                    else
+                    {
+                        sheetName = string.Format("Sheet {0}", sheetNum);
+                    }
+
+                    sb.AppendLine(string.Format("--- {0} ---", sheetName));
                     using (var stream = sheetEntry.Open())
                     {
                         var doc = XDocument.Load(stream);
@@ -195,6 +235,10 @@ namespace MSOfficeAIAssistant.Attachments
                             var cellValues = new List<string>();
                             foreach (var c in row.Descendants(s + "c"))
                             {
+                                string cellAddr = (string)c.Attribute("r");
+                                if (string.IsNullOrEmpty(cellAddr))
+                                    continue;
+
                                 string type = (string)c.Attribute("t");
                                 string val = c.Element(s + "v") != null ? c.Element(s + "v").Value : string.Empty;
 
@@ -210,7 +254,7 @@ namespace MSOfficeAIAssistant.Attachments
 
                                 if (!string.IsNullOrEmpty(val))
                                 {
-                                    cellValues.Add(val);
+                                    cellValues.Add(string.Format("{0}={1}", cellAddr, val));
                                 }
                             }
                             if (cellValues.Count > 0)
@@ -219,6 +263,7 @@ namespace MSOfficeAIAssistant.Attachments
                             }
                         }
                     }
+                    sheetNum++;
                 }
             }
             return sb.ToString();

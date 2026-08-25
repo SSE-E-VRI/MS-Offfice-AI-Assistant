@@ -56,6 +56,8 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Data" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="System.Security" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Xml.Linq" />
@@ -102,6 +104,7 @@
     <Compile Include="XamlLoadTests.cs" />
     <Compile Include="AssistantSessionModeTests.cs" />
     <Compile Include="ResponseCardCategoryTests.cs" />
+    <Compile Include="AttachmentExtractorProvenanceTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
