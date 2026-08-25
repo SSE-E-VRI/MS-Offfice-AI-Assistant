@@ -21,7 +21,9 @@ namespace MSOfficeAIAssistant.Tests
             TestExecuteAllStopsAtAwaitingApprovalStep();
             TestExecuteAllStopsAtFailedStep();
             TestRollbackAllDelegatesAndSetsStateRolledBack();
+            TestRollbackAllHealsActionStatusAfterRoundTripAndUpdatesPlanStep();
             TestBusyRetryableStateRetriesUpTo3Times();
+            TestPostVerifyNonRetryableFailureSetsExecutorFailed();
 
             Console.WriteLine("All PlanExecutor State Machine tests passed!");
         }
@@ -367,66 +369,187 @@ namespace MSOfficeAIAssistant.Tests
             // Executor state should be RolledBack
             Assert(executor.State == PlanExecutionState.RolledBack, "Executor state should be RolledBack after successful RollbackAll");
 
+            // PlanStep status must track the action-level rollback
+            Assert(step1.Status == PlanStepStatus.RolledBack,
+                "PlanStep.Status should be RolledBack after successful RollbackAll");
+
             Console.WriteLine("  [PASS] RollbackAll delegates to RollbackExecutor.RollbackBatch and sets state to RolledBack");
         }
 
-        private static void TestBusyRetryableStateRetriesUpTo3Times()
+        private static void TestRollbackAllHealsActionStatusAfterRoundTripAndUpdatesPlanStep()
         {
-            // KNOWN GAP: ExcelController.ExecuteWriteFormula is not virtual, so this suite
-            // cannot override it to force ToolRegistry.Execute to return a HostBusyRetryable
-            // HostOperationResult (0x800AC472) without widening this task's scope into a host
-            // controller file, which is out of scope here. This test can therefore only exercise
-            // PlanExecutor.ExecuteStep against a genuinely failing headless call (null COM app)
-            // and confirm it reaches a terminal state - it does NOT prove the retry-3-times count
-            // in PlanExecutor.ExecuteStep's while loop is correct. That loop was read and
-            // verified by code review (const maxRetries = 3, Thread.Sleep(retryDelayMs) between
-            // attempts, terminal Failed after the 3rd), but is not mechanically guarded by a
-            // test. A follow-up making ExecuteWriteFormula virtual (mirroring the PowerPoint
-            // Tier-1 D-13 pattern) would let a future suite assert the exact retry count.
+            // OfficeAction.Status was historically [JsonIgnore]; even with serialization fixed,
+            // PlanStep.Status is the plan-level authority. Simulate a stale Action.Status=Pending
+            // while PlanStep is Applied (the post-round-trip footgun) and confirm RollbackAll
+            // still rolls back rather than silently succeeding with "No applied actions".
             var plan = new Plan();
-
+            var action = new OfficeAction
+            {
+                ActionId = "act-heal",
+                Host = "Excel",
+                Operation = "excel.write_formula",
+                Target = new ActionTarget { Range = "B2" },
+                Status = OfficeActionStatus.Pending, // stale — as if JsonIgnore wiped Applied
+                Rollback = new RollbackInfo("mock_success")
+                {
+                    IsRollbackPossible = true,
+                    CapturedAt = DateTime.UtcNow
+                }
+            };
             var step = new PlanStep
             {
-                StepId = "step-1",
+                StepId = "step-heal",
                 Order = 1,
-                Description = "Test busy retry (terminal-state only, see gap note above)",
-                Action = new OfficeAction
-                {
-                    ActionId = "act-1",
-                    Host = "Excel",
-                    Operation = "excel.write_formula",
-                    Target = new ActionTarget { Range = "C5" },
-                    Parameters = new Dictionary<string, object> { { "formula", "=2+2" } },
-                    RiskLevel = 2,
-                    RequiresApproval = false
-                },
+                Description = "Applied step with stale Action.Status",
+                Action = action,
                 TargetHost = "Excel",
-                // Approved: excel.write_formula always requires approval per the registry - see
-                // the comment in TestPreVerifyValidationErrorMarksStepFailed.
-                Status = PlanStepStatus.Approved
+                Status = PlanStepStatus.Applied
             };
             plan.Steps.Add(step);
 
             var executor = new PlanExecutor(plan, new ExcelController(null));
+            var result = executor.RollbackAll();
 
+            Assert(result.Success, "RollbackAll should succeed after healing Action.Status from PlanStep");
+            Assert(action.Status == OfficeActionStatus.RolledBack,
+                "Action.Status should be RolledBack after mock rollback");
+            Assert(step.Status == PlanStepStatus.RolledBack,
+                "PlanStep.Status should be RolledBack after successful RollbackAll");
+            Assert(executor.State == PlanExecutionState.RolledBack,
+                "Executor state should be RolledBack");
+            Assert(result.ErrorMessage == null || !result.ErrorMessage.Contains("No applied actions"),
+                "Must not silently no-op with 'No applied actions' when PlanStep is Applied");
+
+            Console.WriteLine("  [PASS] RollbackAll heals stale Action.Status from PlanStep and updates PlanStep to RolledBack");
+        }
+
+        private static void TestBusyRetryableStateRetriesUpTo3Times()
+        {
+            // powerpoint.set_notes is RiskLevel 1, so ExecuteStep skips the RiskLevel>=2
+            // BeforeState capture gate that blocks excel.write_formula under a null COM app.
+            // SetSpeakerNotesForSlide is virtual — a test subclass can throw COMException
+            // 0x800AC472 so PostVerify returns HostBusyRetryable and the retry loop runs.
+            var controller = new BusyRetryPowerPointController();
+            var plan = new Plan();
+            var step = new PlanStep
+            {
+                StepId = "step-busy",
+                Order = 1,
+                Description = "Force HostBusyRetryable via subclassed PowerPointController",
+                Action = new OfficeAction
+                {
+                    ActionId = "act-busy",
+                    Host = "PowerPoint",
+                    Operation = "powerpoint.set_notes",
+                    Target = new ActionTarget { Slide = 1 },
+                    Parameters = new Dictionary<string, object> { { "slide", 1 }, { "notes", "retry me" } }
+                },
+                TargetHost = "PowerPoint",
+                Status = PlanStepStatus.Approved
+            };
+            plan.Steps.Add(step);
+
+            var executor = new PlanExecutor(plan, controller);
             var result = executor.ExecuteStep(1);
 
-            Assert(step.Status != PlanStepStatus.Pending, "Step should not remain Pending after ExecuteStep");
-            Assert(step.Status == PlanStepStatus.Failed || step.Status == PlanStepStatus.Applied,
-                "Step should be in terminal state (Applied or Failed)");
-            // With a headless (null app) controller, ExecuteWriteFormula reports failure without
-            // the 0x800AC472 busy HRESULT, so PostVerify's outcome is a genuine (non-retryable)
-            // failure, not HostBusyRetryable. This is the one test in this suite that reaches
-            // the PostVerify-failure branch of ExecuteStep (as opposed to the PreVerify-invalid
-            // branch, which TestExecuteAllStopsAtFailedStep already covers) - it is the only
-            // coverage for that branch's own _state = PlanExecutionState.Failed assignment.
-            if (step.Status == PlanStepStatus.Failed)
+            Assert(controller.CallCount == 3,
+                string.Format("ExecuteStep must retry exactly 3 times on HostBusyRetryable, got {0}", controller.CallCount));
+            Assert(step.Status == PlanStepStatus.Failed,
+                "Step should be Failed after exhausting HostBusyRetryable retries");
+            Assert(executor.State == PlanExecutionState.Failed,
+                "Executor state should be Failed after retry exhaustion");
+            Assert(!result.Success, "ExecuteStep should report failure after retry exhaustion");
+            Assert(step.ErrorMessage != null && step.ErrorMessage.Contains("retries"),
+                "ErrorMessage should mention retries");
+
+            Console.WriteLine("  [PASS] HostBusyRetryable path retries exactly 3 times then marks Failed");
+        }
+
+        private static void TestPostVerifyNonRetryableFailureSetsExecutorFailed()
+        {
+            // Covers the PostVerify non-retryable failure branch (distinct from HostBusyRetryable
+            // retry exhaustion). SetSpeakerNotesForSlide returning false yields ErrorCode 0,
+            // which PostVerify classifies as ExecutionError — not HostBusyRetryable.
+            var controller = new NonRetryFailPowerPointController();
+            var plan = new Plan();
+            var step = new PlanStep
             {
-                Assert(executor.State == PlanExecutionState.Failed,
-                    "Executor state should be Failed when PostVerify reports the step failed");
+                StepId = "step-postverify",
+                Order = 1,
+                Description = "Non-retryable PostVerify failure",
+                Action = new OfficeAction
+                {
+                    ActionId = "act-pv",
+                    Host = "PowerPoint",
+                    Operation = "powerpoint.set_notes",
+                    Target = new ActionTarget { Slide = 1 },
+                    Parameters = new Dictionary<string, object> { { "slide", 1 }, { "notes", "x" } }
+                },
+                TargetHost = "PowerPoint",
+                Status = PlanStepStatus.Approved
+            };
+            plan.Steps.Add(step);
+
+            // Step 2 must not run if ExecuteAll halts on _state=Failed from step 1
+            var step2 = new PlanStep
+            {
+                StepId = "step-after",
+                Order = 2,
+                Description = "Must remain Pending",
+                TargetHost = "PowerPoint",
+                Status = PlanStepStatus.Pending
+            };
+            plan.Steps.Add(step2);
+
+            var executor = new PlanExecutor(plan, controller);
+            executor.ExecuteAll(null);
+
+            Assert(controller.CallCount == 1, "Non-retryable failure must not retry");
+            Assert(step.Status == PlanStepStatus.Failed, "Step 1 should be Failed");
+            Assert(executor.State == PlanExecutionState.Failed,
+                "Executor _state must be Failed so ExecuteAll halts (PostVerify non-retryable branch)");
+            Assert(step2.Status == PlanStepStatus.Pending,
+                "ExecuteAll must not continue past PostVerify non-retryable failure");
+
+            Console.WriteLine("  [PASS] PostVerify non-retryable failure sets executor Failed and halts ExecuteAll");
+        }
+
+        /// <summary>
+        /// Test double: SetSpeakerNotesForSlide is virtual on PowerPointController.
+        /// Throws 0x800AC472 so ActionVerifier.PostVerify classifies HostBusyRetryable.
+        /// </summary>
+        private class BusyRetryPowerPointController : PowerPointController
+        {
+            public int CallCount;
+
+            public BusyRetryPowerPointController()
+                : base(null)
+            {
             }
 
-            Console.WriteLine("  [PASS] Step reaches terminal state after ExecuteStep, executor state tracks PostVerify failure (retry-count itself verified by code review, see gap note)");
+            public override bool SetSpeakerNotesForSlide(int slideNumber, string notes)
+            {
+                CallCount++;
+                throw new System.Runtime.InteropServices.COMException(
+                    "Excel busy",
+                    unchecked((int)0x800AC472));
+            }
+        }
+
+        private class NonRetryFailPowerPointController : PowerPointController
+        {
+            public int CallCount;
+
+            public NonRetryFailPowerPointController()
+                : base(null)
+            {
+            }
+
+            public override bool SetSpeakerNotesForSlide(int slideNumber, string notes)
+            {
+                CallCount++;
+                return false;
+            }
         }
     }
 }

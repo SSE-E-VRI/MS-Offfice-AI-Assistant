@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.Actions;
 
 namespace MSOfficeAIAssistant.Core.Planning
@@ -97,7 +98,11 @@ namespace MSOfficeAIAssistant.Core.Planning
 
         /// <summary>
         /// Determines if a plan can be executed without any approval gates.
-        /// Returns true only if every Pending step has Action == null OR Action.RiskLevel == 0.
+        /// Returns true only if every Pending step is reasoning-only OR resolves via ToolRegistry
+        /// to RiskLevel 0 / RequiresApproval false. Action.RiskLevel on the object is NOT trusted
+        /// — ActionVerifier.PreVerify re-synchronizes from ToolRegistry on every execute, so this
+        /// gate must use the same source of truth or it can falsely report auto-runnable and skip
+        /// approval for a live RiskLevel >= 1 mutation.
         /// </summary>
         /// <param name="plan">The plan to check</param>
         /// <returns>True if the entire plan is safe to auto-run; false if any risk >= 1 action is pending</returns>
@@ -113,10 +118,13 @@ namespace MSOfficeAIAssistant.Core.Planning
                 // Reasoning-only steps are safe
                 if (step.IsReasoningOnly) continue;
 
-                // Action steps with RiskLevel 0 are safe
-                if (step.Action != null && step.Action.RiskLevel == 0) continue;
+                if (step.Action == null) continue;
 
-                // Any other case is unsafe (RiskLevel >= 1)
+                // Authoritative risk from ToolRegistry (same SSOT PreVerify uses). Unresolved
+                // operations are not auto-runnable.
+                var tool = ToolRegistry.GetTool(step.Action.Operation, step.Action.Host);
+                if (tool != null && tool.RiskLevel == 0 && !tool.RequiresApproval) continue;
+
                 return false;
             }
 
