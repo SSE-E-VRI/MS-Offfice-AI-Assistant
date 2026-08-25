@@ -109,6 +109,109 @@ namespace MSOfficeAIAssistant.Tests
             var imageNotFoundRes = ctrl.ExecuteInsertImage("C:\\non_existent_file_path_12345.png");
             Assert(!imageNotFoundRes.Success, "ExecuteInsertImage on non-existent file should fail");
             Assert(imageNotFoundRes.ErrorMessage.Contains("not found"), "Expected file not found message");
+
+            // D-13 Tier 1: Test new Execute* wrappers with validation failures and headless operation
+            TestExecuteMoveSlideResults(ctrl);
+            TestExecuteCreateSectionResults(ctrl);
+            TestExecuteRenameSectionResults(ctrl);
+            TestExecuteSetSpeakerNotesResults(ctrl);
+        }
+
+        private static void TestExecuteMoveSlideResults(PowerPointController ctrl)
+        {
+            // Validation: invalid source slide
+            var invalidSrcRes = ctrl.ExecuteMoveSlide(0, 5);
+            Assert(!invalidSrcRes.Success, "ExecuteMoveSlide(0, 5) should fail validation");
+            Assert(invalidSrcRes.ErrorMessage.Contains("at least 1"), "Expected validation message for source slide");
+
+            // Validation: invalid destination slide
+            var invalidTgtRes = ctrl.ExecuteMoveSlide(5, -1);
+            Assert(!invalidTgtRes.Success, "ExecuteMoveSlide(5, -1) should fail validation");
+            Assert(invalidTgtRes.ErrorMessage.Contains("at least 1"), "Expected validation message for destination slide");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteMoveSlide(1, 2);
+            Assert(!headlessRes.Success, "ExecuteMoveSlide(1, 2) on null app should fail cleanly");
+            Assert(headlessRes.ErrorMessage.Contains("Failed"), "Expected failure message for headless operation");
+
+            // Exception path: Mock controller that throws to force outer catch
+            var throwingCtrl = new ThrowingMoveSlideController();
+            var exceptionRes = throwingCtrl.ExecuteMoveSlide(1, 2);
+            Assert(!exceptionRes.Success, "ExecuteMoveSlide should fail when MoveSlide throws");
+            Assert(exceptionRes.ErrorCode != 0, "Expected non-zero ErrorCode (HRESULT) when exception caught");
+            Assert(exceptionRes.ErrorMessage.Contains("ExecuteMoveSlide"), "Expected operation name in error message");
+        }
+
+        private static void TestExecuteCreateSectionResults(PowerPointController ctrl)
+        {
+            // Validation: empty section name
+            var emptyNameRes = ctrl.ExecuteCreateSectionBeforeSlide("", 3);
+            Assert(!emptyNameRes.Success, "ExecuteCreateSectionBeforeSlide(empty, 3) should fail");
+            Assert(emptyNameRes.ErrorMessage.Contains("empty"), "Expected validation message for section name");
+
+            // Validation: invalid slide number
+            var invalidSlideRes = ctrl.ExecuteCreateSectionBeforeSlide("New Section", 0);
+            Assert(!invalidSlideRes.Success, "ExecuteCreateSectionBeforeSlide('New Section', 0) should fail");
+            Assert(invalidSlideRes.ErrorMessage.Contains("at least 1"), "Expected validation message for slide number");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteCreateSectionBeforeSlide("New Section", 3);
+            Assert(!headlessRes.Success, "ExecuteCreateSectionBeforeSlide on null app should fail cleanly");
+
+            // Exception path: Mock controller that throws to force outer catch
+            var throwingCtrl = new ThrowingCreateSectionController();
+            var exceptionRes = throwingCtrl.ExecuteCreateSectionBeforeSlide("New Section", 1);
+            Assert(!exceptionRes.Success, "ExecuteCreateSectionBeforeSlide should fail when CreateSectionBeforeSlide throws");
+            Assert(exceptionRes.ErrorCode != 0, "Expected non-zero ErrorCode (HRESULT) when exception caught");
+            Assert(exceptionRes.ErrorMessage.Contains("ExecuteCreateSectionBeforeSlide"), "Expected operation name in error message");
+        }
+
+        private static void TestExecuteRenameSectionResults(PowerPointController ctrl)
+        {
+            // Validation: invalid section index
+            var invalidIndexRes = ctrl.ExecuteRenameSectionInPlace(0, "Renamed");
+            Assert(!invalidIndexRes.Success, "ExecuteRenameSectionInPlace(0, 'Renamed') should fail");
+            Assert(invalidIndexRes.ErrorMessage.Contains("at least 1"), "Expected validation message for section index");
+
+            // Validation: empty section name
+            var emptyNameRes = ctrl.ExecuteRenameSectionInPlace(1, "");
+            Assert(!emptyNameRes.Success, "ExecuteRenameSectionInPlace(1, empty) should fail");
+            Assert(emptyNameRes.ErrorMessage.Contains("empty"), "Expected validation message for section name");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteRenameSectionInPlace(1, "Renamed");
+            Assert(!headlessRes.Success, "ExecuteRenameSectionInPlace on null app should fail cleanly");
+
+            // Exception path: Mock controller that throws to force outer catch
+            var throwingCtrl = new ThrowingRenameSectionController();
+            var exceptionRes = throwingCtrl.ExecuteRenameSectionInPlace(1, "Renamed");
+            Assert(!exceptionRes.Success, "ExecuteRenameSectionInPlace should fail when RenameSection throws");
+            Assert(exceptionRes.ErrorCode != 0, "Expected non-zero ErrorCode (HRESULT) when exception caught");
+            Assert(exceptionRes.ErrorMessage.Contains("ExecuteRenameSectionInPlace"), "Expected operation name in error message");
+        }
+
+        private static void TestExecuteSetSpeakerNotesResults(PowerPointController ctrl)
+        {
+            // Validation: invalid slide number
+            var invalidSlideRes = ctrl.ExecuteSetSpeakerNotesInPlace(-1, "Speaker notes");
+            Assert(!invalidSlideRes.Success, "ExecuteSetSpeakerNotesInPlace(-1, notes) should fail");
+            Assert(invalidSlideRes.ErrorMessage.Contains("at least 1"), "Expected validation message for slide number");
+
+            // Validation: empty notes
+            var emptyNotesRes = ctrl.ExecuteSetSpeakerNotesInPlace(1, "");
+            Assert(!emptyNotesRes.Success, "ExecuteSetSpeakerNotesInPlace(1, empty) should fail");
+            Assert(emptyNotesRes.ErrorMessage.Contains("empty"), "Expected validation message for notes");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteSetSpeakerNotesInPlace(1, "Speaker notes");
+            Assert(!headlessRes.Success, "ExecuteSetSpeakerNotesInPlace on null app should fail cleanly");
+
+            // Exception path: Mock controller that throws to force outer catch
+            var throwingCtrl = new ThrowingSetSpeakerNotesController();
+            var exceptionRes = throwingCtrl.ExecuteSetSpeakerNotesInPlace(1, "Speaker notes");
+            Assert(!exceptionRes.Success, "ExecuteSetSpeakerNotesInPlace should fail when SetSpeakerNotesForSlide throws");
+            Assert(exceptionRes.ErrorCode != 0, "Expected non-zero ErrorCode (HRESULT) when exception caught");
+            Assert(exceptionRes.ErrorMessage.Contains("ExecuteSetSpeakerNotesInPlace"), "Expected operation name in error message");
         }
 
         private static void Assert(bool condition, string message)
@@ -117,6 +220,47 @@ namespace MSOfficeAIAssistant.Tests
             {
                 throw new Exception("Assertion failed: " + message);
             }
+        }
+    }
+
+    // Mock controller subclasses that throw exceptions to force Execute* catch blocks (Rule 10 validation)
+    internal class ThrowingMoveSlideController : PowerPointController
+    {
+        public ThrowingMoveSlideController() : base(new object()) { }
+
+        public override bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
+        {
+            throw new System.Runtime.InteropServices.COMException("Mock COM exception for MoveSlide", unchecked((int)0x800AC472));
+        }
+    }
+
+    internal class ThrowingCreateSectionController : PowerPointController
+    {
+        public ThrowingCreateSectionController() : base(new object()) { }
+
+        public override bool CreateSectionBeforeSlide(string sectionName, int slideNumber)
+        {
+            throw new System.Runtime.InteropServices.COMException("Mock COM exception for CreateSectionBeforeSlide", unchecked((int)0x800AC472));
+        }
+    }
+
+    internal class ThrowingRenameSectionController : PowerPointController
+    {
+        public ThrowingRenameSectionController() : base(new object()) { }
+
+        public override bool RenameSection(int sectionIndex, string sectionName)
+        {
+            throw new System.Runtime.InteropServices.COMException("Mock COM exception for RenameSection", unchecked((int)0x800AC472));
+        }
+    }
+
+    internal class ThrowingSetSpeakerNotesController : PowerPointController
+    {
+        public ThrowingSetSpeakerNotesController() : base(new object()) { }
+
+        public override bool SetSpeakerNotesForSlide(int slideNumber, string notes)
+        {
+            throw new System.Runtime.InteropServices.COMException("Mock COM exception for SetSpeakerNotesForSlide", unchecked((int)0x800AC472));
         }
     }
 }
