@@ -577,6 +577,98 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        public HostOperationResult ExecuteMoveSlide(int sourceSlideNumber, int destinationSlideNumber)
+        {
+            if (sourceSlideNumber < 1)
+                return HostOperationResult.Failed("Source slide number must be at least 1.", 0, "Slide " + sourceSlideNumber);
+
+            if (destinationSlideNumber < 1)
+                return HostOperationResult.Failed("Destination slide number must be at least 1.", 0, "Slide " + destinationSlideNumber);
+
+            try
+            {
+                bool ok = MoveSlide(sourceSlideNumber, destinationSlideNumber);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Moved slide {0} to position {1}", sourceSlideNumber, destinationSlideNumber), "Slide " + destinationSlideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to move slide {0} to position {1}", sourceSlideNumber, destinationSlideNumber), 0, "Slide " + destinationSlideNumber);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteMoveSlide failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteMoveSlide", "Slide " + destinationSlideNumber);
+            }
+        }
+
+        public HostOperationResult ExecuteCreateSectionBeforeSlide(string sectionName, int slideNumber)
+        {
+            if (string.IsNullOrWhiteSpace(sectionName))
+                return HostOperationResult.Failed("Section name cannot be empty.", 0, "Slide " + slideNumber);
+
+            if (slideNumber < 1)
+                return HostOperationResult.Failed("Slide number must be at least 1.", 0, "Slide " + slideNumber);
+
+            try
+            {
+                bool ok = CreateSectionBeforeSlide(sectionName, slideNumber);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Created section '{0}' before slide {1}", sectionName, slideNumber), "Slide " + slideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to create section '{0}' before slide {1}", sectionName, slideNumber), 0, "Slide " + slideNumber);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteCreateSectionBeforeSlide failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteCreateSectionBeforeSlide", "Slide " + slideNumber);
+            }
+        }
+
+        public HostOperationResult ExecuteRenameSectionInPlace(int sectionIndex, string sectionName)
+        {
+            if (sectionIndex < 1)
+                return HostOperationResult.Failed("Section index must be at least 1.", 0, "Section " + sectionIndex);
+
+            if (string.IsNullOrWhiteSpace(sectionName))
+                return HostOperationResult.Failed("New section name cannot be empty.", 0, "Section " + sectionIndex);
+
+            try
+            {
+                bool ok = RenameSection(sectionIndex, sectionName);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Renamed section {0} to '{1}'", sectionIndex, sectionName), "Section " + sectionIndex);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to rename section {0} to '{1}'", sectionIndex, sectionName), 0, "Section " + sectionIndex);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteRenameSectionInPlace failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteRenameSectionInPlace", "Section " + sectionIndex);
+            }
+        }
+
+        public HostOperationResult ExecuteSetSpeakerNotesInPlace(int slideNumber, string notes)
+        {
+            if (slideNumber < 1)
+                return HostOperationResult.Failed("Slide number must be at least 1.", 0, "Slide " + slideNumber);
+
+            if (string.IsNullOrWhiteSpace(notes))
+                return HostOperationResult.Failed("Speaker notes cannot be empty.", 0, "Slide " + slideNumber);
+
+            try
+            {
+                bool ok = SetSpeakerNotesForSlide(slideNumber, notes);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Set speaker notes on slide {0}", slideNumber), "Slide " + slideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to set speaker notes on slide {0}", slideNumber), 0, "Slide " + slideNumber);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteSetSpeakerNotesInPlace failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteSetSpeakerNotesInPlace", "Slide " + slideNumber);
+            }
+        }
+
         public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
             try

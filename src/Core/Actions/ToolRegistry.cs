@@ -348,10 +348,7 @@ namespace MSOfficeAIAssistant.Core
                     var p = (PowerPointController)ctrl;
                     int src = act.GetParameterInt("source");
                     int tgt = act.GetParameterInt("target");
-                    bool ok = p.MoveSlide(src, tgt);
-                    return ok
-                        ? HostOperationResult.Ok(string.Format("Moved slide {0} to {1}", src, tgt), "Slide " + tgt)
-                        : HostOperationResult.Failed(string.Format("Failed to move slide {0} to {1}", src, tgt));
+                    return p.ExecuteMoveSlide(src, tgt);
                 }));
 
             Register(new ToolDefinition("powerpoint.create_section", "PowerPoint", "Creates a named section header before a designated slide.", 2, true, true)
@@ -364,10 +361,7 @@ namespace MSOfficeAIAssistant.Core
                     var p = (PowerPointController)ctrl;
                     int s = act.Target != null && act.Target.Slide.HasValue ? act.Target.Slide.Value : act.GetParameterInt("slide");
                     string n = act.GetParameterString("name") ?? "Section";
-                    bool ok = p.CreateSectionBeforeSlide(n, s);
-                    return ok
-                        ? HostOperationResult.Ok(string.Format("Created section '{0}' before slide {1}", n, s), "Slide " + s)
-                        : HostOperationResult.Failed("Failed to create section.");
+                    return p.ExecuteCreateSectionBeforeSlide(n, s);
                 }));
 
             Register(new ToolDefinition("powerpoint.rename_section", "PowerPoint", "Renames an existing section header.", 2, true, true)
@@ -380,10 +374,7 @@ namespace MSOfficeAIAssistant.Core
                     var p = (PowerPointController)ctrl;
                     int s = act.GetParameterInt("section");
                     string n = act.GetParameterString("name") ?? "Section";
-                    bool ok = p.RenameSection(s, n);
-                    return ok
-                        ? HostOperationResult.Ok(string.Format("Renamed section {0} to '{1}'", s, n))
-                        : HostOperationResult.Failed("Failed to rename section.");
+                    return p.ExecuteRenameSectionInPlace(s, n);
                 }));
 
             Register(new ToolDefinition("powerpoint.set_notes", "PowerPoint", "Updates or appends speaker notes for a designated slide.", 1, true, true)
@@ -396,10 +387,7 @@ namespace MSOfficeAIAssistant.Core
                     var p = (PowerPointController)ctrl;
                     int s = act.Target != null && act.Target.Slide.HasValue ? act.Target.Slide.Value : act.GetParameterInt("slide");
                     string n = act.GetParameterString("notes") ?? act.ContentDisplay;
-                    bool ok = p.SetSpeakerNotesForSlide(s, n);
-                    return ok
-                        ? HostOperationResult.Ok(string.Format("Set speaker notes on slide {0}", s), "Slide " + s)
-                        : HostOperationResult.Failed("Failed to set speaker notes.");
+                    return p.ExecuteSetSpeakerNotesInPlace(s, n);
                 }));
 
             Register(new ToolDefinition("powerpoint.create_slide", "PowerPoint", "Inserts a new slide with structured title, bullets, and speaker notes.", 2, true, true)
