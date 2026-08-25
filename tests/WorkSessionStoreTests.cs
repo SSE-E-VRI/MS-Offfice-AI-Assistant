@@ -13,10 +13,75 @@ namespace MSOfficeAIAssistant.Tests
         public static void RunAll()
         {
             TestRoundTripWithPlan();
+            TestRoundTripPreservesPlanStepAndActionStatus();
             TestRoundTripWithNullPlan();
             TestListByDocumentKeyOrdering();
             TestDeleteSession();
             TestCorruptedFileHandling();
+        }
+
+        private static void TestRoundTripPreservesPlanStepAndActionStatus()
+        {
+            string tempDir = Path.Combine(Path.GetTempPath(), "test-worksession-status-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(tempDir);
+                var store = new WorkSessionStore(tempDir);
+
+                var plan = new Plan();
+                plan.Status = PlanStatus.Executing;
+
+                var appliedAction = new OfficeAction();
+                appliedAction.ActionId = Guid.NewGuid().ToString();
+                appliedAction.Host = "Excel";
+                appliedAction.Operation = "excel.write_formula";
+                appliedAction.Target = new ActionTarget { Range = "B2" };
+                appliedAction.Status = OfficeActionStatus.Applied;
+                appliedAction.Rollback = new RollbackInfo("mock_success");
+                appliedAction.Rollback.IsRollbackPossible = true;
+
+                var appliedStep = new PlanStep();
+                appliedStep.Order = 1;
+                appliedStep.Description = "Applied mutation";
+                appliedStep.TargetHost = "Excel";
+                appliedStep.Status = PlanStepStatus.Applied;
+                appliedStep.Action = appliedAction;
+                plan.Steps.Add(appliedStep);
+
+                var failedStep = new PlanStep();
+                failedStep.Order = 2;
+                failedStep.Description = "Failed step";
+                failedStep.TargetHost = "Word";
+                failedStep.Status = PlanStepStatus.Failed;
+                failedStep.ErrorMessage = "boom";
+                plan.Steps.Add(failedStep);
+
+                var session = new WorkSession();
+                session.DocumentKey = "StatusRoundTripDoc";
+                session.Title = "Status round-trip";
+                session.Plan = plan;
+                session.Status = "Failed";
+                session.SourceHosts = new List<string> { "Excel", "Word" };
+
+                store.Save(session);
+                var loaded = store.Load(session.WorkSessionId);
+
+                Assert(loaded != null && loaded.Plan != null, "Session and Plan loaded");
+                Assert(loaded.Plan.Status == PlanStatus.Executing, "PlanStatus enum round-trips");
+                Assert(loaded.Plan.Steps[0].Status == PlanStepStatus.Applied, "PlanStep Applied round-trips");
+                Assert(loaded.Plan.Steps[1].Status == PlanStepStatus.Failed, "PlanStep Failed round-trips");
+                Assert(loaded.Plan.Steps[1].ErrorMessage == "boom", "PlanStep ErrorMessage round-trips");
+                Assert(loaded.Plan.Steps[0].Action != null, "Action present after load");
+                Assert(loaded.Plan.Steps[0].Action.Status == OfficeActionStatus.Applied,
+                    "OfficeAction.Status must round-trip (required for RollbackAll after resume)");
+                Assert(loaded.Plan.Steps[0].Action.Rollback != null
+                    && loaded.Plan.Steps[0].Action.Rollback.IsRollbackPossible,
+                    "RollbackInfo survives round-trip");
+            }
+            finally
+            {
+                try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
+            }
         }
 
         private static void TestRoundTripWithPlan()

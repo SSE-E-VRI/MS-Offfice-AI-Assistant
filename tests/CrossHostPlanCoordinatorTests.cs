@@ -24,6 +24,8 @@ namespace MSOfficeAIAssistant.Tests
             TestComputeStatusForSingleHostCompleted();
             TestStepGatedForApprovalStopsExecutionOnCurrentHost();
             TestExecuteForCurrentHostStopsAtFailedStepOnCurrentHost();
+            TestPlanFullyCompleteFalseWhenSoleStepFailed();
+            TestPausedForDifferentHostFalseWhenCurrentHostStepFailed();
 
             Console.WriteLine("All CrossHostPlanCoordinator tests passed!");
         }
@@ -227,26 +229,21 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestPausedForDifferentHostResult()
         {
-            // Setup: 3-step plan (Excel, Word, Excel), execute on Excel
+            // Setup: Excel reasoning step Applied path, then Word pending.
+            // Use reasoning-only for the Excel step so execution actually succeeds on a
+            // headless controller — a real excel.write_formula Approved step fails at
+            // BeforeState capture and would make PausedForDifferentHost true for the WRONG
+            // reason (failure left Word as next pending). This test isolates the happy-path
+            // "Excel work done, pause for Word" signal.
             var plan = new Plan();
 
             var step1 = new PlanStep
             {
                 StepId = "step-1",
                 Order = 1,
-                Description = "Excel step",
-                Action = new OfficeAction
-                {
-                    ActionId = "act-1",
-                    Host = "Excel",
-                    Operation = "excel.write_formula",
-                    Target = new ActionTarget { Range = "B2" },
-                    Parameters = new Dictionary<string, object> { { "formula", "=1+1" } },
-                    RiskLevel = 2,
-                    RequiresApproval = false
-                },
+                Description = "Excel reasoning step (succeeds headless)",
                 TargetHost = "Excel",
-                Status = PlanStepStatus.Approved
+                Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step1);
 
@@ -273,6 +270,10 @@ namespace MSOfficeAIAssistant.Tests
             var executor = new PlanExecutor(plan, new ExcelController(null));
             var result = CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
 
+            Assert(step1.Status == PlanStepStatus.Applied,
+                "Excel step 1 must succeed (precondition — not a Failed-then-paused confusable)");
+            Assert(step3.Status == PlanStepStatus.Applied,
+                "Excel step 3 must succeed after skipping Word");
             Assert(result.PausedForDifferentHost,
                 "Result should indicate paused for different host");
             Assert(result.NextHost == "Word",
@@ -533,6 +534,89 @@ namespace MSOfficeAIAssistant.Tests
                 string.Format("ComputeStatus should return 'Failed', got: {0}", status));
 
             Console.WriteLine("  [PASS] ExecuteForCurrentHost stops at a Failed step on the current host, does not continue past it");
+        }
+
+        private static void TestPlanFullyCompleteFalseWhenSoleStepFailed()
+        {
+            // PlanFullyComplete must be false when the only step Failed — GetNextPendingHost
+            // returns null for Failed steps, which previously made PlanFullyComplete=true.
+            var plan = new Plan();
+            var step = new PlanStep
+            {
+                StepId = "step-1",
+                Order = 1,
+                Description = "Sole Excel step that fails headless",
+                Action = new OfficeAction
+                {
+                    ActionId = "act-1",
+                    Host = "Excel",
+                    Operation = "excel.write_formula",
+                    Target = new ActionTarget { Range = "B2" },
+                    Parameters = new Dictionary<string, object> { { "formula", "=1+1" } }
+                },
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Approved
+            };
+            plan.Steps.Add(step);
+
+            var executor = new PlanExecutor(plan, new ExcelController(null));
+            var result = CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
+
+            Assert(step.Status == PlanStepStatus.Failed, "Precondition: sole step Failed");
+            Assert(!result.PlanFullyComplete,
+                "PlanFullyComplete must be false when a step Failed");
+            Assert(!result.PausedForDifferentHost,
+                "PausedForDifferentHost must be false on failure");
+            Assert(result.NextHost == null,
+                "NextHost must be null when not paused for a different host");
+            Assert(result.StatusMessage == "Failed",
+                string.Format("StatusMessage should be Failed, got {0}", result.StatusMessage));
+
+            Console.WriteLine("  [PASS] PlanFullyComplete is false when the sole step Failed");
+        }
+
+        private static void TestPausedForDifferentHostFalseWhenCurrentHostStepFailed()
+        {
+            // After an Excel failure with a later Word Pending step, do NOT report
+            // PausedForDifferentHost — that would prompt a host switch while Excel failed.
+            var plan = new Plan();
+            plan.Steps.Add(new PlanStep
+            {
+                StepId = "step-1",
+                Order = 1,
+                Description = "Excel step that fails",
+                Action = new OfficeAction
+                {
+                    ActionId = "act-1",
+                    Host = "Excel",
+                    Operation = "excel.write_formula",
+                    Target = new ActionTarget { Range = "B2" },
+                    Parameters = new Dictionary<string, object> { { "formula", "=1" } }
+                },
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Approved
+            });
+            plan.Steps.Add(new PlanStep
+            {
+                StepId = "step-2",
+                Order = 2,
+                Description = "Word step still pending",
+                TargetHost = "Word",
+                Status = PlanStepStatus.Pending
+            });
+
+            var executor = new PlanExecutor(plan, new ExcelController(null));
+            var result = CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
+
+            Assert(plan.Steps[0].Status == PlanStepStatus.Failed, "Precondition: Excel step Failed");
+            Assert(!result.PausedForDifferentHost,
+                "Must not claim PausedForDifferentHost when current-host step Failed");
+            Assert(result.NextHost == null,
+                "NextHost must be null when PausedForDifferentHost is false");
+            Assert(result.StatusMessage == "Failed",
+                string.Format("StatusMessage should be Failed, got {0}", result.StatusMessage));
+
+            Console.WriteLine("  [PASS] PausedForDifferentHost is false when a current-host step Failed");
         }
     }
 }

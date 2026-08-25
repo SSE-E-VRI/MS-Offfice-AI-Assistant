@@ -131,8 +131,10 @@ namespace MSOfficeAIAssistant.Core.Actions
         [JsonProperty("evidence")]
         public List<EvidenceClaim> Evidence { get; set; }
 
-        // Execution & Presentation state
-        [JsonIgnore]
+        // Execution & Presentation state.
+        // Serialized so WorkSession round-trips preserve Applied/Failed/RolledBack for
+        // PlanExecutor.RollbackAll (RollbackBatch filters on OfficeActionStatus.Applied).
+        [JsonProperty("status")]
         public OfficeActionStatus Status
         {
             get { return _status; }

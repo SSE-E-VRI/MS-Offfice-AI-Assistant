@@ -132,12 +132,30 @@ namespace MSOfficeAIAssistant.Core.Planning
                 }
             }
 
-            // Determine the plan's next state
+            // Determine the plan's next state. A Failed step must never be reported as
+            // PlanFullyComplete (doc contract: complete only when every step is Applied/
+            // Skipped/RolledBack and none Failed) and must never set PausedForDifferentHost
+            // (that would prompt a host switch while an unresolved failure remains).
+            bool hasFailedStep = false;
+            foreach (var s in plan.Steps)
+            {
+                if (s.Status == PlanStepStatus.Failed)
+                {
+                    hasFailedStep = true;
+                    break;
+                }
+            }
+
             string nextHost = GetNextPendingHost(plan);
-            bool planFullyComplete = (nextHost == null);
+            bool planFullyComplete = (nextHost == null && !hasFailedStep);
             bool pausedForDifferentHost = false;
 
-            if (!planFullyComplete && !string.IsNullOrEmpty(nextHost) && nextHost != currentHost)
+            if (!hasFailedStep
+                && executor.State != PlanExecutionState.Failed
+                && executor.State != PlanExecutionState.AwaitingApproval
+                && !planFullyComplete
+                && !string.IsNullOrEmpty(nextHost)
+                && nextHost != currentHost)
             {
                 pausedForDifferentHost = true;
             }
