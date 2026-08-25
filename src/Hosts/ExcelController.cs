@@ -678,14 +678,6 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        public string CreatePreviewDescription(SpreadsheetAction action)
-        {
-            if (action == null) return "No spreadsheet action is available.";
-            string description = string.IsNullOrWhiteSpace(action.Description) ? "No additional description provided." : action.Description;
-            return string.Format("Excel will apply {0} to {1}.\n\nDescription: {2}\n\nConfiguration:\n{3}",
-                action.Type, action.Target, description, action.Content ?? string.Empty);
-        }
-
         private static string EnsureFormula(string content)
         {
             string formula = (content ?? string.Empty).Trim();
@@ -1246,44 +1238,6 @@ namespace MSOfficeAIAssistant.Hosts
             }
 
             return result;
-        }
-
-        public void WriteFormula(string formula, string cellAddress = null)
-        {
-            if (string.IsNullOrEmpty(formula)) return;
-
-            if (!string.IsNullOrEmpty(cellAddress) && !SpreadsheetActionParser.IsSafeTarget(cellAddress))
-            {
-                Logger.Warn(string.Format("ExcelController.WriteFormula: Rejected unsafe cell address: {0}", cellAddress));
-                return;
-            }
-
-            try
-            {
-                dynamic app = _rawAppObj;
-                if (app == null) return;
-
-                dynamic targetRange = null;
-                if (!string.IsNullOrEmpty(cellAddress))
-                {
-                    targetRange = app.ActiveSheet.Range(cellAddress);
-                }
-                else
-                {
-                    targetRange = app.Selection;
-                }
-
-                if (targetRange != null)
-                {
-                    if (!formula.StartsWith("=")) formula = "=" + formula;
-                    targetRange.Formula = formula;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("ExcelController.WriteFormula failed", ex);
-                throw;
-            }
         }
 
         public string GetActiveWorkbookName()
