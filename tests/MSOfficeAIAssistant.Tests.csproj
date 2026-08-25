@@ -97,6 +97,7 @@
     <Compile Include="PlannerTests.cs" />
     <Compile Include="WorkSessionStoreTests.cs" />
     <Compile Include="MarkdownHelperTests.cs" />
+    <Compile Include="PlanExecutorTests.cs" />
     <Compile Include="XamlLoadTests.cs" />
   </ItemGroup>
 
