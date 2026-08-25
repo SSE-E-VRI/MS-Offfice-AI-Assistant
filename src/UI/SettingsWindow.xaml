@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AI Assistant — Settings" Height="680" Width="520"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="{StaticResource SurfaceSubtleBrush}" FontFamily="Segoe UI" FontSize="13">
+        Background="{DynamicResource SurfaceSubtleBrush}" FontFamily="Segoe UI" FontSize="13">
     <Window.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
