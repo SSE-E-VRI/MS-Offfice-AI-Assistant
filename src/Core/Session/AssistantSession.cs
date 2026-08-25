@@ -12,6 +12,12 @@ using MSOfficeAIAssistant.Providers;
 
 namespace MSOfficeAIAssistant.Core.Session
 {
+    public class ActionGateResult
+    {
+        public bool Allowed { get; set; }
+        public string Reason { get; set; }
+    }
+
     public class PreparedPayload
     {
         public AIRequest Request { get; set; }
@@ -32,6 +38,7 @@ namespace MSOfficeAIAssistant.Core.Session
         private readonly StreamCoordinator _streamCoordinator;
         private string _hostType;
         private string _currentDocumentKey = "OfficeSession";
+        private SessionMode _mode = SessionMode.Edit;
 
         public ObservableCollection<ChatMessage> Messages
         {
@@ -58,6 +65,12 @@ namespace MSOfficeAIAssistant.Core.Session
         {
             get { return _currentDocumentKey; }
             set { _currentDocumentKey = value; }
+        }
+
+        public SessionMode Mode
+        {
+            get { return _mode; }
+            set { _mode = value; }
         }
 
         public AssistantSession(ChatOrchestrator orchestrator = null, ObservableCollection<ChatMessage> messages = null)
@@ -202,6 +215,29 @@ namespace MSOfficeAIAssistant.Core.Session
             {
                 Logger.Warn(string.Format("LoadConversationHistory failed: {0}", ex.Message));
             }
+        }
+
+        /// <summary>
+        /// Pure, testable gating method that determines if an action is allowed in the current session mode.
+        /// Returns an ActionGateResult indicating whether the action should proceed and, if not, why.
+        /// </summary>
+        public ActionGateResult IsActionAllowed(OfficeAction action)
+        {
+            if (action == null)
+            {
+                return new ActionGateResult { Allowed = true, Reason = null };
+            }
+
+            if (_mode == SessionMode.Chat && action.RiskLevel >= 1)
+            {
+                return new ActionGateResult
+                {
+                    Allowed = false,
+                    Reason = "Chat mode is read-only. Switch to Plan or Edit mode to apply this action."
+                };
+            }
+
+            return new ActionGateResult { Allowed = true, Reason = null };
         }
     }
 }

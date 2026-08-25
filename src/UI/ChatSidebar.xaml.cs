@@ -832,6 +832,15 @@ namespace MSOfficeAIAssistant.UI
         {
             if (action == null) return false;
 
+            var gate = _session.IsActionAllowed(action);
+            if (!gate.Allowed)
+            {
+                action.Status = OfficeActionStatus.Failed;
+                action.ErrorMessage = gate.Reason;
+                MessageBox.Show(gate.Reason, "Action Blocked by Chat Mode", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
             string host = !string.IsNullOrEmpty(action.Host) ? action.Host : _hostType;
 
             var pre = ActionVerifier.PreVerify(action, host);
@@ -1353,6 +1362,30 @@ namespace MSOfficeAIAssistant.UI
             {
                 ConfigManager.Instance.DefaultModel = selected.Trim();
                 ConfigManager.Instance.Save();
+            }
+        }
+
+        private void RdoChatMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_session != null)
+            {
+                _session.Mode = SessionMode.Chat;
+            }
+        }
+
+        private void RdoPlanMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_session != null)
+            {
+                _session.Mode = SessionMode.Plan;
+            }
+        }
+
+        private void RdoEditMode_Click(object sender, RoutedEventArgs e)
+        {
+            if (_session != null)
+            {
+                _session.Mode = SessionMode.Edit;
             }
         }
 
