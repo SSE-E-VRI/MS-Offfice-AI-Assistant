@@ -8,9 +8,15 @@
              xmlns:helpers="clr-namespace:MSOfficeAIAssistant.UI.Helpers"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="360"
-             Background="#FAFAFA" FontFamily="Segoe UI" FontSize="13">
+             Background="{StaticResource SurfaceMutedBrush}" FontFamily="Segoe UI" FontSize="13">
 
     <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme/Tokens.xaml"/>
+                <ResourceDictionary Source="Theme/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="InverseBoolToVisConverter" Invert="True"/>
 
@@ -19,6 +25,7 @@
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="8,4"/>
         </Style>
+        </ResourceDictionary>
     </UserControl.Resources>
 
     <Grid>
@@ -36,7 +43,7 @@
         </Grid.RowDefinitions>
 
         <!-- 1. Header -->
-        <Border Grid.Row="0" Background="#1E293B" Padding="12,10">
+        <Border Grid.Row="0" Background="{StaticResource InkBrush}" Padding="12,10">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -52,29 +59,29 @@
 
                 <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
                 <StackPanel Grid.Column="1" VerticalAlignment="Center" ToolTip="AI Assistant v0.5.0&#x0a;Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302">
-                    <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="#F8FAFC" FontSize="14"/>
-                    <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="#94A3B8"/>
+                    <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="{StaticResource SurfaceSubtleBrush}" FontSize="14"/>
+                    <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="{StaticResource InkFaintBrush}"/>
                 </StackPanel>
 
-                <Button x:Name="BtnAcceptRevisions" Grid.Column="2" Content="Accept" Background="Transparent" Foreground="#86EFAC"
+                <Button x:Name="BtnAcceptRevisions" Grid.Column="2" Content="Accept" Background="Transparent" Foreground="{StaticResource SuccessFaintBrush}"
                         ToolTip="Accept tracked AI edits in the selection, or all tracked edits" Click="BtnAcceptRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
-                <Button x:Name="BtnRejectRevisions" Grid.Column="3" Content="Reject" Background="Transparent" Foreground="#FCA5A5"
+                <Button x:Name="BtnRejectRevisions" Grid.Column="3" Content="Reject" Background="Transparent" Foreground="{StaticResource DangerFaintBrush}"
                         ToolTip="Reject tracked AI edits in the selection, or all tracked edits" Click="BtnRejectRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
-                <Button x:Name="BtnUndoChange" Grid.Column="4" Content="Undo" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnUndoChange" Grid.Column="4" Content="Undo" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="Undo the last Office change made by the assistant" Click="BtnUndoChange_Click" Margin="0,0,4,0" FontSize="11"/>
-                <Button x:Name="BtnActionHistory" Grid.Column="5" Content="Log" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnActionHistory" Grid.Column="5" Content="Log" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"/>
-                <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"/>
-                <Button x:Name="BtnSettings" Grid.Column="7" Content="&#x2699;" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnSettings" Grid.Column="7" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"/>
-                <Button x:Name="BtnHelp" Grid.Column="8" Content="?" Background="Transparent" Foreground="#CBD5E1"
+                <Button x:Name="BtnHelp" Grid.Column="8" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="4,0,0,0"/>
             </Grid>
         </Border>
 
         <!-- 2. Controls & Model Toolbar -->
-        <Border Grid.Row="1" Background="#F1F5F9" BorderBrush="#E2E8F0" BorderThickness="0,0,0,1" Padding="10,6">
+        <Border Grid.Row="1" Background="{StaticResource SurfaceAltBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -95,48 +102,60 @@
                 </ComboBox>
 
                 <CheckBox x:Name="ChkTrackChanges" Grid.Column="2" Content="Track edits"
-                          VerticalAlignment="Center" FontSize="11" Foreground="#475569" IsChecked="True"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" IsChecked="True"
                           ToolTip="When in Word, insert/rewrite responses as Track Changes."/>
             </Grid>
         </Border>
 
         <!-- 3. Chat Messages Area -->
-        <!-- NOTE: Virtualization is intentionally disabled (IsVirtualizing=False) for this version.
-     All message bubbles are realized at once. Enable virtualization in a future pass
-     if conversation history grows long. -->
-        <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto" 
+        <!-- Virtualized (D-7): messages realize/derealize as they scroll in/out of view.
+     VirtualizationMode=Standard (not Recycling) — message bubbles vary widely in height
+     (plain text vs. an action card with N sub-items), and container recycling across such
+     mismatched heights causes visible scroll jitter. ScrollUnit=Pixel keeps scrolling smooth
+     despite the height variance; CanContentScroll=True on the ScrollViewer is required for
+     the panel to actually virtualize instead of measuring every item up front. -->
+        <ScrollViewer x:Name="ChatScrollViewer" Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled" Padding="10,8"
                       CanContentScroll="True">
-            <ItemsControl x:Name="MessagesItemsControl" VirtualizingStackPanel.IsVirtualizing="False">
+            <ItemsControl x:Name="MessagesItemsControl"
+                          VirtualizingStackPanel.IsVirtualizing="True"
+                          VirtualizingStackPanel.VirtualizationMode="Standard"
+                          VirtualizingStackPanel.ScrollUnit="Pixel">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <VirtualizingStackPanel Orientation="Vertical"/>
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
                         <Grid Margin="0,6">
                             <!-- User Message Bubble (Right aligned) -->
-                            <Border x:Name="UserBubble" Background="#2563EB" CornerRadius="12,12,2,12" 
+                            <Border x:Name="UserBubble" Background="{StaticResource PrimaryBrush}" CornerRadius="12,12,2,12" 
                                     HorizontalAlignment="Right" MaxWidth="300" Padding="12,8"
                                     Visibility="{Binding IsUser, Converter={StaticResource BoolToVisConverter}}">
                                 <StackPanel>
-                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="#FFFFFF" FontSize="13"/>
-                                    <TextBlock Text="{Binding Timestamp, StringFormat=t}" FontSize="10" Foreground="#93C5FD" 
+                                    <TextBlock Text="{Binding Content}" TextWrapping="Wrap" Foreground="{StaticResource SurfaceBrush}" FontSize="13"/>
+                                    <TextBlock Text="{Binding Timestamp, StringFormat=t}" FontSize="10" Foreground="{StaticResource PrimaryFaintBrush}" 
                                                HorizontalAlignment="Right" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
 
                             <!-- AI Assistant Message Bubble (Left aligned) -->
                             <!-- Uses MarkdownHelper to render rich Markdown (.md) formatting natively in TextBlock -->
-                            <Border x:Name="AssistantBubble" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="1" 
+                            <Border x:Name="AssistantBubble" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" 
                                     CornerRadius="12,12,12,2" HorizontalAlignment="Left" MaxWidth="320" Padding="12,10"
                                     Visibility="{Binding IsAssistant, Converter={StaticResource BoolToVisConverter}}">
                                 <StackPanel>
-                                    <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}" 
-                                               TextWrapping="Wrap" Foreground="#1E293B" FontSize="13"
+                                    <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                                               helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                                               TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
                                                FontFamily="Segoe UI" LineHeight="20"/>
 
                                     <!-- Structured Office Action Cards (Single-Source Invariant §5.3) -->
                                     <ItemsControl ItemsSource="{Binding OfficeActions}" Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}" Margin="0,8,0,4">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Background="#F8FAFC" BorderBrush="#CBD5E1" BorderThickness="1" CornerRadius="6" Margin="0,3" Padding="8,6">
+                                                <Border Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6" Margin="0,3" Padding="8,6">
                                                     <Grid>
                                                         <Grid.RowDefinitions>
                                                             <RowDefinition Height="Auto"/>
@@ -150,25 +169,25 @@
 
                                                         <!-- Target & Type Badge -->
                                                         <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,3">
-                                                            <Border Background="#1E293B" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
-                                                                <TextBlock Text="{Binding TargetDisplay}" Foreground="#FFFFFF" FontSize="10" FontWeight="Bold"/>
+                                                            <Border Background="{StaticResource InkBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                                                <TextBlock Text="{Binding TargetDisplay}" Foreground="{StaticResource SurfaceBrush}" FontSize="10" FontWeight="Bold"/>
                                                             </Border>
-                                                            <Border Background="#E0E7FF" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
-                                                                <TextBlock Text="{Binding ActionBadge}" Foreground="#3730A3" FontSize="10" FontWeight="Bold"/>
+                                                            <Border Background="{StaticResource AccentSurfaceBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                                                <TextBlock Text="{Binding ActionBadge}" Foreground="{StaticResource AccentTextBrush}" FontSize="10" FontWeight="Bold"/>
                                                             </Border>
-                                                            <TextBlock Text="{Binding PreviewDescription}" FontSize="11" Foreground="#475569" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="{Binding PreviewDescription}" FontSize="11" Foreground="{StaticResource InkMutedBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                                                         </StackPanel>
 
                                                         <!-- Content Display -->
-                                                        <Border Grid.Row="1" Grid.Column="0" Background="#F1F5F9" CornerRadius="4" Padding="6,3" Margin="0,2,6,2"
+                                                        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SurfaceAltBrush}" CornerRadius="4" Padding="6,3" Margin="0,2,6,2"
                                                                 Visibility="{Binding HasContentDisplay, Converter={StaticResource BoolToVisConverter}}">
-                                                            <TextBlock Text="{Binding ContentDisplay}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="#0F172A" TextWrapping="Wrap"/>
+                                                            <TextBlock Text="{Binding ContentDisplay}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="{StaticResource InkStrongBrush}" TextWrapping="Wrap"/>
                                                         </Border>
 
                                                         <!-- The card is the action preview; applying always requires confirmation. -->
                                                         <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Review &amp; Apply"
-                                                                Background="#059669" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
-                                                                Padding="8,4" BorderBrush="#047857" BorderThickness="1" VerticalAlignment="Center"
+                                                                Background="{StaticResource SuccessBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                                                                Padding="8,4" BorderBrush="{StaticResource SuccessStrongBrush}" BorderThickness="1" VerticalAlignment="Center"
                                                                 Click="BtnApplyOfficeAction_Click" Tag="{Binding}"
                                                                 ToolTip="Review the proposed native Office change before applying"/>
 
@@ -182,30 +201,30 @@
                                     </ItemsControl>
 
                                     <!-- Apply All Office Actions Button -->
-                                    <Button Content="Review &amp; Apply All Actions" Background="#047857" Foreground="#FFFFFF"
+                                    <Button Content="Review &amp; Apply All Actions" Background="{StaticResource SuccessStrongBrush}" Foreground="{StaticResource SurfaceBrush}"
                                             FontSize="11" FontWeight="Bold" Padding="8,4" BorderThickness="0" Margin="0,4,0,4"
                                             Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}"
                                             Click="BtnApplyAllOfficeActions_Click"/>
 
                                     <!-- Action Bar below AI message -->
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                                        <Button Content="Copy" Background="#DBEAFE" Foreground="#1E3A8A" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="#93C5FD" BorderThickness="1"
+                                        <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
                                                 Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
-                                        <Button Content="Preview" Background="#F1F5F9" Foreground="#334155" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="#CBD5E1" BorderThickness="1" Margin="6,0,0,0"
+                                        <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
                                                 Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
-                                        <Button Content="Insert" Background="#1D4ED8" Foreground="#FFFFFF" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="#1E40AF" BorderThickness="1"
+                                        <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                                                Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
                                                 Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
 
                             <!-- System Message (Center aligned) -->
-                            <Border x:Name="SystemBubble" Background="#E2E8F0" CornerRadius="6" HorizontalAlignment="Center" 
+                            <Border x:Name="SystemBubble" Background="{StaticResource BorderBrush}" CornerRadius="6" HorizontalAlignment="Center" 
                                     Padding="8,4" Visibility="{Binding IsSystem, Converter={StaticResource BoolToVisConverter}}">
-                                <TextBlock Text="{Binding Content}" FontSize="11" Foreground="#475569" TextWrapping="Wrap" TextAlignment="Center"/>
+                                <TextBlock Text="{Binding Content}" FontSize="11" Foreground="{StaticResource InkMutedBrush}" TextWrapping="Wrap" TextAlignment="Center"/>
                             </Border>
                         </Grid>
                     </DataTemplate>
@@ -214,17 +233,17 @@
         </ScrollViewer>
 
         <!-- 4. Typing Indicator -->
-        <Border x:Name="TypingIndicator" Grid.Row="3" Background="#F8FAFC" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" 
+        <Border x:Name="TypingIndicator" Grid.Row="3" Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" 
                 Padding="12,6" Visibility="Collapsed">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="AI Assistant is generating..." FontStyle="Italic" FontSize="11" Foreground="#64748B" VerticalAlignment="Center"/>
-                <Button x:Name="BtnStopStreaming" Content="Stop" Background="#FEE2E2" Foreground="#DC2626" 
+                <TextBlock Text="AI Assistant is generating..." FontStyle="Italic" FontSize="11" Foreground="{StaticResource InkSubtleBrush}" VerticalAlignment="Center"/>
+                <Button x:Name="BtnStopStreaming" Content="Stop" Background="{StaticResource DangerSurfaceBrush}" Foreground="{StaticResource DangerBrush}" 
                         FontSize="11" FontWeight="Bold" Padding="8,2" Margin="12,0,0,0" Click="BtnStopStreaming_Click"/>
             </StackPanel>
         </Border>
 
         <!-- 5. Input Area -->
-        <Border Grid.Row="4" Background="#FFFFFF" BorderBrush="#E2E8F0" BorderThickness="0,1,0,0" Padding="10">
+        <Border Grid.Row="4" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10">
             <Grid>
                 <Grid.RowDefinitions>
                     <!-- Attachment Chips List -->
@@ -246,12 +265,12 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="4" 
+                            <Border Background="{StaticResource PrimarySurfaceFaintBrush}" BorderBrush="{StaticResource PrimaryBorderFaintBrush}" BorderThickness="1" CornerRadius="4" 
                                     Padding="6,3" Margin="0,0,6,4">
                                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                                     <TextBlock Text="{Binding DisplayIcon}" FontSize="12" Margin="0,0,4,0"/>
-                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="#1E3A8A" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
-                                    <Button Content="✕" Background="Transparent" Foreground="#94A3B8" FontSize="11" 
+                                    <TextBlock Text="{Binding DisplayName}" FontSize="11" Foreground="{StaticResource PrimaryTextBrush}" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
+                                    <Button Content="✕" Background="Transparent" Foreground="{StaticResource InkFaintBrush}" FontSize="11" 
                                             Margin="4,0,0,0" Padding="2,0" Cursor="Hand" Click="BtnRemoveAttachment_Click" ToolTip="Remove attachment"/>
                                 </StackPanel>
                             </Border>
@@ -260,25 +279,25 @@
                 </ItemsControl>
 
                 <!-- 1. Vision Capability Warning -->
-                <Border x:Name="VisionWarningBanner" Grid.Row="1" Background="#FEF3C7" BorderBrush="#FCD34D" BorderThickness="1" 
+                <Border x:Name="VisionWarningBanner" Grid.Row="1" Background="{StaticResource WarningSurfaceBrush}" BorderBrush="{StaticResource WarningBorderBrush}" BorderThickness="1" 
                         CornerRadius="4" Padding="6,4" Margin="0,0,0,6" Visibility="Collapsed">
                     <TextBlock Text="⚠ Selected model does not support image analysis. Images will be skipped." 
-                               FontSize="11" Foreground="#92400E" TextWrapping="Wrap"/>
+                               FontSize="11" Foreground="{StaticResource WarningTextBrush}" TextWrapping="Wrap"/>
                 </Border>
 
                 <!-- 2. Message Input Box -->
                 <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
-                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="#CBD5E1"
+                         TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="{StaticResource BorderStrongBrush}"
                          BorderThickness="1" FontSize="13" Focusable="True" IsTabStop="True" KeyDown="TxtInput_KeyDown"
                          PreviewMouseDown="TxtInput_PreviewMouseDown"
                          GotKeyboardFocus="TxtInput_GotKeyboardFocus" LostKeyboardFocus="TxtInput_LostKeyboardFocus"
                          ToolTip="Type your prompt here... (Ctrl+Enter to send)">
                     <TextBox.ContextMenu>
-                        <ContextMenu Background="#FFFFFF" BorderBrush="#CBD5E1" BorderThickness="1" Padding="2">
+                        <ContextMenu Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Padding="2">
                             <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X"/>
                             <MenuItem Command="ApplicationCommands.Copy" Header="Copy" InputGestureText="Ctrl+C"/>
                             <MenuItem Command="ApplicationCommands.Paste" Header="Paste" InputGestureText="Ctrl+V"/>
-                            <Separator Background="#E2E8F0"/>
+                            <Separator Background="{StaticResource BorderBrush}"/>
                             <MenuItem Command="ApplicationCommands.SelectAll" Header="Select All" InputGestureText="Ctrl+A"/>
                         </ContextMenu>
                     </TextBox.ContextMenu>
@@ -293,25 +312,25 @@
                     </Grid.ColumnDefinitions>
 
                     <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button x:Name="BtnAttach" Content="📎 Attach" Background="#F1F5F9" Foreground="#334155" 
+                        <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"/>
-                        <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="#F1F5F9" Foreground="#334155" 
+                        <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Summarize the selected text or document clearly."/>
-                        <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="#F1F5F9" Foreground="#334155" 
+                        <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Rewrite the selected text for improved clarity and tone."/>
-                        <Button x:Name="BtnQuickOutline" Content="Outline" Background="#F1F5F9" Foreground="#334155"
+                        <Button x:Name="BtnQuickOutline" Content="Outline" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow."/>
-                        <Button x:Name="BtnQuickActions" Content="Actions" Background="#F1F5F9" Foreground="#334155"
+                        <Button x:Name="BtnQuickActions" Content="Actions" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Extract decisions, action items, owners where stated, deadlines where stated, and risks. Do not invent owners or dates."/>
-                        <Button x:Name="BtnQuickReview" Content="Review" Background="#F1F5F9" Foreground="#334155"
+                        <Button x:Name="BtnQuickReview" Content="Review" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Click="BtnQuickAction_Click" Tag="Review this content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, also assess story flow and weak slides."/>
-                        <Button x:Name="BtnQuickDeck" Content="Build deck" Background="#F1F5F9" Foreground="#334155"
+                        <Button x:Name="BtnQuickDeck" Content="Build deck" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnQuickAction_Click" Tag="Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide."/>
-                        <Button x:Name="BtnInsertVisual" Content="Insert image" Background="#F1F5F9" Foreground="#334155"
+                        <Button x:Name="BtnInsertVisual" Content="Insert image" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"/>
                     </WrapPanel>
 
-                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="#2563EB" Foreground="#FFFFFF" 
+                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}" 
                             FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"/>
                 </Grid>
             </Grid>

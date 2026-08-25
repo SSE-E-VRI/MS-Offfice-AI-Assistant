@@ -350,6 +350,55 @@ asserts zero diff against this baseline to mechanistically verify behavior parit
 
 There is **no CI**.
 
+### 2.15 Design tokens (Phase 0.3)
+
+`src/UI/Theme/Tokens.xaml` (color primitives + semantic brushes) and `src/UI/Theme/Controls.xaml`
+(keyed Card/Badge/Chip/Button styles) are the first `ResourceDictionary` files in the repo. Both are
+merged into `ChatSidebar.xaml` and `SettingsWindow.xaml` via `MergedDictionaries` in each file's own
+`Resources` — there is no `App.xaml`/`Application` instance to host a global dictionary (this is a
+COM add-in hosted through `ElementHost`, not a standalone WPF app), so the merge is per-root-element
+by design. Every inlined hex literal in those two files was replaced 1:1 with a `{StaticResource}`
+token reference (mechanical substitution — same colors, same properties, same element order — so the
+`OfficeDockedPane` keyboard-hook HWND resolution in §2.3 is unaffected). `Controls.xaml` styles are
+all `x:Key`'d, not `TargetType`-implicit, and none are wired into existing controls yet, so merging
+it changes nothing visually; Phase A's visual design pass is expected to consume them.
+`MarkdownHelper.cs` mirrors the same six colors it needs as frozen `SolidColorBrush` statics
+(with a comment cross-referencing the `Tokens.xaml` keys) rather than loading the `ResourceDictionary`
+at runtime — it sits on the streaming hot path (see D-7 resolution above), and per-call XAML resource
+resolution has no reason to be on that path.
+
+### 2.16 ElementHost DPI awareness — investigated, not implemented (Phase 0.3)
+
+Per-Monitor v2 DPI handling was scoped as an *investigation* for Phase 0.3, not an implementation.
+Findings:
+
+- **DPI awareness is a process-level declaration**, made by whichever EXE calls
+  `SetProcessDpiAwarenessContext` (or carries the equivalent application manifest) before any window
+  is created. For this add-in, that process is **`EXCEL.EXE` / `WINWORD.EXE` / `POWERPNT.EXE`** — the
+  Office host — not `MSOfficeAIAssistant.dll`. A COM in-process server loaded into that host inherits
+  whatever DPI-awareness mode the host already declared; it cannot change it after the fact, and
+  `app.config` (checked — `src/app.config`, currently only `<startup>`) has no DPI-related element
+  that would do anything even if added, because `.config` files govern the CLR, not Win32 DPI
+  awareness, and are read by whichever process loads the CLR (the Office host) regardless.
+- Confirmed no DPI awareness is declared anywhere in this repo today: no manifest, no
+  `<application><windowsSettings>` block, no `SetProcessDpiAwarenessContext`/`SetProcessDPIAware`
+  call. Whatever the three hosting strategies render at currently comes entirely from the Office
+  host process's own DPI-awareness mode (Office itself has been Per-Monitor-v2-aware since fairly
+  recent 365 builds, System-DPI-aware on older ones) — this add-in has simply never had an opinion.
+- Where a real fix *would* live, if this add-in ever needs to react to a DPI change independent of
+  the host (e.g. dragging a floating `ChatFloatingWindow` between monitors with different scaling):
+  **`ElementHost`/WinForms DPI-change handling**, not process-level awareness. Concretely:
+  `OfficeDockedPane` (`Form`) and `ChatFloatingWindow` (`Form`) would need `AutoScaleMode` review and
+  a `WM_DPICHANGED` handler that re-applies `ElementHost.Font`/scaling and asks the child WPF
+  `HwndSource` to re-layout — WinForms `ElementHost` does not automatically rescale its hosted WPF
+  content on a monitor-to-monitor DPI change the way a native WPF window does. The native-CTP path
+  (`ICTPFactory.CreateCTP`, §2.3 strategy 2) is Office-managed chrome and is out of scope for any such
+  fix regardless — only the `OfficeDockedPane` and `ChatFloatingWindow` fallback paths would need it.
+- This is a self-contained slice (WinForms/ElementHost-specific, touches the same `Form` subclasses
+  as the load-bearing keyboard hook) and was deliberately **not** bundled into Phase 0.3 — it has no
+  dependency on the tokens/virtualization/markdown work done here and deserves its own careful pass
+  given `OfficeDockedPane`'s fragility (§2.3).
+
 ---
 
 ## 3. Feature status
@@ -391,8 +440,8 @@ There is **no CI**.
 | ~~D-4~~ | — | **RESOLVED.** Deleted orphaned `OutlookController.cs` and unified controller dispatch under `IOfficeHostController`. |
 | ~~D-5~~ | — | **RESOLVED.** All 4 allow-list sites unified to `ToolRegistry` (`PromptAssembler.cs`, `SpreadsheetActionParser.cs`, `PowerPointActionParser.cs`, `ExcelController.cs` execution dispatch via `ToolRegistry.Execute`). Eliminated 13-case hardcoded switch in `ExcelController`. |
 | ~~D-6~~ | — | **RESOLVED.** Session orchestration extracted from `ChatSidebar.xaml.cs` into `src/Core/Session/` (`AssistantSession`, `StreamCoordinator`, `PromptAssembler`). View code-behind handles rendering and HWND routing only. Headlessly verified with dedicated session tests and Golden Master hash gate. |
-| **D-7** | Low | Streaming re-parses the **entire** markdown string every 5th delta, and `VirtualizingStackPanel.IsVirtualizing` is explicitly `False` (`ChatSidebar.xaml:104`). Both degrade long conversations. |
-| **D-8** | Low | `MarkdownToFlowDocumentConverter` (`src/UI/Converters/MarkdownConverter.cs:12`) is fully written but referenced by nothing — dead code. Markdig is a live dependency used only for Word insertion. |
+| ~~D-7~~ | — | **RESOLVED (Phase 0.3).** `MessagesItemsControl` now virtualizes (`VirtualizingStackPanel.IsVirtualizing=True`, `VirtualizationMode=Standard`, `ScrollUnit=Pixel` — Recycling was tried first and produces visible scroll jitter because message bubbles vary widely in height, plain text vs. an action card with N sub-items; Standard avoids that at the cost of not reusing containers). `MarkdownHelper` (`src/UI/Helpers/MarkdownHelper.cs`) now renders incrementally while `ChatMessage.IsStreaming` is true — only newly-*completed* (newline-terminated) lines are parsed and appended; the trailing, possibly mid-marker line is deliberately held back. On stream end (`IsStreaming` flips false) it always does one full from-scratch re-parse, so final output is guaranteed identical to a single full parse regardless of chunk boundaries — verified by `tests/MarkdownHelperTests.cs`, including a fence-marker split mid-token. |
+| ~~D-8~~ | — | **RESOLVED (Phase 0.3).** Dead `MarkdownToFlowDocumentConverter` deleted from `src/UI/Converters/MarkdownConverter.cs` (kept `BooleanToVisibilityConverter`, which lives in the same file and *is* used). Its sole dependency, `Markdig.Wpf`, is now unused and was removed from the csproj and `packages.config`; core `Markdig` remains as a live dependency for `WordMarkdownRenderer`. |
 | **D-9** | Low | `RibbonCallback.OnTranslate` (`:121-151`) implements 9 languages but **has no corresponding ribbon XML** — orphaned and unreachable. |
 | **D-10** | Low | Dead methods with no callers: `ExcelController.CreatePreviewDescription` (duplicates the UI's own `DescribeSpreadsheetAction`), `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`. |
 | ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
@@ -559,8 +608,9 @@ clean core upon which doc-to-deck and subsequent phases are built.
    `SafeOfficeProbe<T>` helpers; mutations must never catch bare `Exception`.
 6. **Next Slice — From Document → Briefing Deck (Doc-to-Deck):** Build the "From document…" entry point and
    briefing deck generator directly on the clean `AssistantSession` core with a structured slide preview card.
-7. **Phase 0.3 — UI Foundation & Performance:** Design system (`Tokens.xaml` + `Controls.xaml`), Win32/ElementHost
-   DPI awareness handling, re-enable list virtualization, and incremental markdown rendering (D-7, D-8).
+7. **Phase 0.3 — UI Foundation & Performance:** Design system (`Tokens.xaml` + `Controls.xaml`),
+   re-enabled list virtualization, and incremental markdown rendering (D-7, D-8). Win32/ElementHost
+   Per-Monitor v2 DPI handling was investigated (§2.16) and deliberately deferred to its own slice.
 8. **Phase C — Safe Execution:** Unified JSON `OfficeAction` schema, single-source Tool Registry (D-5),
    risk levels 0–3, preview cards, post-execution verification engine, and before-state rollback.
 9. **Phase A / B / D — Copilot UX, Domain Packs & Multi-Step Planner:** Chat/Plan/Edit modes, context bar,
@@ -608,7 +658,7 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 | 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`88e58388...`) and `golden_master_baseline.txt` fixture committed to gate changes against byte-for-byte drift. | Verification Gate | Verified |
 | 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | Verified |
 | 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Verified |
-| 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; ElementHost DPI handling; re-enable list virtualization; incremental markdown. | D-7, D-8 | Planned |
+| 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; re-enabled list virtualization; incremental markdown. ElementHost Per-Monitor v2 DPI handling investigated (§2.16) and deliberately deferred — out of scope, host-process-level concern. | D-7, D-8 | Verified |
 | 0.4 | **Controller Interface:** `IOfficeHostController` over the three controllers, replacing common dispatch; deleted orphaned `OutlookController` (D-4). | D-4 | Verified |
 | 0.5 | **Provider Capabilities:** Add `StructuredOutput` / `ToolCalling` / `JsonMode` to `AICapabilities`; make `BuildPayload` extensible. | §2.5 | Verified |
 
