@@ -5,6 +5,7 @@
 *.userosscache
 *.sln.docstates
 *.userprefs
+*_wpftmp.csproj
 
 ## Build outputs
 [Bb]in/
