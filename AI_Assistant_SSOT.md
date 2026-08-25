@@ -423,7 +423,7 @@ Findings:
 | Context bar, source citations, response cards | Planned — Phase A |
 | Skills and domain packs | Planned — Phase B |
 | Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
-| Multi-step planner, cross-host workflows | Planned — Phase D |
+| Multi-step planner, cross-host workflows | Implemented (Phase D1–D4 complete: `Planner`, `PlanExecutor`, `CrossHostPlanCoordinator`, `WorkSession`; verified in `PlannerTests`, `PlanExecutorTests`, `CrossHostPlanCoordinatorTests`, `WorkSessionStoreTests`) |
 | Web search / external grounding | Deferred (Post-Phase D) — opt-in BYOK client-side search |
 | AI Pages, model routing, knowledge library, feedback capture | Not Implemented — deferred past Phase D |
 | GSSMS / CMMS / IoT / connectors / RAG | **Out of scope** (§1) |
@@ -709,7 +709,7 @@ domain rules demonstrably suppress invented references.
 
 **Exit:** All structured actions across Word, Excel, and PowerPoint are unified, risk-gated, verified, rollbackable in strict LIFO order, and audited with full forensic provenance.
 
-### Phase D — Agentic plan-then-execute (medium–high risk)
+### Phase D — Agentic plan-then-execute (medium–high risk) (Implemented & Verified in 4/4 Unit Suites)
 
 - **D1** `src/Core/Planning/` — Planner producing ordered `PlanStep`s bound to Tool Registry entries.
   Editable before any risk ≥1 action runs.
@@ -735,7 +735,7 @@ confirm-before-write), not against Copilot's feature list.
 | Rank | Feature | Verdict |
 |---|---|---|
 | 1 | **Doc-to-deck** | **Verified**. Attachment-sourced briefing generator, slide outline parser, preview dialog, and view-state guards active. |
-| 2 | **Word Review → native comments** | Build next. Genuinely new — `grep` finds **no** Comments API in any host controller. `Document.Comments.Add(Range, Text)` works from Office 2010 onward, and it is non-destructive, so it fits the existing safety model without new risk tiers. |
+| 2 | **Word Review → native comments** | **Implemented.** `WordController.ExecuteAddComment` wraps `Document.Comments.Add(Range, Text)`, risk-gated and tested (`HostOperationResultTests`). |
 | 3 | **`@` mention local files** | Same local grounding, better UX. Pure WPF work over `AttachmentExtractor`. Delivers the "Copilot `/file`" feel with no cloud dependency. Helps Word, Excel and doc-to-deck alike. |
 | 4 | Chart/Pivot "explain + suggest" | Cheap. Prompt work over the existing `excel_actions` chart/pivot types. A chip, not a project. |
 | 5 | Persistent memory | **Largely already done** — `ConversationStore` is per-document DPAPI history. Only worth revisiting for cross-document memory or a user-editable fact list. |
