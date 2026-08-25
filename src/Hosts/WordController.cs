@@ -989,6 +989,7 @@ namespace MSOfficeAIAssistant.Hosts
             public int Index;
             public string Text;
             public int Score;
+            public int StartLineIndex;
         }
 
         public static string BuildRelevantDocumentContext(
@@ -1041,7 +1042,7 @@ namespace MSOfficeAIAssistant.Hosts
             for (int i = 0; i < selected.Count && result.Length < maxCharacters; i++)
             {
                 ContextChunk chunk = selected[i];
-                string label = string.Format("[Excerpt {0} of {1}]\n", chunk.Index + 1, chunks.Count);
+                string label = string.Format("[Excerpt {0} of {1}, ~Paragraph {2}]\n", chunk.Index + 1, chunks.Count, chunk.StartLineIndex + 1);
                 int remaining = maxCharacters - result.Length;
                 if (remaining <= label.Length + 20) break;
 
@@ -1173,13 +1174,15 @@ namespace MSOfficeAIAssistant.Hosts
             string[] lines = documentText.Split(new[] { '\n' }, StringSplitOptions.None);
             List<ContextChunk> chunks = new List<ContextChunk>();
             StringBuilder current = new StringBuilder();
+            int chunkStartLineIndex = 0;
 
             for (int i = 0; i < lines.Length; i++)
             {
                 string line = lines[i];
                 if (current.Length > 0 && current.Length + line.Length + 1 > target && current.Length >= 300)
                 {
-                    AddChunk(chunks, current);
+                    AddChunk(chunks, current, chunkStartLineIndex);
+                    chunkStartLineIndex = i;
                 }
 
                 if (line.Length > target && current.Length == 0)
@@ -1188,29 +1191,33 @@ namespace MSOfficeAIAssistant.Hosts
                     while (start < line.Length)
                     {
                         int length = Math.Min(target, line.Length - start);
-                        chunks.Add(new ContextChunk { Index = chunks.Count, Text = line.Substring(start, length) });
+                        chunks.Add(new ContextChunk { Index = chunks.Count, Text = line.Substring(start, length), StartLineIndex = i });
                         start += length;
                     }
+                    chunkStartLineIndex = i + 1;
                     continue;
                 }
 
                 if (current.Length > 0) current.Append('\n');
                 current.Append(line);
                 if (string.IsNullOrWhiteSpace(line) && current.Length >= 300)
-                    AddChunk(chunks, current);
+                {
+                    AddChunk(chunks, current, chunkStartLineIndex);
+                    chunkStartLineIndex = i + 1;
+                }
             }
-            AddChunk(chunks, current);
+            AddChunk(chunks, current, chunkStartLineIndex);
 
             if (chunks.Count == 0)
-                chunks.Add(new ContextChunk { Index = 0, Text = documentText });
+                chunks.Add(new ContextChunk { Index = 0, Text = documentText, StartLineIndex = 0 });
             return chunks;
         }
 
-        private static void AddChunk(List<ContextChunk> chunks, StringBuilder current)
+        private static void AddChunk(List<ContextChunk> chunks, StringBuilder current, int startLineIndex)
         {
             string text = current.ToString().Trim();
             if (!string.IsNullOrEmpty(text))
-                chunks.Add(new ContextChunk { Index = chunks.Count, Text = text });
+                chunks.Add(new ContextChunk { Index = chunks.Count, Text = text, StartLineIndex = startLineIndex });
             current.Length = 0;
         }
 
