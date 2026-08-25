@@ -1,11 +1,12 @@
 <UserControl x:Class="MSOfficeAIAssistant.UI.ChatSidebar"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
-             xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:local="clr-namespace:MSOfficeAIAssistant.UI"
              xmlns:converters="clr-namespace:MSOfficeAIAssistant.UI.Converters"
              xmlns:helpers="clr-namespace:MSOfficeAIAssistant.UI.Helpers"
+             xmlns:cards="clr-namespace:MSOfficeAIAssistant.UI.Cards"
              mc:Ignorable="d" 
              d:DesignHeight="700" d:DesignWidth="360"
              Background="{DynamicResource SurfaceMutedBrush}" FontFamily="Segoe UI" FontSize="13">
@@ -19,6 +20,198 @@
 
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="InverseBoolToVisConverter" Invert="True"/>
+
+        <!-- Response Card Templates for Phase A3 -->
+
+        <!-- Text Template: Plain markdown response (default) -->
+        <DataTemplate x:Key="TextTemplate">
+            <StackPanel>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- ActionPreview Template: Message with office action cards -->
+        <DataTemplate x:Key="ActionPreviewTemplate">
+            <StackPanel>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <ItemsControl ItemsSource="{Binding OfficeActions}" Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}" Margin="0,8,0,4">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6" Margin="0,3" Padding="8,6">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,3">
+                                        <Border Background="{StaticResource InkBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                            <TextBlock Text="{Binding TargetDisplay}" Foreground="{StaticResource SurfaceBrush}" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <Border Background="{StaticResource AccentSurfaceBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
+                                            <TextBlock Text="{Binding ActionBadge}" Foreground="{StaticResource AccentTextBrush}" FontSize="10" FontWeight="Bold"/>
+                                        </Border>
+                                        <TextBlock Text="{Binding PreviewDescription}" FontSize="11" Foreground="{StaticResource InkMutedBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SurfaceAltBrush}" CornerRadius="4" Padding="6,3" Margin="0,2,6,2"
+                                            Visibility="{Binding HasContentDisplay, Converter={StaticResource BoolToVisConverter}}">
+                                        <TextBlock Text="{Binding ContentDisplay}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="{StaticResource InkStrongBrush}" TextWrapping="Wrap"/>
+                                    </Border>
+                                    <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Review &amp; Apply"
+                                            Background="{StaticResource SuccessBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                                            Padding="8,4" BorderBrush="{StaticResource SuccessStrongBrush}" BorderThickness="1" VerticalAlignment="Center"
+                                            Click="BtnApplyOfficeAction_Click" Tag="{Binding}"
+                                            ToolTip="Review the proposed native Office change before applying"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding StatusDisplay}"
+                                               FontSize="10" Foreground="{Binding StatusForegroundBrush}" FontWeight="Medium" Margin="0,2,0,0"/>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Button Content="Review &amp; Apply All Actions" Background="{StaticResource SuccessStrongBrush}" Foreground="{StaticResource SurfaceBrush}"
+                        FontSize="11" FontWeight="Bold" Padding="8,4" BorderThickness="0" Margin="0,4,0,4"
+                        Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}"
+                        Click="BtnApplyAllOfficeActions_Click"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Warning Template: Warning accent card with ⚠ label -->
+        <DataTemplate x:Key="WarningTemplate">
+            <StackPanel>
+                <Border Background="{StaticResource WarningSurfaceBrush}" BorderBrush="{StaticResource WarningBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,4">
+                    <TextBlock Text="⚠ Warning" FontWeight="Bold" Foreground="{StaticResource WarningBrush}" FontSize="12"/>
+                </Border>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Finding Template: Blue/info accent card with 🔍 label -->
+        <DataTemplate x:Key="FindingTemplate">
+            <StackPanel>
+                <Border Background="{StaticResource PrimarySurfaceBrush}" BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,4">
+                    <TextBlock Text="🔍 Finding" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" FontSize="12"/>
+                </Border>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Recommendation Template: Green/success accent card with 💡 label -->
+        <DataTemplate x:Key="RecommendationTemplate">
+            <StackPanel>
+                <Border Background="{StaticResource SuccessBrush}" BorderBrush="{StaticResource SuccessBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,4" CornerRadius="0">
+                    <TextBlock Text="💡 Recommendation" FontWeight="Bold" Foreground="{StaticResource SurfaceBrush}" FontSize="12"/>
+                </Border>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Summary Template: Neutral/slate accent card with 📊 label -->
+        <DataTemplate x:Key="SummaryTemplate">
+            <StackPanel>
+                <Border Background="{StaticResource SurfaceAltBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,4">
+                    <TextBlock Text="📊 Summary" FontWeight="Bold" Foreground="{StaticResource InkMutedBrush}" FontSize="12"/>
+                </Border>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                           helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
+                           TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
+                           FontFamily="Segoe UI" LineHeight="20"/>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
+                    <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
+                            Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
+                    <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
+                    <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
+                            Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+
+        <!-- Response Card Template Selector -->
+        <cards:ResponseCardTemplateSelector x:Key="ResponseCardSelector"
+            TextTemplate="{StaticResource TextTemplate}"
+            ActionPreviewTemplate="{StaticResource ActionPreviewTemplate}"
+            WarningTemplate="{StaticResource WarningTemplate}"
+            FindingTemplate="{StaticResource FindingTemplate}"
+            RecommendationTemplate="{StaticResource RecommendationTemplate}"
+            SummaryTemplate="{StaticResource SummaryTemplate}"/>
 
         <Style TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
@@ -161,84 +354,11 @@
                             </Border>
 
                             <!-- AI Assistant Message Bubble (Left aligned) -->
-                            <!-- Uses MarkdownHelper to render rich Markdown (.md) formatting natively in TextBlock -->
-                            <Border x:Name="AssistantBubble" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" 
+                            <!-- Uses ContentTemplateSelector to render response cards based on category -->
+                            <Border x:Name="AssistantBubble" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
                                     CornerRadius="12,12,12,2" HorizontalAlignment="Left" MaxWidth="320" Padding="12,10"
                                     Visibility="{Binding IsAssistant, Converter={StaticResource BoolToVisConverter}}">
-                                <StackPanel>
-                                    <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
-                                               helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
-                                               TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
-                                               FontFamily="Segoe UI" LineHeight="20"/>
-
-                                    <!-- Structured Office Action Cards (Single-Source Invariant §5.3) -->
-                                    <ItemsControl ItemsSource="{Binding OfficeActions}" Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}" Margin="0,8,0,4">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <Border Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6" Margin="0,3" Padding="8,6">
-                                                    <Grid>
-                                                        <Grid.RowDefinitions>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                            <RowDefinition Height="Auto"/>
-                                                        </Grid.RowDefinitions>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="*"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                        </Grid.ColumnDefinitions>
-
-                                                        <!-- Target & Type Badge -->
-                                                        <StackPanel Grid.Row="0" Grid.Column="0" Orientation="Horizontal" Margin="0,0,0,3">
-                                                            <Border Background="{StaticResource InkBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
-                                                                <TextBlock Text="{Binding TargetDisplay}" Foreground="{StaticResource SurfaceBrush}" FontSize="10" FontWeight="Bold"/>
-                                                            </Border>
-                                                            <Border Background="{StaticResource AccentSurfaceBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,5,0">
-                                                                <TextBlock Text="{Binding ActionBadge}" Foreground="{StaticResource AccentTextBrush}" FontSize="10" FontWeight="Bold"/>
-                                                            </Border>
-                                                            <TextBlock Text="{Binding PreviewDescription}" FontSize="11" Foreground="{StaticResource InkMutedBrush}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                                        </StackPanel>
-
-                                                        <!-- Content Display -->
-                                                        <Border Grid.Row="1" Grid.Column="0" Background="{StaticResource SurfaceAltBrush}" CornerRadius="4" Padding="6,3" Margin="0,2,6,2"
-                                                                Visibility="{Binding HasContentDisplay, Converter={StaticResource BoolToVisConverter}}">
-                                                            <TextBlock Text="{Binding ContentDisplay}" FontFamily="Consolas, Segoe UI" FontSize="11" Foreground="{StaticResource InkStrongBrush}" TextWrapping="Wrap"/>
-                                                        </Border>
-
-                                                        <!-- The card is the action preview; applying always requires confirmation. -->
-                                                        <Button Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Content="Review &amp; Apply"
-                                                                Background="{StaticResource SuccessBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
-                                                                Padding="8,4" BorderBrush="{StaticResource SuccessStrongBrush}" BorderThickness="1" VerticalAlignment="Center"
-                                                                Click="BtnApplyOfficeAction_Click" Tag="{Binding}"
-                                                                ToolTip="Review the proposed native Office change before applying"/>
-
-                                                        <!-- Status Display -->
-                                                        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Text="{Binding StatusDisplay}" 
-                                                                   FontSize="10" Foreground="{Binding StatusForegroundBrush}" FontWeight="Medium" Margin="0,2,0,0"/>
-                                                    </Grid>
-                                                </Border>
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-
-                                    <!-- Apply All Office Actions Button -->
-                                    <Button Content="Review &amp; Apply All Actions" Background="{StaticResource SuccessStrongBrush}" Foreground="{StaticResource SurfaceBrush}"
-                                            FontSize="11" FontWeight="Bold" Padding="8,4" BorderThickness="0" Margin="0,4,0,4"
-                                            Visibility="{Binding HasOfficeActions, Converter={StaticResource BoolToVisConverter}}"
-                                            Click="BtnApplyAllOfficeActions_Click"/>
-
-                                    <!-- Action Bar below AI message -->
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0">
-                                        <Button Content="Copy" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="{StaticResource PrimaryFaintBrush}" BorderThickness="1"
-                                                Click="BtnCopyMessage_Click" ToolTip="Copy response"/>
-                                        <Button Content="Preview" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
-                                                Click="BtnPreviewMessage_Click" ToolTip="Review the response before inserting it"/>
-                                        <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
-                                                Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
-                                                Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
-                                    </StackPanel>
-                                </StackPanel>
+                                <ContentControl Content="{Binding}" ContentTemplateSelector="{StaticResource ResponseCardSelector}"/>
                             </Border>
 
                             <!-- System Message (Center aligned) -->
