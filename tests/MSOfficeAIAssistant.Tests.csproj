@@ -95,6 +95,7 @@
     <Compile Include="ActionVerifierTests.cs" />
     <Compile Include="RollbackExecutorTests.cs" />
     <Compile Include="MarkdownHelperTests.cs" />
+    <Compile Include="XamlLoadTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
