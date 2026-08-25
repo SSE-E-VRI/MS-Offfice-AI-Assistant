@@ -3,23 +3,29 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="AI Assistant — Settings" Height="680" Width="520"
         WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
-        Background="#F8FAFC" FontFamily="Segoe UI" FontSize="13">
+        Background="{DynamicResource SurfaceSubtleBrush}" FontFamily="Segoe UI" FontSize="13">
     <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme/Tokens.xaml"/>
+                <ResourceDictionary Source="Theme/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
         <Style TargetType="TextBlock">
-            <Setter Property="Foreground" Value="#1E293B"/>
+            <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style TargetType="PasswordBox">
             <Setter Property="Padding" Value="8,6"/>
-            <Setter Property="BorderBrush" Value="#CBD5E1"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderStrongBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Background" Value="#FFFFFF"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
         </Style>
         <Style TargetType="Button">
@@ -28,6 +34,7 @@
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="BorderThickness" Value="0"/>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid Margin="18">
@@ -42,19 +49,19 @@
         <StackPanel Grid.Row="0" Margin="0,0,0,12">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <TextBlock Text="⚙️" FontSize="20" Margin="0,0,8,0"/>
-                <TextBlock Text="AI Assistant Configuration" FontSize="18" FontWeight="Bold" Foreground="#0F172A"/>
+                <TextBlock Text="AI Assistant Configuration" FontSize="18" FontWeight="Bold" Foreground="{StaticResource InkStrongBrush}"/>
             </StackPanel>
             <TextBlock Text="Bring Your Own Key (BYOK) — Credentials encrypted with Windows DPAPI" 
-                       Foreground="#64748B" FontSize="12" Margin="0,4,0,0"/>
+                       Foreground="{StaticResource InkSubtleBrush}" FontSize="12" Margin="0,4,0,0"/>
         </StackPanel>
 
         <!-- Settings Scrollable Content -->
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,0,0,10">
             <StackPanel>
                 <!-- Card 1: Provider Selection & Credentials -->
-                <Border Background="#FFFFFF" CornerRadius="8" BorderBrush="#E2E8F0" BorderThickness="1" Padding="14" Margin="0,0,0,12">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                     <StackPanel>
-                        <TextBlock Text="AI Provider" FontWeight="Bold" FontSize="14" Foreground="#1E293B" Margin="0,0,0,8"/>
+                        <TextBlock Text="AI Provider" FontWeight="Bold" FontSize="14" Foreground="{StaticResource InkBrush}" Margin="0,0,0,8"/>
 
                         <!-- Provider Selection ComboBox -->
                         <TextBlock Text="Active Provider" FontWeight="SemiBold" Margin="0,0,0,4"/>
@@ -75,12 +82,12 @@
                             <PasswordBox x:Name="TxtApiKey" Grid.Column="0" Margin="0,0,6,0"/>
                             <TextBox x:Name="TxtApiKeyPlain" Grid.Column="0" Margin="0,0,6,0" Visibility="Collapsed"/>
                             <Button x:Name="BtnToggleKey" Grid.Column="1" Content="👁" Width="36" 
-                                    Background="#F1F5F9" Foreground="#475569" Click="BtnToggleKey_Click"
+                                    Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkMutedBrush}" Click="BtnToggleKey_Click"
                                     ToolTip="Show/Hide Key"/>
                         </Grid>
                         <TextBlock x:Name="PnlApiKeyHelp" Margin="0,0,0,10" FontSize="11" VerticalAlignment="Center">
-                            <Run Text="Don't have an API key? " Foreground="#64748B"/>
-                            <Hyperlink x:Name="LnkApiKey" NavigateUri="https://console.mistral.ai/api-keys/" RequestNavigate="LnkApiKey_RequestNavigate" Foreground="#2563EB" Cursor="Hand">
+                            <Run Text="Don't have an API key? " Foreground="{StaticResource InkSubtleBrush}"/>
+                            <Hyperlink x:Name="LnkApiKey" NavigateUri="https://console.mistral.ai/api-keys/" RequestNavigate="LnkApiKey_RequestNavigate" Foreground="{StaticResource PrimaryBrush}" Cursor="Hand">
                                 <Run Text="Click here"/>
                             </Hyperlink>
                         </TextBlock>
@@ -98,7 +105,7 @@
                             </Grid.ColumnDefinitions>
                             <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="6,5" IsEditable="True"/>
                             <Button x:Name="BtnDiscoverModels" Grid.Column="1" Content="Discover" 
-                                    Background="#E0E7FF" Foreground="#3730A3" Click="BtnDiscoverModels_Click"
+                                    Background="{StaticResource AccentSurfaceBrush}" Foreground="{StaticResource AccentTextBrush}" Click="BtnDiscoverModels_Click"
                                     ToolTip="For Gemini, verifies which models this API key can use"/>
                         </Grid>
 
@@ -111,9 +118,9 @@
                 </Border>
 
                 <!-- Card 2: Generation Behavior -->
-                <Border Background="#FFFFFF" CornerRadius="8" BorderBrush="#E2E8F0" BorderThickness="1" Padding="14">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14">
                     <StackPanel>
-                        <TextBlock Text="Model Parameters &amp; Behavior" FontWeight="Bold" FontSize="14" Foreground="#1E293B" Margin="0,0,0,8"/>
+                        <TextBlock Text="Model Parameters &amp; Behavior" FontWeight="Bold" FontSize="14" Foreground="{StaticResource InkBrush}" Margin="0,0,0,8"/>
 
                         <!-- Temperature -->
                         <Grid Margin="0,0,0,2">
@@ -122,7 +129,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Temperature (Creativity)" FontWeight="SemiBold" Grid.Column="0"/>
-                            <TextBlock x:Name="LblTemp" Text="0.7" FontWeight="Bold" Foreground="#2563EB" Grid.Column="1"/>
+                            <TextBlock x:Name="LblTemp" Text="0.7" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" Grid.Column="1"/>
                         </Grid>
                         <Slider x:Name="SldTemp" Minimum="0.0" Maximum="1.0" Value="0.7" SmallChange="0.05" LargeChange="0.1" 
                                 TickFrequency="0.1" IsSnapToTickEnabled="False" ValueChanged="SldTemp_ValueChanged" Margin="0,0,0,10"/>
@@ -134,7 +141,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Text="Max Output Tokens" FontWeight="SemiBold" Grid.Column="0"/>
-                            <TextBlock x:Name="LblMaxTokens" Text="4096" FontWeight="Bold" Foreground="#2563EB" Grid.Column="1"/>
+                            <TextBlock x:Name="LblMaxTokens" Text="4096" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" Grid.Column="1"/>
                         </Grid>
                         <Slider x:Name="SldMaxTokens" Minimum="256" Maximum="8192" Value="4096" SmallChange="256" LargeChange="1024" 
                                 TickFrequency="256" IsSnapToTickEnabled="True" ValueChanged="SldMaxTokens_ValueChanged" Margin="0,0,0,10"/>
@@ -155,9 +162,9 @@
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Button x:Name="BtnTest" Grid.Column="0" Content="Test Connection" 
-                    Background="#F1F5F9" Foreground="#0F172A" BorderBrush="#CBD5E1" BorderThickness="1" Click="BtnTest_Click"/>
+                    Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkStrongBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Click="BtnTest_Click"/>
             <TextBlock x:Name="LblStatus" Grid.Column="1" VerticalAlignment="Center" Margin="10,0,0,0" 
-                       TextWrapping="Wrap" FontSize="12" Foreground="#059669"/>
+                       TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource SuccessBrush}"/>
         </Grid>
 
         <!-- Action Buttons & Credit -->
@@ -168,15 +175,15 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,10,0">
-                <TextBlock Text="AI Assistant v0.5.0" FontWeight="Bold" FontSize="11" Foreground="#475569"/>
-                <TextBlock Text="Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302" FontSize="10" Foreground="#64748B" TextWrapping="Wrap"/>
+                <TextBlock Text="AI Assistant v0.5.0" FontWeight="Bold" FontSize="11" Foreground="{StaticResource InkMutedBrush}"/>
+                <TextBlock Text="Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302" FontSize="10" Foreground="{StaticResource InkSubtleBrush}" TextWrapping="Wrap"/>
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button x:Name="BtnCancel" Content="Cancel" Margin="0,0,8,0" Width="85" 
-                        Background="#F1F5F9" Foreground="#334155" Click="BtnCancel_Click"/>
+                        Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" Click="BtnCancel_Click"/>
                 <Button x:Name="BtnSave" Content="Save Settings" Width="120" 
-                        Background="#2563EB" Foreground="#FFFFFF" Click="BtnSave_Click"/>
+                        Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}" Click="BtnSave_Click"/>
             </StackPanel>
         </Grid>
     </Grid>

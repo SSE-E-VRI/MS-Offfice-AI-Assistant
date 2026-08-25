@@ -1360,8 +1360,22 @@ namespace MSOfficeAIAssistant.UI
         {
             try
             {
-                if (ChatScrollViewer != null)
-                    ChatScrollViewer.ScrollToBottom();
+                if (ChatScrollViewer == null) return;
+
+                // With virtualization enabled (D-7), ExtentHeight for the just-appended item
+                // isn't necessarily up to date yet when this is called synchronously right after
+                // an ObservableCollection add. Deferring to Background priority lets the pending
+                // layout pass (which recomputes the virtualized extent) run first, so ScrollToBottom
+                // actually reaches the new end instead of the previous one.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(delegate
+                {
+                    try
+                    {
+                        if (ChatScrollViewer != null)
+                            ChatScrollViewer.ScrollToBottom();
+                    }
+                    catch { }
+                }));
             }
             catch { }
         }
