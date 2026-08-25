@@ -93,7 +93,13 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        private dynamic GetActivePresentation(bool createIfNone)
+        // D-2: GetActivePresentation(createIfNone:true) and GetOrCreateActiveSlide(createIfNone:true)
+        // were "Get"-shaped names that silently created a presentation/slide as a side effect when
+        // the boolean flag was true — a caller (or a future risk-classification pass) could easily
+        // read past the flag and treat the call as read-only. Fixed by removing the boolean entirely:
+        // *Core holds the shared implementation, and every caller now uses one of two thin, honestly
+        // named wrappers below so the method name alone states whether it can mutate.
+        private dynamic GetActivePresentationCore(bool createIfNone)
         {
             if (_rawAppObj == null) return null;
             try
@@ -116,7 +122,19 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        private dynamic GetOrCreateActiveSlide(bool createIfNone = false)
+        /// <summary>Read-only. Returns null if no presentation is open — never creates one.</summary>
+        private dynamic GetActivePresentation()
+        {
+            return GetActivePresentationCore(false);
+        }
+
+        /// <summary>Mutating. Creates a new presentation if none is currently open.</summary>
+        private dynamic GetOrCreateActivePresentation()
+        {
+            return GetActivePresentationCore(true);
+        }
+
+        private dynamic GetActiveSlideCore(bool createIfNone)
         {
             if (_rawAppObj == null) return null;
             try
@@ -151,7 +169,7 @@ namespace MSOfficeAIAssistant.Hosts
                 }
 
                 // 3. Fallback: Check ActivePresentation
-                dynamic pres = GetActivePresentation(createIfNone);
+                dynamic pres = GetActivePresentationCore(createIfNone);
 
                 if (pres != null)
                 {
@@ -186,11 +204,23 @@ namespace MSOfficeAIAssistant.Hosts
             return null;
         }
 
+        /// <summary>Read-only. Returns null if there is no resolvable active slide — never creates one.</summary>
+        private dynamic GetActiveSlide()
+        {
+            return GetActiveSlideCore(false);
+        }
+
+        /// <summary>Mutating. Creates a new slide (and/or presentation) if none currently exists.</summary>
+        private dynamic GetOrCreateActiveSlide()
+        {
+            return GetActiveSlideCore(true);
+        }
+
         public string GetSlideText()
         {
             try
             {
-                dynamic slide = GetOrCreateActiveSlide(false);
+                dynamic slide = GetActiveSlide();
                 if (slide != null)
                 {
                     return GetSlideTextInternal(slide, true).TrimEnd();
@@ -212,7 +242,7 @@ namespace MSOfficeAIAssistant.Hosts
             if (maxCharacters <= 0) maxCharacters = 48000;
             try
             {
-                dynamic presentation = GetActivePresentation(false);
+                dynamic presentation = GetActivePresentation();
                 if (presentation == null || presentation.Slides == null) return string.Empty;
 
                 var sb = new StringBuilder();
@@ -243,35 +273,6 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        public string GetPresentationOutline(int maxCharacters)
-        {
-            if (maxCharacters <= 0) maxCharacters = 24000;
-            try
-            {
-                dynamic presentation = GetActivePresentation(false);
-                if (presentation == null || presentation.Slides == null) return string.Empty;
-
-                var sb = new StringBuilder();
-                int count = Convert.ToInt32(presentation.Slides.Count);
-                for (int i = 1; i <= count; i++)
-                {
-                    dynamic slide = presentation.Slides[i];
-                    string title = GetSlideTitle(slide);
-                    if (string.IsNullOrWhiteSpace(title)) title = "(untitled)";
-                    string sectionName = GetSectionName(presentation, i);
-                    string prefix = string.IsNullOrWhiteSpace(sectionName) ? string.Empty : string.Format(" [{0}]", sectionName);
-                    AppendBounded(sb, string.Format("{0}. {1}{2}\n", i, title, prefix), maxCharacters);
-                    if (sb.Length >= maxCharacters) break;
-                }
-                return sb.ToString().TrimEnd();
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("PowerPointController.GetPresentationOutline failed: {0}", ex.Message));
-                return string.Empty;
-            }
-        }
-
         /// <summary>
         /// Supplies a compact, deterministic review brief before the LLM adds recommendations.
         /// </summary>
@@ -280,7 +281,7 @@ namespace MSOfficeAIAssistant.Hosts
             if (maxCharacters <= 0) maxCharacters = 28000;
             try
             {
-                dynamic presentation = GetActivePresentation(false);
+                dynamic presentation = GetActivePresentation();
                 if (presentation == null || presentation.Slides == null) return string.Empty;
 
                 int slideCount = Convert.ToInt32(presentation.Slides.Count);
@@ -410,10 +411,10 @@ namespace MSOfficeAIAssistant.Hosts
                     return true;
                 }
 
-                dynamic pres = GetActivePresentation(true);
+                dynamic pres = GetOrCreateActivePresentation();
                 if (pres == null) return false;
 
-                dynamic activeSlide = GetOrCreateActiveSlide(true);
+                dynamic activeSlide = GetOrCreateActiveSlide();
                 // If active slide already has user content, do not overwrite it — append new slides instead.
                 bool canReuseActiveSlide = activeSlide != null && !SlideHasSubstantiveContent(activeSlide);
                 bool isFirst = true;
@@ -671,7 +672,7 @@ namespace MSOfficeAIAssistant.Hosts
 
         public virtual bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
-            dynamic presentation = GetActivePresentation(false);
+            dynamic presentation = GetActivePresentation();
             if (presentation == null || presentation.Slides == null) return false;
             int count = Convert.ToInt32(presentation.Slides.Count);
             if (sourceSlideNumber < 1 || sourceSlideNumber > count || destinationSlideNumber < 1 || destinationSlideNumber > count)
@@ -684,7 +685,7 @@ namespace MSOfficeAIAssistant.Hosts
         public virtual bool CreateSectionBeforeSlide(string sectionName, int slideNumber)
         {
             if (string.IsNullOrWhiteSpace(sectionName)) return false;
-            dynamic presentation = GetActivePresentation(false);
+            dynamic presentation = GetActivePresentation();
             if (presentation == null || presentation.SectionProperties == null) return false;
             int count = Convert.ToInt32(presentation.Slides.Count);
             if (slideNumber < 1 || slideNumber > count + 1) return false;
@@ -706,7 +707,7 @@ namespace MSOfficeAIAssistant.Hosts
         public virtual bool RenameSection(int sectionIndex, string sectionName)
         {
             if (sectionIndex < 1 || string.IsNullOrWhiteSpace(sectionName)) return false;
-            dynamic presentation = GetActivePresentation(false);
+            dynamic presentation = GetActivePresentation();
             if (presentation == null || presentation.SectionProperties == null) return false;
             presentation.SectionProperties.Rename(sectionIndex, sectionName.Trim());
             return true;
@@ -715,7 +716,7 @@ namespace MSOfficeAIAssistant.Hosts
         public virtual bool SetSpeakerNotesForSlide(int slideNumber, string notes)
         {
             if (slideNumber < 1 || string.IsNullOrWhiteSpace(notes)) return false;
-            dynamic presentation = GetActivePresentation(false);
+            dynamic presentation = GetActivePresentation();
             if (presentation == null || presentation.Slides == null) return false;
             int count = Convert.ToInt32(presentation.Slides.Count);
             if (slideNumber > count) return false;
@@ -740,7 +741,7 @@ namespace MSOfficeAIAssistant.Hosts
             if (slideNumber < 1) return string.Empty;
             try
             {
-                dynamic presentation = GetActivePresentation(false);
+                dynamic presentation = GetActivePresentation();
                 if (presentation == null || presentation.Slides == null) return string.Empty;
                 int count = Convert.ToInt32(presentation.Slides.Count);
                 if (slideNumber > count) return string.Empty;
@@ -773,7 +774,7 @@ namespace MSOfficeAIAssistant.Hosts
             if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath)) return false;
             try
             {
-                dynamic slide = GetOrCreateActiveSlide(true);
+                dynamic slide = GetOrCreateActiveSlide();
                 if (slide == null || slide.Shapes == null) return false;
                 dynamic picture = slide.Shapes.AddPicture(filePath, 0, -1, 70, 115, -1, -1);
                 if (picture != null && !string.IsNullOrWhiteSpace(altText))
@@ -1163,44 +1164,12 @@ namespace MSOfficeAIAssistant.Hosts
                         slideData.Bullets.Add(clean);
                 }
 
-                dynamic slide = GetOrCreateActiveSlide(true);
+                dynamic slide = GetOrCreateActiveSlide();
                 PopulateSlide(slide, slideData);
             }
             catch (Exception ex)
             {
                 Logger.Error("PowerPointController.AddBulletPoints failed", ex);
-                throw;
-            }
-        }
-
-        public void SetSpeakerNotes(string notes)
-        {
-            if (notes == null) notes = string.Empty;
-            try
-            {
-                dynamic slide = GetOrCreateActiveSlide(true);
-                if (slide != null && slide.NotesPage != null && slide.NotesPage.Shapes != null)
-                {
-                    dynamic shapes = slide.NotesPage.Shapes;
-                    int count = Convert.ToInt32(shapes.Count);
-                    for (int i = 1; i <= count; i++)
-                    {
-                        dynamic shape = shapes[i];
-                        if (shape != null && shape.PlaceholderFormat != null)
-                        {
-                            // ppPlaceholderBody = 2
-                            if (Convert.ToInt32(shape.PlaceholderFormat.Type) == 2)
-                            {
-                                shape.TextFrame.TextRange.Text = CleanMarkdown(notes);
-                                return;
-                            }
-                        }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("PowerPointController.SetSpeakerNotes failed", ex);
                 throw;
             }
         }

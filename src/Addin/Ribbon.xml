@@ -35,6 +35,19 @@
           <button id="btnActionItems" label="Actions" imageMso="FileOpen" size="normal" onAction="OnActionItems"/>
           <button id="btnReviewContent" label="Review" imageMso="FileNew" size="normal" onAction="OnReviewContent"/>
           <button id="btnBuildDeck" label="Slides" imageMso="FileSave" size="normal" onAction="OnBuildSlides"/>
+          <menu id="mnuTranslate" label="Translate" imageMso="Language" size="normal"
+                screentip="Translate"
+                supertip="Translate the current selection or context into the chosen language.">
+            <button id="btnTransTA" label="Tamil" onAction="OnTranslate"/>
+            <button id="btnTransHI" label="Hindi" onAction="OnTranslate"/>
+            <button id="btnTransTE" label="Telugu" onAction="OnTranslate"/>
+            <button id="btnTransKN" label="Kannada" onAction="OnTranslate"/>
+            <button id="btnTransML" label="Malayalam" onAction="OnTranslate"/>
+            <button id="btnTransBN" label="Bengali" onAction="OnTranslate"/>
+            <button id="btnTransMR" label="Marathi" onAction="OnTranslate"/>
+            <button id="btnTransGU" label="Gujarati" onAction="OnTranslate"/>
+            <button id="btnTransEN" label="English" onAction="OnTranslate"/>
+          </menu>
         </group>
         <group id="grpHelp" label="Help">
           <button id="btnUserManual" label="User Manual"
