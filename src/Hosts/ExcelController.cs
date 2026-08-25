@@ -237,6 +237,35 @@ namespace MSOfficeAIAssistant.Hosts
             return string.Empty;
         }
 
+        public string GetContextReadout()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null) return string.Empty;
+
+                dynamic ws = null;
+                try { ws = app.ActiveSheet; } catch { }
+                if (ws == null) return string.Empty;
+
+                string sheetName = Convert.ToString(ws.Name);
+                string selAddr = "A1";
+                try
+                {
+                    if (app.Selection != null)
+                        selAddr = Convert.ToString(app.Selection.Address);
+                }
+                catch { }
+
+                return string.Format("{0}!{1}", sheetName, selAddr);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ExcelController.GetContextReadout failed: {0}", ex.Message));
+            }
+            return string.Empty;
+        }
+
         private HostOperationResult ResolveTargetRange(string targetAddress, out dynamic app, out dynamic ws, out dynamic targetRange)
         {
             app = null;
