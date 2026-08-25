@@ -23,6 +23,7 @@ namespace MSOfficeAIAssistant.Tests
             TestComputeStatusForMultiHostAwaitingDifferentHost();
             TestComputeStatusForSingleHostCompleted();
             TestStepGatedForApprovalStopsExecutionOnCurrentHost();
+            TestExecuteForCurrentHostStopsAtFailedStepOnCurrentHost();
 
             Console.WriteLine("All CrossHostPlanCoordinator tests passed!");
         }
@@ -99,27 +100,28 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestExecuteForCurrentHostSkipsOutOfHostStepsAndContinues()
         {
-            // 3-step plan: step 1 Excel (approved), step 2 Word, step 3 Excel (approved)
-            // When executing on Excel, should execute step 1, SKIP step 2, CONTINUE and execute step 3
+            // 3-step plan: step 1 Excel (reasoning-only), step 2 Word, step 3 Excel (reasoning-only)
+            // When executing on Excel, should execute step 1, SKIP step 2, CONTINUE and execute step 3.
+            //
+            // Step 1 is deliberately reasoning-only (Action == null), NOT a real mutating action.
+            // A real ToolRegistry mutation (e.g. excel.write_formula) reliably FAILS on a headless
+            // null-app controller (BeforeState capture fails for RiskLevel >= 2 undoable actions -
+            // see PlanExecutorTests.cs), and CrossHostPlanCoordinator now correctly stops at a
+            // Failed step (matching PlanExecutor.ExecuteAll's own contract - see the fix in
+            // CrossHostPlanCoordinator.cs). Using a real mutating action here would make step 1
+            // fail and halt execution before ever reaching step 3, which is a DIFFERENT behavior
+            // (correctly stopping at failure) from what THIS test wants to isolate (skip-and-
+            // continue past an out-of-host step). Reasoning-only steps always succeed, so they
+            // test the skip/continue path cleanly without that confound.
             var plan = new Plan();
 
             var step1 = new PlanStep
             {
                 StepId = "step-1",
                 Order = 1,
-                Description = "Excel step 1",
-                Action = new OfficeAction
-                {
-                    ActionId = "act-1",
-                    Host = "Excel",
-                    Operation = "excel.write_formula",
-                    Target = new ActionTarget { Range = "B2" },
-                    Parameters = new Dictionary<string, object> { { "formula", "=1+1" } },
-                    RiskLevel = 2,
-                    RequiresApproval = false
-                },
+                Description = "Excel step 1 (reasoning-only)",
                 TargetHost = "Excel",
-                Status = PlanStepStatus.Approved
+                Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step1);
 
@@ -147,9 +149,9 @@ namespace MSOfficeAIAssistant.Tests
 
             var result = CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
 
-            // Step 1 should be Applied or Failed (attempted on headless controller)
-            Assert(step1.Status == PlanStepStatus.Applied || step1.Status == PlanStepStatus.Failed,
-                "Step 1 should be attempted and reach terminal state");
+            // Step 1 is reasoning-only, so it always succeeds
+            Assert(step1.Status == PlanStepStatus.Applied,
+                "Step 1 (Excel reasoning-only) should be executed and Applied");
 
             // Step 2 should remain untouched - NOT gated for approval, just skipped
             Assert(step2.Status == PlanStepStatus.Pending,
@@ -463,6 +465,74 @@ namespace MSOfficeAIAssistant.Tests
                 string.Format("ComputeStatus should return 'Awaiting approval', got: {0}", status));
 
             Console.WriteLine("  [PASS] Execution stops at approval gate on current host step");
+        }
+
+        private static void TestExecuteForCurrentHostStopsAtFailedStepOnCurrentHost()
+        {
+            // Regression guard for the exact bug found in review: the original implementation
+            // only stopped ExecuteForCurrentHost's loop at AwaitingApproval, explicitly
+            // "continuing past Failed steps to maximize progress" - which is inconsistent with
+            // PlanExecutor.ExecuteAll's own contract (stop at Failed, resume explicitly via
+            // ContinueFromStep) and unsafe in general: a later same-host step may depend on state
+            // a failed earlier step never produced. No prior test in this suite caught it -
+            // TestExecuteForCurrentHostSkipsOutOfHostStepsAndContinues uses a reasoning-only step
+            // 1 (always succeeds), and TestStepGatedForApprovalStopsExecutionOnCurrentHost tests
+            // the approval gate, not a genuine execution failure.
+            //
+            // Step 1: a real, Approved excel.write_formula action. On a headless (null-app)
+            // ExcelController this reliably fails at RollbackExecutor.CaptureBeforeState (the
+            // action is RiskLevel 2 and IsUndoable, so BeforeState capture is attempted before
+            // execution and fails with no live COM app) - see the identical pattern and
+            // explanation in PlanExecutorTests.cs.
+            // Step 2: a same-host (Excel) reasoning-only step that must NOT execute if
+            // ExecuteForCurrentHost correctly stops at step 1's failure.
+            var plan = new Plan();
+
+            var step1 = new PlanStep
+            {
+                StepId = "step-1",
+                Order = 1,
+                Description = "Excel step that will fail on a headless controller",
+                Action = new OfficeAction
+                {
+                    ActionId = "act-1",
+                    Host = "Excel",
+                    Operation = "excel.write_formula",
+                    Target = new ActionTarget { Range = "B2" },
+                    Parameters = new Dictionary<string, object> { { "formula", "=1+1" } }
+                },
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Approved
+            };
+            plan.Steps.Add(step1);
+
+            var step2 = new PlanStep
+            {
+                StepId = "step-2",
+                Order = 2,
+                Description = "Same-host step that must not execute after step 1 fails",
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Pending
+            };
+            plan.Steps.Add(step2);
+
+            var executor = new PlanExecutor(plan, new ExcelController(null));
+            var result = CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
+
+            Assert(step1.Status == PlanStepStatus.Failed,
+                "Step 1 should fail on a headless controller (precondition for this test)");
+            Assert(step2.Status == PlanStepStatus.Pending,
+                "Step 2 must NOT execute after step 1 failed - execution should stop at the failure");
+            Assert(executor.State == PlanExecutionState.Failed,
+                "Executor state should be Failed after a same-host step fails");
+            Assert(result.StepsExecutedOnThisHost == 1,
+                string.Format("Exactly 1 step should have been attempted, got {0}", result.StepsExecutedOnThisHost));
+
+            string status = CrossHostPlanCoordinator.ComputeStatus(plan, executor, "Excel");
+            Assert(status == "Failed",
+                string.Format("ComputeStatus should return 'Failed', got: {0}", status));
+
+            Console.WriteLine("  [PASS] ExecuteForCurrentHost stops at a Failed step on the current host, does not continue past it");
         }
     }
 }

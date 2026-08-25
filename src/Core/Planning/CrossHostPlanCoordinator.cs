@@ -13,8 +13,10 @@ namespace MSOfficeAIAssistant.Core.Planning
     /// - Execute ONLY steps whose TargetHost matches the current host, plus any reasoning-only steps
     /// - Walk steps in Order sequence, skipping (not attempting) any steps for a DIFFERENT host
     /// - CONTINUE past a skipped different-host step to execute any same-host steps later in the
-    ///   sequence (do NOT stop at the first different-host step - only stop for AwaitingApproval or
-    ///   Failed on an IN-SCOPE step)
+    ///   sequence (do NOT stop at the first different-host step)
+    /// - STOP at the first in-scope step that leaves executor.State as AwaitingApproval or Failed
+    ///   (matches PlanExecutor.ExecuteAll's own stop condition - a failed step is never silently
+    ///   skipped past, since a later same-host step may depend on state it never produced)
     /// - Detect when all steps for the current host are complete and the plan is waiting for a
     ///   different host to continue
     /// </summary>
@@ -71,11 +73,9 @@ namespace MSOfficeAIAssistant.Core.Planning
         /// Walks steps in Order sequence, skipping (not attempting) steps targeting a DIFFERENT host,
         /// and CONTINUING past those to execute any further same-host steps.
         ///
-        /// Stops early only when:
-        /// - An in-scope step sets executor.State to AwaitingApproval (user approval required)
-        ///
-        /// Continues past Failed steps (and steps that fail) to maximize progress on the current
-        /// host's steps before the workflow potentially pauses for a different host.
+        /// Stops early only when an in-scope step leaves executor.State as AwaitingApproval
+        /// (user approval required) or Failed (matches PlanExecutor.ExecuteAll's own stop
+        /// condition - resume via PlanExecutor.ContinueFromStep after review).
         ///
         /// Returns a CrossHostExecutionResult describing the outcome: whether the plan is fully
         /// complete, paused for a different host, and the number of steps executed on this host.
@@ -120,13 +120,16 @@ namespace MSOfficeAIAssistant.Core.Planning
                 var result = executor.ExecuteStep(step.Order);
                 stepsExecuted++;
 
-                // Stop only at AwaitingApproval (user action required).
-                // Continue past Failed steps to maximize progress on this host's steps.
-                if (executor.State == PlanExecutionState.AwaitingApproval)
+                // Stop at AwaitingApproval (user action required) or Failed (matches
+                // PlanExecutor.ExecuteAll's own stop condition from Phase D2 - a failed step
+                // must not be silently skipped past, since a later same-host step may depend on
+                // state the failed step never produced). The user resumes via
+                // PlanExecutor.ContinueFromStep after reviewing/fixing the failure.
+                if (executor.State == PlanExecutionState.AwaitingApproval ||
+                    executor.State == PlanExecutionState.Failed)
                 {
                     break;
                 }
-
             }
 
             // Determine the plan's next state
