@@ -458,83 +458,6 @@ namespace MSOfficeAIAssistant.Hosts
         /// <summary>
         /// Applies a single structured deck action returned by the model, setting status and result/error on the action object.
         /// </summary>
-        public bool ApplyPowerPointAction(PowerPointAction action)
-        {
-            if (action == null) return false;
-            action.Status = PowerPointActionStatus.Applying;
-
-            try
-            {
-                bool success = false;
-                string result = null;
-
-                if (string.Equals(action.Type, "move_slide", StringComparison.OrdinalIgnoreCase))
-                {
-                    success = MoveSlide(action.Source, action.Target);
-                    if (success) result = string.Format("Moved slide {0} to {1}", action.Source, action.Target);
-                }
-                else if (string.Equals(action.Type, "create_section", StringComparison.OrdinalIgnoreCase))
-                {
-                    int targetSlide = action.Slide > 0 ? action.Slide : action.Target;
-                    success = CreateSectionBeforeSlide(action.Name, targetSlide);
-                    if (success) result = string.Format("Created section '{0}'", action.Name);
-                }
-                else if (string.Equals(action.Type, "rename_section", StringComparison.OrdinalIgnoreCase))
-                {
-                    success = RenameSection(action.Section, action.Name);
-                    if (success) result = string.Format("Renamed section {0} to '{1}'", action.Section, action.Name);
-                }
-                else if (string.Equals(action.Type, "set_notes", StringComparison.OrdinalIgnoreCase))
-                {
-                    success = SetSpeakerNotesForSlide(action.Slide, action.Notes);
-                    if (success) result = string.Format("Set speaker notes on slide {0}", action.Slide);
-                }
-                else
-                {
-                    action.Status = PowerPointActionStatus.Error;
-                    action.ErrorMessage = string.Format("Unsupported action type '{0}'", action.Type);
-                    return false;
-                }
-
-                if (success)
-                {
-                    action.ResultText = result;
-                    action.Status = PowerPointActionStatus.Applied;
-                    Logger.Info(string.Format("Applied PowerPoint action {0}: {1}", action.Type, result));
-                    return true;
-                }
-                else
-                {
-                    action.Status = PowerPointActionStatus.Error;
-                    action.ErrorMessage = string.Format("Failed to execute {0}", action.Type);
-                    return false;
-                }
-            }
-            catch (Exception ex)
-            {
-                action.Status = PowerPointActionStatus.Error;
-                action.ErrorMessage = ex.Message;
-                Logger.Error(string.Format("ApplyPowerPointAction failed on {0}", action.Type), ex);
-                return false;
-            }
-        }
-
-        public HostOperationResult ExecutePowerPointAction(PowerPointAction action)
-        {
-            if (action == null)
-                return HostOperationResult.Failed("PowerPoint action cannot be null.");
-
-            if (!ApplyPowerPointAction(action))
-            {
-                return HostOperationResult.Failed(
-                    !string.IsNullOrEmpty(action.ErrorMessage) ? action.ErrorMessage : "PowerPoint action application failed.",
-                    0,
-                    action.Slide > 0 ? "Slide " + action.Slide : null);
-            }
-
-            return HostOperationResult.Ok(action.ResultText, action.Slide > 0 ? "Slide " + action.Slide : null);
-        }
-
         public HostOperationResult ExecuteCreateDeckFromOutline(string outline)
         {
             if (string.IsNullOrWhiteSpace(outline))
@@ -670,6 +593,38 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        // D-13 Tier 2: mutation methods that lacked a structured HostOperationResult wrapper.
+        public HostOperationResult ExecuteUndo()
+        {
+            try
+            {
+                bool ok = Undo();
+                return ok ? HostOperationResult.Ok("Undid the last PowerPoint change.") : HostOperationResult.Failed("Undo returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteUndo failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteUndo");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertText(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return HostOperationResult.Failed("Text cannot be empty.");
+
+            try
+            {
+                bool ok = InsertText(text);
+                return ok ? HostOperationResult.Ok("Inserted text into the presentation.") : HostOperationResult.Failed("InsertText returned false.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteInsertText failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteInsertText");
+            }
+        }
+
         public virtual bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
             dynamic presentation = GetActivePresentation();
@@ -786,22 +741,6 @@ namespace MSOfficeAIAssistant.Hosts
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("PowerPointController.InsertImageFromFile failed: {0}", ex.Message));
-                return false;
-            }
-        }
-
-        public bool UndoLastChange()
-        {
-            try
-            {
-                dynamic app = _rawAppObj;
-                if (app == null || app.CommandBars == null) return false;
-                app.CommandBars.ExecuteMso("Undo");
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("PowerPointController.UndoLastChange failed: {0}", ex.Message));
                 return false;
             }
         }
