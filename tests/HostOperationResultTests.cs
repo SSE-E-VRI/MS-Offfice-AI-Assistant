@@ -109,6 +109,81 @@ namespace MSOfficeAIAssistant.Tests
             var imageNotFoundRes = ctrl.ExecuteInsertImage("C:\\non_existent_file_path_12345.png");
             Assert(!imageNotFoundRes.Success, "ExecuteInsertImage on non-existent file should fail");
             Assert(imageNotFoundRes.ErrorMessage.Contains("not found"), "Expected file not found message");
+
+            // D-13 Tier 1: Test new Execute* wrappers with validation failures and headless operation
+            TestExecuteMoveSlideResults(ctrl);
+            TestExecuteCreateSectionResults(ctrl);
+            TestExecuteRenameSectionResults(ctrl);
+            TestExecuteSetSpeakerNotesResults(ctrl);
+        }
+
+        private static void TestExecuteMoveSlideResults(PowerPointController ctrl)
+        {
+            // Validation: invalid source slide
+            var invalidSrcRes = ctrl.ExecuteMoveSlide(0, 5);
+            Assert(!invalidSrcRes.Success, "ExecuteMoveSlide(0, 5) should fail validation");
+            Assert(invalidSrcRes.ErrorMessage.Contains("at least 1"), "Expected validation message for source slide");
+
+            // Validation: invalid destination slide
+            var invalidTgtRes = ctrl.ExecuteMoveSlide(5, -1);
+            Assert(!invalidTgtRes.Success, "ExecuteMoveSlide(5, -1) should fail validation");
+            Assert(invalidTgtRes.ErrorMessage.Contains("at least 1"), "Expected validation message for destination slide");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteMoveSlide(1, 2);
+            Assert(!headlessRes.Success, "ExecuteMoveSlide(1, 2) on null app should fail cleanly");
+            Assert(headlessRes.ErrorMessage.Contains("Failed"), "Expected failure message for headless operation");
+        }
+
+        private static void TestExecuteCreateSectionResults(PowerPointController ctrl)
+        {
+            // Validation: empty section name
+            var emptyNameRes = ctrl.ExecuteCreateSectionBeforeSlide("", 3);
+            Assert(!emptyNameRes.Success, "ExecuteCreateSectionBeforeSlide(empty, 3) should fail");
+            Assert(emptyNameRes.ErrorMessage.Contains("empty"), "Expected validation message for section name");
+
+            // Validation: invalid slide number
+            var invalidSlideRes = ctrl.ExecuteCreateSectionBeforeSlide("New Section", 0);
+            Assert(!invalidSlideRes.Success, "ExecuteCreateSectionBeforeSlide('New Section', 0) should fail");
+            Assert(invalidSlideRes.ErrorMessage.Contains("at least 1"), "Expected validation message for slide number");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteCreateSectionBeforeSlide("New Section", 3);
+            Assert(!headlessRes.Success, "ExecuteCreateSectionBeforeSlide on null app should fail cleanly");
+        }
+
+        private static void TestExecuteRenameSectionResults(PowerPointController ctrl)
+        {
+            // Validation: invalid section index
+            var invalidIndexRes = ctrl.ExecuteRenameSectionInPlace(0, "Renamed");
+            Assert(!invalidIndexRes.Success, "ExecuteRenameSectionInPlace(0, 'Renamed') should fail");
+            Assert(invalidIndexRes.ErrorMessage.Contains("at least 1"), "Expected validation message for section index");
+
+            // Validation: empty section name
+            var emptyNameRes = ctrl.ExecuteRenameSectionInPlace(1, "");
+            Assert(!emptyNameRes.Success, "ExecuteRenameSectionInPlace(1, empty) should fail");
+            Assert(emptyNameRes.ErrorMessage.Contains("empty"), "Expected validation message for section name");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteRenameSectionInPlace(1, "Renamed");
+            Assert(!headlessRes.Success, "ExecuteRenameSectionInPlace on null app should fail cleanly");
+        }
+
+        private static void TestExecuteSetSpeakerNotesResults(PowerPointController ctrl)
+        {
+            // Validation: invalid slide number
+            var invalidSlideRes = ctrl.ExecuteSetSpeakerNotesInPlace(-1, "Speaker notes");
+            Assert(!invalidSlideRes.Success, "ExecuteSetSpeakerNotesInPlace(-1, notes) should fail");
+            Assert(invalidSlideRes.ErrorMessage.Contains("at least 1"), "Expected validation message for slide number");
+
+            // Validation: empty notes
+            var emptyNotesRes = ctrl.ExecuteSetSpeakerNotesInPlace(1, "");
+            Assert(!emptyNotesRes.Success, "ExecuteSetSpeakerNotesInPlace(1, empty) should fail");
+            Assert(emptyNotesRes.ErrorMessage.Contains("empty"), "Expected validation message for notes");
+
+            // Headless: valid parameters but no presentation
+            var headlessRes = ctrl.ExecuteSetSpeakerNotesInPlace(1, "Speaker notes");
+            Assert(!headlessRes.Success, "ExecuteSetSpeakerNotesInPlace on null app should fail cleanly");
         }
 
         private static void Assert(bool condition, string message)
