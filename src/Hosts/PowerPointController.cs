@@ -577,99 +577,160 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        public bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
+        public HostOperationResult ExecuteMoveSlide(int sourceSlideNumber, int destinationSlideNumber)
         {
+            if (sourceSlideNumber < 1)
+                return HostOperationResult.Failed("Source slide number must be at least 1.", 0, "Slide " + sourceSlideNumber);
+
+            if (destinationSlideNumber < 1)
+                return HostOperationResult.Failed("Destination slide number must be at least 1.", 0, "Slide " + destinationSlideNumber);
+
             try
             {
-                dynamic presentation = GetActivePresentation(false);
-                if (presentation == null || presentation.Slides == null) return false;
-                int count = Convert.ToInt32(presentation.Slides.Count);
-                if (sourceSlideNumber < 1 || sourceSlideNumber > count || destinationSlideNumber < 1 || destinationSlideNumber > count)
-                    return false;
-                dynamic slide = presentation.Slides[sourceSlideNumber];
-                slide.MoveTo(destinationSlideNumber);
-                return true;
+                bool ok = MoveSlide(sourceSlideNumber, destinationSlideNumber);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Moved slide {0} to position {1}", sourceSlideNumber, destinationSlideNumber), "Slide " + destinationSlideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to move slide {0} to position {1}", sourceSlideNumber, destinationSlideNumber), 0, "Slide " + destinationSlideNumber);
             }
             catch (Exception ex)
             {
-                Logger.Warn(string.Format("PowerPointController.MoveSlide failed: {0}", ex.Message));
-                return false;
+                Logger.Error("PowerPointController.ExecuteMoveSlide failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteMoveSlide", "Slide " + destinationSlideNumber);
             }
         }
 
-        public bool CreateSectionBeforeSlide(string sectionName, int slideNumber)
+        public HostOperationResult ExecuteCreateSectionBeforeSlide(string sectionName, int slideNumber)
+        {
+            if (string.IsNullOrWhiteSpace(sectionName))
+                return HostOperationResult.Failed("Section name cannot be empty.", 0, "Slide " + slideNumber);
+
+            if (slideNumber < 1)
+                return HostOperationResult.Failed("Slide number must be at least 1.", 0, "Slide " + slideNumber);
+
+            try
+            {
+                bool ok = CreateSectionBeforeSlide(sectionName, slideNumber);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Created section '{0}' before slide {1}", sectionName, slideNumber), "Slide " + slideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to create section '{0}' before slide {1}", sectionName, slideNumber), 0, "Slide " + slideNumber);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteCreateSectionBeforeSlide failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteCreateSectionBeforeSlide", "Slide " + slideNumber);
+            }
+        }
+
+        public HostOperationResult ExecuteRenameSectionInPlace(int sectionIndex, string sectionName)
+        {
+            if (sectionIndex < 1)
+                return HostOperationResult.Failed("Section index must be at least 1.", 0, "Section " + sectionIndex);
+
+            if (string.IsNullOrWhiteSpace(sectionName))
+                return HostOperationResult.Failed("New section name cannot be empty.", 0, "Section " + sectionIndex);
+
+            try
+            {
+                bool ok = RenameSection(sectionIndex, sectionName);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Renamed section {0} to '{1}'", sectionIndex, sectionName), "Section " + sectionIndex);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to rename section {0} to '{1}'", sectionIndex, sectionName), 0, "Section " + sectionIndex);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteRenameSectionInPlace failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteRenameSectionInPlace", "Section " + sectionIndex);
+            }
+        }
+
+        public HostOperationResult ExecuteSetSpeakerNotesInPlace(int slideNumber, string notes)
+        {
+            if (slideNumber < 1)
+                return HostOperationResult.Failed("Slide number must be at least 1.", 0, "Slide " + slideNumber);
+
+            if (string.IsNullOrWhiteSpace(notes))
+                return HostOperationResult.Failed("Speaker notes cannot be empty.", 0, "Slide " + slideNumber);
+
+            try
+            {
+                bool ok = SetSpeakerNotesForSlide(slideNumber, notes);
+                if (ok)
+                    return HostOperationResult.Ok(string.Format("Set speaker notes on slide {0}", slideNumber), "Slide " + slideNumber);
+                else
+                    return HostOperationResult.Failed(string.Format("Failed to set speaker notes on slide {0}", slideNumber), 0, "Slide " + slideNumber);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("PowerPointController.ExecuteSetSpeakerNotesInPlace failed", ex);
+                return HostOperationResult.FromException(ex, "PowerPointController.ExecuteSetSpeakerNotesInPlace", "Slide " + slideNumber);
+            }
+        }
+
+        public virtual bool MoveSlide(int sourceSlideNumber, int destinationSlideNumber)
+        {
+            dynamic presentation = GetActivePresentation(false);
+            if (presentation == null || presentation.Slides == null) return false;
+            int count = Convert.ToInt32(presentation.Slides.Count);
+            if (sourceSlideNumber < 1 || sourceSlideNumber > count || destinationSlideNumber < 1 || destinationSlideNumber > count)
+                return false;
+            dynamic slide = presentation.Slides[sourceSlideNumber];
+            slide.MoveTo(destinationSlideNumber);
+            return true;
+        }
+
+        public virtual bool CreateSectionBeforeSlide(string sectionName, int slideNumber)
         {
             if (string.IsNullOrWhiteSpace(sectionName)) return false;
-            try
-            {
-                dynamic presentation = GetActivePresentation(false);
-                if (presentation == null || presentation.SectionProperties == null) return false;
-                int count = Convert.ToInt32(presentation.Slides.Count);
-                if (slideNumber < 1 || slideNumber > count + 1) return false;
+            dynamic presentation = GetActivePresentation(false);
+            if (presentation == null || presentation.SectionProperties == null) return false;
+            int count = Convert.ToInt32(presentation.Slides.Count);
+            if (slideNumber < 1 || slideNumber > count + 1) return false;
 
-                if (slideNumber <= count)
-                {
-                    presentation.SectionProperties.AddBeforeSlide(slideNumber, sectionName.Trim());
-                }
-                else
-                {
-                    // AddBeforeSlide requires an existing slide.  AddSection is the COM API
-                    // that creates an empty section at the end of a presentation.
-                    int sectionCount = Convert.ToInt32(presentation.SectionProperties.Count);
-                    presentation.SectionProperties.AddSection(sectionCount + 1, sectionName.Trim());
-                }
-                return true;
-            }
-            catch (Exception ex)
+            if (slideNumber <= count)
             {
-                Logger.Warn(string.Format("PowerPointController.CreateSectionBeforeSlide failed: {0}", ex.Message));
-                return false;
+                presentation.SectionProperties.AddBeforeSlide(slideNumber, sectionName.Trim());
             }
+            else
+            {
+                // AddBeforeSlide requires an existing slide.  AddSection is the COM API
+                // that creates an empty section at the end of a presentation.
+                int sectionCount = Convert.ToInt32(presentation.SectionProperties.Count);
+                presentation.SectionProperties.AddSection(sectionCount + 1, sectionName.Trim());
+            }
+            return true;
         }
 
-        public bool RenameSection(int sectionIndex, string sectionName)
+        public virtual bool RenameSection(int sectionIndex, string sectionName)
         {
             if (sectionIndex < 1 || string.IsNullOrWhiteSpace(sectionName)) return false;
-            try
-            {
-                dynamic presentation = GetActivePresentation(false);
-                if (presentation == null || presentation.SectionProperties == null) return false;
-                presentation.SectionProperties.Rename(sectionIndex, sectionName.Trim());
-                return true;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("PowerPointController.RenameSection failed: {0}", ex.Message));
-                return false;
-            }
+            dynamic presentation = GetActivePresentation(false);
+            if (presentation == null || presentation.SectionProperties == null) return false;
+            presentation.SectionProperties.Rename(sectionIndex, sectionName.Trim());
+            return true;
         }
 
-        public bool SetSpeakerNotesForSlide(int slideNumber, string notes)
+        public virtual bool SetSpeakerNotesForSlide(int slideNumber, string notes)
         {
             if (slideNumber < 1 || string.IsNullOrWhiteSpace(notes)) return false;
-            try
+            dynamic presentation = GetActivePresentation(false);
+            if (presentation == null || presentation.Slides == null) return false;
+            int count = Convert.ToInt32(presentation.Slides.Count);
+            if (slideNumber > count) return false;
+            dynamic slide = presentation.Slides[slideNumber];
+            dynamic shapes = slide.NotesPage != null ? slide.NotesPage.Shapes : null;
+            int shapeCount = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
+            for (int i = 1; i <= shapeCount; i++)
             {
-                dynamic presentation = GetActivePresentation(false);
-                if (presentation == null || presentation.Slides == null) return false;
-                int count = Convert.ToInt32(presentation.Slides.Count);
-                if (slideNumber > count) return false;
-                dynamic slide = presentation.Slides[slideNumber];
-                dynamic shapes = slide.NotesPage != null ? slide.NotesPage.Shapes : null;
-                int shapeCount = shapes != null ? Convert.ToInt32(shapes.Count) : 0;
-                for (int i = 1; i <= shapeCount; i++)
+                dynamic shape = shapes[i];
+                if (shape == null || shape.PlaceholderFormat == null) continue;
+                if (Convert.ToInt32(shape.PlaceholderFormat.Type) == 2 && Convert.ToInt32(shape.HasTextFrame) != 0)
                 {
-                    dynamic shape = shapes[i];
-                    if (shape == null || shape.PlaceholderFormat == null) continue;
-                    if (Convert.ToInt32(shape.PlaceholderFormat.Type) == 2 && Convert.ToInt32(shape.HasTextFrame) != 0)
-                    {
-                        shape.TextFrame.TextRange.Text = CleanMarkdown(notes);
-                        return true;
-                    }
+                    shape.TextFrame.TextRange.Text = CleanMarkdown(notes);
+                    return true;
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warn(string.Format("PowerPointController.SetSpeakerNotesForSlide failed: {0}", ex.Message));
             }
             return false;
         }
