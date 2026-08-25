@@ -126,6 +126,7 @@ namespace MSOfficeAIAssistant.Core.Planning
             if (!preVerifyResult.IsValid)
             {
                 step.Status = PlanStepStatus.Failed;
+                _state = PlanExecutionState.Failed;
                 step.ErrorMessage = string.Join("; ", preVerifyResult.ValidationErrors);
                 return HostOperationResult.Failed(step.ErrorMessage, 0, step.Action.TargetDisplay);
             }
@@ -137,6 +138,7 @@ namespace MSOfficeAIAssistant.Core.Planning
                 if (!captureRes.Success && step.Action.RiskLevel >= 2)
                 {
                     step.Status = PlanStepStatus.Failed;
+                    _state = PlanExecutionState.Failed;
                     step.ErrorMessage = "Failed to capture BeforeState for rollback: " + captureRes.ErrorMessage;
                     return HostOperationResult.Failed(step.ErrorMessage, captureRes.ErrorCode, step.Action.TargetDisplay);
                 }
@@ -165,6 +167,7 @@ namespace MSOfficeAIAssistant.Core.Planning
                     {
                         // Exceeded retries
                         step.Status = PlanStepStatus.Failed;
+                        _state = PlanExecutionState.Failed;
                         step.ErrorMessage = string.Format("Host remained busy after {0} retries: {1}", maxRetries, postVerifyResult.DiagnosticMessage);
                         return HostOperationResult.Failed(step.ErrorMessage, execResult.ErrorCode, step.Action.TargetDisplay);
                     }
@@ -181,6 +184,7 @@ namespace MSOfficeAIAssistant.Core.Planning
                     else
                     {
                         step.Status = PlanStepStatus.Failed;
+                        _state = PlanExecutionState.Failed;
                         step.ErrorMessage = postVerifyResult.DiagnosticMessage;
                         return HostOperationResult.Failed(step.ErrorMessage, execResult.ErrorCode, step.Action.TargetDisplay);
                     }
@@ -188,6 +192,7 @@ namespace MSOfficeAIAssistant.Core.Planning
             }
 
             step.Status = PlanStepStatus.Failed;
+            _state = PlanExecutionState.Failed;
             step.ErrorMessage = "Unexpected execution failure.";
             return HostOperationResult.Failed(step.ErrorMessage, 0, step.Action.TargetDisplay);
         }
@@ -223,7 +228,7 @@ namespace MSOfficeAIAssistant.Core.Planning
                         CurrentStepOrder = step.Order,
                         TotalSteps = _plan.TotalStepCount,
                         State = _state,
-                        LastMessage = result.ErrorMessage ?? result.Value != null ? Convert.ToString(result.Value) : "Step executed."
+                        LastMessage = result.ErrorMessage ?? (result.Value != null ? Convert.ToString(result.Value) : "Step executed.")
                     });
                 }
 
@@ -277,7 +282,7 @@ namespace MSOfficeAIAssistant.Core.Planning
                         CurrentStepOrder = step.Order,
                         TotalSteps = _plan.TotalStepCount,
                         State = _state,
-                        LastMessage = result.ErrorMessage ?? result.Value != null ? Convert.ToString(result.Value) : "Step executed."
+                        LastMessage = result.ErrorMessage ?? (result.Value != null ? Convert.ToString(result.Value) : "Step executed.")
                     });
                 }
 
@@ -320,7 +325,16 @@ namespace MSOfficeAIAssistant.Core.Planning
                 return HostOperationResult.Failed("No plan or steps available for rollback.");
             }
 
-            var result = RollbackExecutor.RollbackBatch(_controller, _plan.Steps);
+            var appliedActions = new List<OfficeAction>();
+            foreach (var s in _plan.Steps)
+            {
+                if (s.Status == PlanStepStatus.Applied && s.Action != null)
+                {
+                    appliedActions.Add(s.Action);
+                }
+            }
+
+            var result = RollbackExecutor.RollbackBatch(_controller, appliedActions);
 
             if (result.Success)
             {
