@@ -1131,5 +1131,37 @@ namespace MSOfficeAIAssistant.Hosts
             }
             return "Presentation";
         }
+
+        public string GetContextReadout()
+        {
+            try
+            {
+                if (_rawAppObj == null) return string.Empty;
+
+                dynamic app = _rawAppObj;
+                dynamic presentation = null;
+                try { presentation = app.ActivePresentation; } catch { }
+                if (presentation == null) return string.Empty;
+
+                dynamic slides = presentation.Slides;
+                int totalSlideCount = 0;
+                try { totalSlideCount = Convert.ToInt32(slides.Count); } catch { }
+                if (totalSlideCount == 0) return string.Empty;
+
+                dynamic activeSlide = GetActiveSlide();
+                if (activeSlide == null) return string.Empty;
+
+                int currentSlideNumber = 0;
+                try { currentSlideNumber = Convert.ToInt32(activeSlide.SlideNumber); } catch { }
+                if (currentSlideNumber == 0) return string.Empty;
+
+                return string.Format("Slide {0} of {1}", currentSlideNumber, totalSlideCount);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.GetContextReadout failed: {0}", ex.Message));
+            }
+            return string.Empty;
+        }
     }
 }

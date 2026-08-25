@@ -336,6 +336,7 @@ namespace MSOfficeAIAssistant.UI
             if (string.IsNullOrWhiteSpace(text)) return;
             TxtInput.Clear();
 
+            RefreshContextReadout();
             string fullPrompt = ComposePromptWithContext(text, GetPromptContextScope());
 
             await SendMessageAsync(fullPrompt, null);
@@ -564,11 +565,16 @@ namespace MSOfficeAIAssistant.UI
         {
             try
             {
-                var item = CmbContextScope != null ? CmbContextScope.SelectedItem as ComboBoxItem : null;
-                string tag = item != null ? Convert.ToString(item.Tag) : "Selection";
-                if (string.Equals(tag, "CurrentFile", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.CurrentFile;
-                if (string.Equals(tag, "SelectionAndFile", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.SelectionAndFile;
-                if (string.Equals(tag, "AttachmentsOnly", StringComparison.OrdinalIgnoreCase)) return PromptContextScope.AttachmentsOnly;
+                bool includeSelection = ChkIncludeSelection != null && ChkIncludeSelection.IsChecked.HasValue && ChkIncludeSelection.IsChecked.Value;
+                bool includeCurrentFile = ChkIncludeCurrentFile != null && ChkIncludeCurrentFile.IsChecked.HasValue && ChkIncludeCurrentFile.IsChecked.Value;
+
+                if (includeSelection && includeCurrentFile)
+                    return PromptContextScope.SelectionAndFile;
+                if (includeSelection)
+                    return PromptContextScope.Selection;
+                if (includeCurrentFile)
+                    return PromptContextScope.CurrentFile;
+                return PromptContextScope.AttachmentsOnly;
             }
             catch { }
             return PromptContextScope.Selection;
@@ -615,6 +621,36 @@ namespace MSOfficeAIAssistant.UI
                 Logger.Warn(string.Format("GetCurrentFileContext failed: {0}", ex.Message));
             }
             return string.Empty;
+        }
+
+        private void RefreshContextReadout()
+        {
+            try
+            {
+                if (TxtContextReadout == null) return;
+
+                string contextText = string.Empty;
+                if (_wordCtrl != null)
+                {
+                    contextText = _wordCtrl.GetContextReadout();
+                }
+                else if (_excelCtrl != null)
+                {
+                    contextText = _excelCtrl.GetContextReadout();
+                }
+                else if (_pptCtrl != null)
+                {
+                    contextText = _pptCtrl.GetContextReadout();
+                }
+
+                TxtContextReadout.Text = contextText ?? string.Empty;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("RefreshContextReadout failed: {0}", ex.Message));
+                if (TxtContextReadout != null)
+                    TxtContextReadout.Text = string.Empty;
+            }
         }
 
         private void BtnStopStreaming_Click(object sender, RoutedEventArgs e)
@@ -1313,6 +1349,8 @@ namespace MSOfficeAIAssistant.UI
             // pane can cache the now-valid HwndSource.
             EventHandler handler = PromptInputFocusRequested;
             if (handler != null) handler(this, EventArgs.Empty);
+
+            RefreshContextReadout();
         }
 
         public bool IsPromptKeyboardFocused

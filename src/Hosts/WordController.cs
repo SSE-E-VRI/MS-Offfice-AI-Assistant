@@ -618,6 +618,79 @@ namespace MSOfficeAIAssistant.Hosts
             return "WordDocument";
         }
 
+        public string GetContextReadout()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null) return string.Empty;
+
+                // Try to find the nearest heading above the cursor position
+                dynamic selection = null;
+                try { selection = app.Selection; } catch { }
+                if (selection == null) return "Document: " + GetActiveDocumentName();
+
+                object selStartObj = null;
+                try { selStartObj = selection.Start; } catch { }
+                int selStart = selStartObj != null ? Convert.ToInt32(selStartObj) : -1;
+
+                if (selStart < 0)
+                    return "Document: " + GetActiveDocumentName();
+
+                // Scan paragraphs for headings before the cursor position
+                int paragraphCount = 0;
+                try { paragraphCount = app.ActiveDocument.Paragraphs.Count; } catch { }
+
+                string lastHeadingFound = null;
+                for (int index = 1; index <= Math.Min(200, paragraphCount); index++)
+                {
+                    try
+                    {
+                        Word.Paragraph paragraph = app.ActiveDocument.Paragraphs[index];
+                        if (paragraph == null || paragraph.Range == null) continue;
+
+                        object rangeStartObj = null;
+                        try { rangeStartObj = paragraph.Range.Start; } catch { }
+                        int rangeStart = rangeStartObj != null ? Convert.ToInt32(rangeStartObj) : -1;
+
+                        // Only consider paragraphs before the cursor
+                        if (rangeStart < 0 || rangeStart >= selStart) continue;
+
+                        int outlineLevel = 0;
+                        try { outlineLevel = Convert.ToInt32(paragraph.OutlineLevel, CultureInfo.InvariantCulture); } catch { }
+
+                        string styleName = string.Empty;
+                        try { styleName = Convert.ToString(paragraph.Style, CultureInfo.InvariantCulture); }
+                        catch { }
+
+                        bool isHeading = (outlineLevel >= 1 && outlineLevel <= 9);
+                        if (!isHeading && styleName.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0)
+                            isHeading = true;
+
+                        if (isHeading)
+                        {
+                            string text = CleanWordText(paragraph.Range.Text);
+                            if (!string.IsNullOrWhiteSpace(text))
+                            {
+                                lastHeadingFound = text.Trim();
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                if (!string.IsNullOrEmpty(lastHeadingFound))
+                    return string.Format("Section: {0}", lastHeadingFound);
+
+                return "Document: " + GetActiveDocumentName();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.GetContextReadout failed: {0}", ex.Message));
+            }
+            return string.Empty;
+        }
+
         // Pure, unit-testable helpers.  Keeping these public lets a lightweight test project
         // validate contextual retrieval without loading Word or NetOffice.
         public static string BuildRelevantDocumentContext(string documentText, string prompt, int maxCharacters)

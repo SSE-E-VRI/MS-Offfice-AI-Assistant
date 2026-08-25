@@ -89,26 +89,30 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <!-- Model Selector -->
                 <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="False" SelectionChanged="CmbModel_SelectionChanged"/>
 
-                <!-- Explicit context scope keeps users in control of what leaves Office. -->
-                <ComboBox x:Name="CmbContextScope" Grid.Column="1" Margin="0,0,6,0" Padding="4,2" FontSize="11" SelectedIndex="0"
-                          ToolTip="Choose exactly which Office context is sent with this prompt">
-                    <ComboBoxItem Tag="Selection">Selection</ComboBoxItem>
-                    <ComboBoxItem Tag="CurrentFile">Current file</ComboBoxItem>
-                    <ComboBoxItem Tag="SelectionAndFile">Selection + file</ComboBoxItem>
-                    <ComboBoxItem Tag="AttachmentsOnly">Attachments only</ComboBoxItem>
-                </ComboBox>
+                <!-- Context scope: selection and current file checkboxes -->
+                <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Selection" IsChecked="True"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
+                          ToolTip="Send the current text selection"/>
+                <CheckBox x:Name="ChkIncludeCurrentFile" Grid.Column="2" Content="Current file" IsChecked="False"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,0"
+                          ToolTip="Send the current document/sheet/deck's relevant content"/>
 
-                <CheckBox x:Name="ChkTrackChanges" Grid.Column="2" Content="Track edits"
+                <!-- Live host context readout -->
+                <TextBlock x:Name="TxtContextReadout" Grid.Column="3" VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,0"/>
+
+                <CheckBox x:Name="ChkTrackChanges" Grid.Column="4" Content="Track edits"
                           VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" IsChecked="True"
                           ToolTip="When in Word, insert/rewrite responses as Track Changes."/>
 
                 <!-- Mode Selector: Chat / Plan / Edit -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
                     <TextBlock Text="Mode:" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"/>
                     <RadioButton x:Name="RdoChatMode" Content="Chat" GroupName="SessionMode" Click="RdoChatMode_Click"
                                  VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
