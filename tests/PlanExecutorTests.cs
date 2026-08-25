@@ -13,7 +13,6 @@ namespace MSOfficeAIAssistant.Tests
         public static void RunAll()
         {
             Console.WriteLine("=== PlanExecutor State Machine Tests === START");
-            Console.Flush();
 
             TestRiskLevel0StepExecutesAutomatically();
             TestRiskLevel1StepWithPendingStatusAwaitingApproval();
@@ -37,42 +36,38 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestRiskLevel0StepExecutesAutomatically()
         {
-            // Create a plan with a RiskLevel 0 step (SetNotes is RiskLevel 1, so we need a RiskLevel 0 tool)
+            // NOTE: No RiskLevel-0 mutating tool is registered in ToolRegistry today - every
+            // registered operation (excel.write_formula, powerpoint.set_notes, etc.) requires
+            // approval by design (Phase C2/C4). ActionVerifier.PreVerify re-synchronizes
+            // RiskLevel/RequiresApproval from the ToolDefinition on every call (the D-5 single
+            // source of truth), so a test cannot override RiskLevel on a real registered tool -
+            // it will simply be resynced back before ExecuteStep's gate check runs. And an
+            // OfficeAction with an unresolvable Operation fails PreVerify.IsValid instead of
+            // reaching the gate at all.
+            //
+            // The one category of step that genuinely always executes without approval gating,
+            // regardless of risk, is a reasoning-only step (Action == null) - that is what this
+            // test actually verifies.
             var plan = new Plan();
             var step = new PlanStep
             {
                 StepId = "step-1",
                 Order = 1,
-                Description = "Test RiskLevel 0 execution",
-                Action = new OfficeAction
-                {
-                    ActionId = "act-1",
-                    Host = "Excel",
-                    Operation = "excel.write_formula",
-                    Target = new ActionTarget { Range = "B2" },
-                    Parameters = new Dictionary<string, object> { { "formula", "=1+1" } }
-                },
+                Description = "Reasoning-only step, no Action",
                 TargetHost = "Excel",
                 Status = PlanStepStatus.Pending
+                // Action left null -> IsReasoningOnly == true
             };
             plan.Steps.Add(step);
 
-            // Verify the action is valid and gets synchronized
-            var preVerify = ActionVerifier.PreVerify(step.Action);
-            // Override to RiskLevel 0 for this test (normally formula is RiskLevel 2)
-            step.Action.RiskLevel = 0;
-            step.Action.RequiresApproval = false;
-
             var executor = new PlanExecutor(plan, new ExcelController(null));
 
-            // Execute the step - should not require approval for RiskLevel 0
             var result = executor.ExecuteStep(1);
 
-            // Step should have attempted execution (result depends on controller being null, but step status changes)
-            // With headless controller, it should fail due to null app, but that's normal for headless testing
-            // The important thing is that it TRIED to execute (status changed from Pending to Applying to Applied/Failed)
-            Assert(step.Status != PlanStepStatus.Pending, "RiskLevel 0 step should not remain Pending after ExecuteStep");
-            Console.WriteLine("  [PASS] RiskLevel 0 step executes automatically without requiring Approved status");
+            Assert(step.Status == PlanStepStatus.Applied, "Reasoning-only step should be marked Applied automatically");
+            Assert(executor.State != PlanExecutionState.AwaitingApproval, "Reasoning-only step must not gate for approval");
+            Assert(result.Success, "ExecuteStep should report success for a reasoning-only step");
+            Console.WriteLine("  [PASS] Reasoning-only step executes automatically without requiring Approved status");
         }
 
         private static void TestRiskLevel1StepWithPendingStatusAwaitingApproval()
@@ -174,15 +169,17 @@ namespace MSOfficeAIAssistant.Tests
                     RequiresApproval = false
                 },
                 TargetHost = "Excel",
-                Status = PlanStepStatus.Pending
+                // Approved (not Pending): excel.write_formula is a registered RiskLevel-2 tool
+                // that always requires approval (PreVerify resyncs RequiresApproval from the
+                // registry regardless of the object initializer above), so a Pending step here
+                // would gate for approval before ever reaching PreVerify's validation check. Set
+                // Approved to bypass the gate and actually exercise the validation-error path
+                // this test targets.
+                Status = PlanStepStatus.Approved
             };
             plan.Steps.Add(step);
 
             var executor = new PlanExecutor(plan, new ExcelController(null));
-
-            // Mock execution tracker
-            bool executeWasCalled = false;
-            var originalExecute = ToolRegistry.Execute;
 
             // Execute the step
             var result = executor.ExecuteStep(1);
@@ -207,7 +204,6 @@ namespace MSOfficeAIAssistant.Tests
                 StepId = "step-1",
                 Order = 1,
                 Description = "Low risk step",
-                IsReasoningOnly = true,  // Reasoning-only step, will execute automatically
                 Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step1);
@@ -239,7 +235,6 @@ namespace MSOfficeAIAssistant.Tests
                 StepId = "step-3",
                 Order = 3,
                 Description = "Should not execute",
-                IsReasoningOnly = true,
                 Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step3);
@@ -274,7 +269,6 @@ namespace MSOfficeAIAssistant.Tests
                 StepId = "step-1",
                 Order = 1,
                 Description = "Low risk reasoning step",
-                IsReasoningOnly = true,
                 Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step1);
@@ -296,7 +290,10 @@ namespace MSOfficeAIAssistant.Tests
                     RequiresApproval = false
                 },
                 TargetHost = "Excel",
-                Status = PlanStepStatus.Pending
+                // Approved: excel.write_formula always requires approval per the registry, so a
+                // Pending step would gate rather than reach validation - see the comment in
+                // TestPreVerifyValidationErrorMarksStepFailed for the full explanation.
+                Status = PlanStepStatus.Approved
             };
             plan.Steps.Add(step2);
 
@@ -306,7 +303,6 @@ namespace MSOfficeAIAssistant.Tests
                 StepId = "step-3",
                 Order = 3,
                 Description = "Should not execute",
-                IsReasoningOnly = true,
                 Status = PlanStepStatus.Pending
             };
             plan.Steps.Add(step3);
@@ -376,14 +372,24 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestBusyRetryableStateRetriesUpTo3Times()
         {
+            // KNOWN GAP: ExcelController.ExecuteWriteFormula is not virtual, so this suite
+            // cannot override it to force ToolRegistry.Execute to return a HostBusyRetryable
+            // HostOperationResult (0x800AC472) without widening this task's scope into a host
+            // controller file, which is out of scope here. This test can therefore only exercise
+            // PlanExecutor.ExecuteStep against a genuinely failing headless call (null COM app)
+            // and confirm it reaches a terminal state - it does NOT prove the retry-3-times count
+            // in PlanExecutor.ExecuteStep's while loop is correct. That loop was read and
+            // verified by code review (const maxRetries = 3, Thread.Sleep(retryDelayMs) between
+            // attempts, terminal Failed after the 3rd), but is not mechanically guarded by a
+            // test. A follow-up making ExecuteWriteFormula virtual (mirroring the PowerPoint
+            // Tier-1 D-13 pattern) would let a future suite assert the exact retry count.
             var plan = new Plan();
 
-            // Create an action that will report HostBusyRetryable via PostVerify
             var step = new PlanStep
             {
                 StepId = "step-1",
                 Order = 1,
-                Description = "Test busy retry",
+                Description = "Test busy retry (terminal-state only, see gap note above)",
                 Action = new OfficeAction
                 {
                     ActionId = "act-1",
@@ -395,25 +401,32 @@ namespace MSOfficeAIAssistant.Tests
                     RequiresApproval = false
                 },
                 TargetHost = "Excel",
-                Status = PlanStepStatus.Pending
+                // Approved: excel.write_formula always requires approval per the registry - see
+                // the comment in TestPreVerifyValidationErrorMarksStepFailed.
+                Status = PlanStepStatus.Approved
             };
             plan.Steps.Add(step);
 
-            // Use the headless controller - it will fail, and the executor will interpret the failure
-            // as a potential retry scenario. We're testing that the retry logic exists and attempts
-            // the execution (status should change from Pending to either Applied or Failed).
             var executor = new PlanExecutor(plan, new ExcelController(null));
 
-            // Execute the step
             var result = executor.ExecuteStep(1);
 
-            // The step should move to a terminal state (Applied or Failed, not remain Pending)
             Assert(step.Status != PlanStepStatus.Pending, "Step should not remain Pending after ExecuteStep");
-            // Since we're using a headless controller (null app), it should fail
             Assert(step.Status == PlanStepStatus.Failed || step.Status == PlanStepStatus.Applied,
                 "Step should be in terminal state (Applied or Failed)");
+            // With a headless (null app) controller, ExecuteWriteFormula reports failure without
+            // the 0x800AC472 busy HRESULT, so PostVerify's outcome is a genuine (non-retryable)
+            // failure, not HostBusyRetryable. This is the one test in this suite that reaches
+            // the PostVerify-failure branch of ExecuteStep (as opposed to the PreVerify-invalid
+            // branch, which TestExecuteAllStopsAtFailedStep already covers) - it is the only
+            // coverage for that branch's own _state = PlanExecutionState.Failed assignment.
+            if (step.Status == PlanStepStatus.Failed)
+            {
+                Assert(executor.State == PlanExecutionState.Failed,
+                    "Executor state should be Failed when PostVerify reports the step failed");
+            }
 
-            Console.WriteLine("  [PASS] HostBusyRetryable outcome is handled (retry logic tested via PostVerify integration)");
+            Console.WriteLine("  [PASS] Step reaches terminal state after ExecuteStep, executor state tracks PostVerify failure (retry-count itself verified by code review, see gap note)");
         }
     }
 }
