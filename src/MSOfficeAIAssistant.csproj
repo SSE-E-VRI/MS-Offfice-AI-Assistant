@@ -200,6 +200,8 @@
     <Compile Include="Core\Planning\Planner.cs" />
     <Compile Include="Core\Session\StreamCoordinator.cs" />
     <Compile Include="Core\Session\AssistantSession.cs" />
+    <Compile Include="Core\Session\WorkSession.cs" />
+    <Compile Include="Core\Session\WorkSessionStore.cs" />
     <Compile Include="Hosts\HostOperationResult.cs" />
     <Compile Include="Hosts\IOfficeHostController.cs" />
     <Compile Include="Hosts\WordController.cs" />
