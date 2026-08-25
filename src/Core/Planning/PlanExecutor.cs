@@ -325,11 +325,21 @@ namespace MSOfficeAIAssistant.Core.Planning
                 return HostOperationResult.Failed("No plan or steps available for rollback.");
             }
 
+            var appliedSteps = new List<PlanStep>();
             var appliedActions = new List<OfficeAction>();
             foreach (var s in _plan.Steps)
             {
                 if (s.Status == PlanStepStatus.Applied && s.Action != null)
                 {
+                    // PlanStep.Status is the plan-level authority (and is what WorkSession
+                    // persists). Heal Action.Status here so a stale Pending value (e.g. from
+                    // an older session file written when Status was [JsonIgnore]) cannot make
+                    // RollbackBatch's OfficeActionStatus.Applied filter silently no-op.
+                    if (s.Action.Status != OfficeActionStatus.Applied)
+                    {
+                        s.Action.Status = OfficeActionStatus.Applied;
+                    }
+                    appliedSteps.Add(s);
                     appliedActions.Add(s.Action);
                 }
             }
@@ -338,6 +348,15 @@ namespace MSOfficeAIAssistant.Core.Planning
 
             if (result.Success)
             {
+                // Keep PlanStep status in sync with action-level RolledBack (RollbackBatch
+                // updates OfficeAction.Status but historically left PlanStep.Status Applied).
+                foreach (var s in appliedSteps)
+                {
+                    if (s.Action != null && s.Action.Status == OfficeActionStatus.RolledBack)
+                    {
+                        s.Status = PlanStepStatus.RolledBack;
+                    }
+                }
                 _state = PlanExecutionState.RolledBack;
             }
 
