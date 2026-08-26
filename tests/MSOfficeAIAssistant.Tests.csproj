@@ -104,6 +104,7 @@
     <Compile Include="XamlLoadTests.cs" />
     <Compile Include="AssistantSessionModeTests.cs" />
     <Compile Include="ResponseCardCategoryTests.cs" />
+    <Compile Include="EvidenceLevelTests.cs" />
     <Compile Include="AttachmentExtractorProvenanceTests.cs" />
     <Compile Include="QuickPromptRegistryTests.cs" />
     <Compile Include="SkillRegistryTests.cs" />

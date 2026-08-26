@@ -20,6 +20,7 @@
 
         <converters:BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
         <converters:BooleanToVisibilityConverter x:Key="InverseBoolToVisConverter" Invert="True"/>
+        <converters:EvidenceLevelConverter x:Key="EvidenceLevelConverter"/>
 
         <!-- Response Card Templates for Phase A3 -->
 
@@ -132,13 +133,21 @@
             </StackPanel>
         </DataTemplate>
 
-        <!-- Finding Template: Blue/info accent card with 🔍 label -->
+        <!-- Finding Template: Blue/info accent card with 🔍 label and evidence level badge -->
         <DataTemplate x:Key="FindingTemplate">
             <StackPanel>
-                <Border Background="{StaticResource PrimarySurfaceBrush}" BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,4">
-                    <TextBlock Text="🔍 Finding" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" FontSize="12"/>
-                </Border>
-                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content}"
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                    <Border Background="{StaticResource PrimarySurfaceBrush}" BorderBrush="{StaticResource PrimaryBrush}" BorderThickness="1,0,0,0" Padding="6,3" Margin="0,0,0,0">
+                        <TextBlock Text="🔍 Finding" FontWeight="Bold" Foreground="{StaticResource PrimaryBrush}" FontSize="12"/>
+                    </Border>
+                    <Border Background="{StaticResource SurfaceAltBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="3" Padding="4,2" Margin="6,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding Content, Converter={StaticResource EvidenceLevelConverter}, ConverterParameter=Icon}" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                            <TextBlock Text="{Binding Content, Converter={StaticResource EvidenceLevelConverter}, ConverterParameter=Label}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource InkMutedBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+                <TextBlock helpers:MarkdownHelper.MarkdownText="{Binding Content, Converter={StaticResource EvidenceLevelConverter}, ConverterParameter=DisplayText}"
                            helpers:MarkdownHelper.IsStreaming="{Binding IsStreaming}"
                            TextWrapping="Wrap" Foreground="{StaticResource InkBrush}" FontSize="13"
                            FontFamily="Segoe UI" LineHeight="20"/>
