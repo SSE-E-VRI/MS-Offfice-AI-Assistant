@@ -420,7 +420,7 @@ Findings:
 | From document → briefing deck (doc-to-deck) | Implemented (Verified in slice) |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
 | Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode. Plan mode is now real, not a no-op alias of Edit: `AssistantSession.ProcessAssistantResponse` builds a `Planner`-produced `Plan` instead of populating `OfficeActions`, rendered as an editable, executable `PlanTemplate` card — reorder/skip/remove steps, per-step approve, run, rollback, wired to the already-tested `PlanExecutor`. Single-host only; `CrossHostPlanCoordinator` is not wired into chat, since a single chat session's `ActionExtractor` is already host-scoped) |
-| Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text — click-to-navigate UI wiring not yet built) |
+| Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Plan/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text, now clickable — `MarkdownHelper` renders citation patterns as `Hyperlink`s wired to `NavigateToParagraph`/`NavigateToCell`/`NavigateToSlide` on the active host controller) |
 | Skills and domain packs | Implemented (Phase B1–B5: `SkillRegistry` loading `general` (9 skills) and `railway` (13 skills) JSON manifests; `AppendDomainPackRules` prompt composition; evidence levels on Finding cards; context-aware skill-chip promotion) |
 | Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
 | Multi-step planner, cross-host workflows | Implemented (Phase D1–D4 complete: `Planner`, `PlanExecutor`, `CrossHostPlanCoordinator`, `WorkSession`; verified in `PlannerTests`, `PlanExecutorTests`, `CrossHostPlanCoordinatorTests`, `WorkSessionStoreTests`) |
@@ -683,10 +683,14 @@ structured actions visible in approval dialog; Excel in-cell edit rejections han
   step list, reorder/skip/remove, per-step approve, run, rollback. **Table** is still NOT a distinct
   card type — already handled inline by `MarkdownHelper` today with no distinct card chrome, so a
   dedicated Table card remains low-value. `ResponseCardCategoryTests`.
-- **A4** ✅ Source-tag provenance (backend half only — click-to-navigate UI wiring is open): `.docx`
-  paragraphs tagged `[¶N]`, `.xlsx` cells tagged with their real address and sheet name (resolved from
+- **A4** ✅ Source-tag provenance, backend AND click-to-navigate UI, both complete: `.docx` paragraphs
+  tagged `[¶N]`, `.xlsx` cells tagged with their real address and sheet name (resolved from
   `xl/workbook.xml`, falling back to an ordinal per-sheet on failure), Word excerpt labels carry a
-  `~Paragraph N` line-based approximation. `AttachmentExtractorProvenanceTests`.
+  `~Paragraph N` line-based approximation — and every one of these patterns now renders as a clickable
+  `Hyperlink` (via `MarkdownHelper.ParseInlineCore`, shared by every card type) wired to
+  `WordController.NavigateToParagraph`/`ExcelController.NavigateToCell`/
+  `PowerPointController.NavigateToSlide` on whichever host controller is active.
+  `AttachmentExtractorProvenanceTests`, `MarkdownHelperCitationTests`.
 - **A5** ✅ Data-driven quick-prompt chips (`QuickPromptRegistry`, `Core.QuickPrompts` — deliberately
   **not** `Core.Skills`, since the real Skill registry is Phase B and doesn't exist yet). Same 6 prompts,
   same text, `HostFilter` restores the original PowerPoint-only visibility of "Build deck".
@@ -702,12 +706,13 @@ structured actions visible in approval dialog; Excel in-cell edit rejections han
   "actively planning" moment distinct from the surrounding Applying/Verifying states to hang a Planning
   status on. `AssistantStatusTests`.
 
-**Exit:** the user can see exactly what context is sent, switch modes, and receive structured cards.
-Mutation behavior unchanged except the new Chat-mode hard block (additive safety, not a regression).
-**One item from the original two is now closed:** Plan mode is wired to the Phase D `PlanExecutor`
-(see the Chat/Plan/Edit modes row above and the Phase D integration entry below) — A3's Plan card and
-this wiring shipped together, after Phase B, as a separate follow-up slice. **Click-to-navigate on
-source tags (A4) remains open.**
+**Exit:** the user can see exactly what context is sent, switch modes, and receive structured cards
+with working source links. Mutation behavior unchanged except the new Chat-mode hard block (additive
+safety, not a regression). **Both items originally left open here are now closed**, as two separate
+post-Phase-B follow-up slices: Plan mode is wired to the Phase D `PlanExecutor` (see the Chat/Plan/Edit
+modes row above and the Phase D integration entry below), and click-to-navigate on A4's source tags is
+implemented (citation-pattern `Hyperlink`s in every card's rendered text, jumping the live document to
+that location on click). All of Phase A's original exit criteria are now met.
 
 ### Phase B — Skills and domain packs (Implemented & Verified in 5/5 New Unit Suites; low risk, parallel with A)
 
