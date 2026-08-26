@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Newtonsoft.Json;
@@ -93,6 +93,17 @@ namespace MSOfficeAIAssistant.API.Models
         /// <summary>Full prompt content sent to the API, which may differ from the displayed Content.</summary>
         [JsonProperty("fullContent", NullValueHandling = NullValueHandling.Ignore)]
         public string FullContent { get; set; }
+
+        /// <summary>
+        /// Name of the Word bookmark pinning the selection this exchange was generated from
+        /// (Selection scope only, Word host only). Lets the Insert button replace exactly the
+        /// text that was sent to the model, even if the user has since clicked or scrolled
+        /// elsewhere in the document while the response was streaming in. Session-only: a
+        /// bookmark does not survive reopening the document, so this is never serialized to the
+        /// conversation history.
+        /// </summary>
+        [JsonIgnore]
+        public string SourceSelectionBookmark { get; set; }
 
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction> _officeActions;
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> _actions;

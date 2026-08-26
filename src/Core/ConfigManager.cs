@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Security.Cryptography;
@@ -68,6 +68,11 @@ namespace MSOfficeAIAssistant.Core
         public int MaxTokens { get; set; }
         public string SystemPrompt { get; set; }
         public bool AutoInsertResponse { get; set; }
+        /// <summary>
+        /// Removes the AI's conversational lead-in and trailing notes before content is inserted
+        /// into a document. Set false to insert the response exactly as the model returned it.
+        /// </summary>
+        public bool StripConversationalWrapper { get; set; }
         public string DomainPack { get; set; }
         public bool LoadFailed { get; private set; }
 
@@ -103,6 +108,7 @@ namespace MSOfficeAIAssistant.Core
             MaxTokens = 4096;
             SystemPrompt = "You are an expert AI assistant embedded inside Microsoft Office. Help the user draft, refine, summarize, and analyze documents with professional quality.";
             AutoInsertResponse = false;
+            StripConversationalWrapper = true;
             DomainPack = "general";
 
             _configDirectory = AppPaths.DataDirectory;
@@ -147,6 +153,7 @@ namespace MSOfficeAIAssistant.Core
                         MaxTokens = this.MaxTokens,
                         SystemPrompt = this.SystemPrompt,
                         AutoInsertResponse = this.AutoInsertResponse,
+                        StripConversationalWrapper = this.StripConversationalWrapper,
                         DomainPack = this.DomainPack
                     };
 
@@ -222,6 +229,11 @@ namespace MSOfficeAIAssistant.Core
                         this.MaxTokens = dto.MaxTokens > 0 ? dto.MaxTokens : 4096;
                         this.SystemPrompt = !string.IsNullOrWhiteSpace(dto.SystemPrompt) ? dto.SystemPrompt : this.SystemPrompt;
                         this.AutoInsertResponse = dto.AutoInsertResponse;
+                        // Nullable so a config file written before this setting existed keeps the
+                        // default (true) instead of deserializing to false and silently disabling it.
+                        this.StripConversationalWrapper = dto.StripConversationalWrapper.HasValue
+                            ? dto.StripConversationalWrapper.Value
+                            : true;
                         this.DomainPack = !string.IsNullOrWhiteSpace(dto.DomainPack) ? dto.DomainPack : "general";
 
                         Logger.Info("Configuration successfully loaded and decrypted.");
@@ -287,6 +299,7 @@ namespace MSOfficeAIAssistant.Core
             public int MaxTokens { get; set; }
             public string SystemPrompt { get; set; }
             public bool AutoInsertResponse { get; set; }
+            public bool? StripConversationalWrapper { get; set; }
             public string DomainPack { get; set; }
         }
     }

@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build">
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
@@ -166,8 +166,11 @@
     </Compile>
     <Compile Include="UI\ChatFloatingWindow.cs" />
     <Compile Include="UI\HelpWindow.cs" />
+    <Compile Include="UI\ResponsePreviewWindow.cs" />
     <Compile Include="UI\OfficeDockedPane.cs" />
+    <Compile Include="UI\Helpers\MarkdownClipboard.cs" />
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
+    <Compile Include="UI\Converters\AuditDisplayConverters.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
     <Compile Include="UI\Converters\UtcToLocalTimeConverter.cs" />
     <Compile Include="UI\Converters\EvidenceLevelConverter.cs" />
@@ -197,6 +200,7 @@
     <Compile Include="Core\Logger.cs" />
     <Compile Include="Core\SpreadsheetAction.cs" />
     <Compile Include="Core\PowerPointActionParser.cs" />
+    <Compile Include="Core\ResponseContentCleaner.cs" />
     <Compile Include="Core\PromptAssembler.cs" />
     <Compile Include="Core\OleMessageFilter.cs" />
     <Compile Include="Core\SafeOfficeProbe.cs" />

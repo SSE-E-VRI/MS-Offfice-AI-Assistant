@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.UI;
 
@@ -22,6 +23,8 @@ namespace MSOfficeAIAssistant.Tests
             TestChatSidebarToolbarsReflowAtNarrowWidth();
             TestChatSidebarSendButtonStaysVisibleAtNarrowWidth();
             TestSettingsWindowLoadsAndLaysOut();
+            TestActionHistoryWindowWrapsLongEntries();
+            TestResponsePreviewWindowShowsCleanedContent();
         }
 
         private static void TestChatSidebarLoadsAndLaysOut()
@@ -129,6 +132,115 @@ namespace MSOfficeAIAssistant.Tests
         {
             var window = new SettingsWindow();
             ForceLayout(window, window.Width, window.Height);
+        }
+
+        /// <summary>
+        /// Regression test for the Action Log rendering every entry as one endless line with a
+        /// horizontal scrollbar. The card's TextBlocks always had TextWrapping="Wrap", but a
+        /// ListBox defaults to ScrollViewer.HorizontalScrollBarVisibility=Auto, which measures
+        /// each item at its full desired width instead of the viewport's -- so wrapping never
+        /// engaged and the Undoable column was pushed off-screen. Fixed by disabling horizontal
+        /// scrolling and stretching the item containers; this asserts the container really is
+        /// bounded by the list's own width.
+        /// </summary>
+        private static void TestActionHistoryWindowWrapsLongEntries()
+        {
+            const double width = 900;
+            const double height = 600;
+
+            string longEntry = "**[Your Department's Letterhead]** " +
+                new string('x', 400) +
+                " I am writing on behalf of the Electrical Division to request one unit of a 5 HP pump.";
+
+            var entries = new List<ActionAuditEntry>
+            {
+                new ActionAuditEntry
+                {
+                    TimestampUtc = DateTime.UtcNow,
+                    Host = "Word",
+                    ActionType = "Tracked edit",
+                    Target = "Selection / cursor",
+                    Undoable = true,
+                    Model = "mistral-large-latest",
+                    Summary = longEntry
+                }
+            };
+
+            var window = new ActionHistoryWindow(entries);
+            ForceLayout(window, width, height);
+
+            var list = window.FindName("ActionsListBox") as ListBox;
+            if (list == null) throw new Exception("ActionsListBox not found in the visual tree.");
+
+            if (ScrollViewer.GetHorizontalScrollBarVisibility(list) != ScrollBarVisibility.Disabled)
+            {
+                throw new Exception("ActionsListBox must disable horizontal scrolling, otherwise entries never wrap.");
+            }
+
+            var container = list.ItemContainerGenerator.ContainerFromIndex(0) as ListBoxItem;
+            if (container == null)
+            {
+                var generator = list.ItemContainerGenerator as System.Windows.Controls.Primitives.IItemContainerGenerator;
+                if (generator != null)
+                {
+                    var pos = generator.GeneratorPositionFromIndex(-1);
+                    using (generator.StartAt(pos, System.Windows.Controls.Primitives.GeneratorDirection.Forward, true))
+                    {
+                        bool isNewlyRealized;
+                        container = generator.GenerateNext(out isNewlyRealized) as ListBoxItem;
+                        if (container != null)
+                        {
+                            generator.PrepareItemContainer(container);
+                            ForceLayout(container, list.ActualWidth > 0 ? list.ActualWidth : width, height);
+                        }
+                    }
+                }
+            }
+            if (container == null) throw new Exception("No container was generated for the first audit entry.");
+
+            double maxAllowedWidth = list.ActualWidth > 0 ? list.ActualWidth : width;
+            if (container.ActualWidth > maxAllowedWidth + 1.0)
+            {
+                throw new Exception(string.Format(
+                    "Audit entry is {0:0} wide inside a {1:0}-wide list -- it is not wrapping to the viewport.",
+                    container.ActualWidth, maxAllowedWidth));
+            }
+        }
+
+        /// <summary>
+        /// The Preview button used to call MessageBox.Show on the raw response, so it displayed
+        /// literal "**" markers and the model's trailing commentary ("Key Features", "Structure")
+        /// that Insert does not apply -- a preview that did not match the result. The window is
+        /// built entirely in code, so this both proves it constructs and lays out, and asserts it
+        /// previews the same cleaned content Insert writes while keeping the raw text available.
+        /// </summary>
+        private static void TestResponsePreviewWindowShowsCleanedContent()
+        {
+            string response =
+                "Here's a polished draft for your request letter:\n\n---\n\n" +
+                "**SOUTHERN RAILWAY**\n\nSir,\n\nRequest for temporary allocation of one 5 HP pump.\n\n" +
+                "**Yours faithfully,**\n[Your Full Name]\n\n---\n\n" +
+                "### **Key Features:**\n1. **Formal numbering** for clarity.\n2. **Structure:** reference line, numbered paragraphs.";
+
+            var window = new ResponsePreviewWindow(response);
+            ForceLayout(window, window.Width, window.Height);
+
+            if (window.PreviewText.Contains("polished draft"))
+            {
+                throw new Exception("Preview still shows the model's lead-in: " + window.PreviewText);
+            }
+            if (window.PreviewText.Contains("Key Features"))
+            {
+                throw new Exception("Preview still shows the trailing commentary Insert discards.");
+            }
+            if (!window.PreviewText.Contains("SOUTHERN RAILWAY") || !window.PreviewText.Contains("[Your Full Name]"))
+            {
+                throw new Exception("Preview dropped part of the letter body: " + window.PreviewText);
+            }
+            if (window.RawText != response)
+            {
+                throw new Exception("The raw response must stay available unchanged for the toggle.");
+            }
         }
 
         private static void ForceLayout(FrameworkElement element, double width, double height)
