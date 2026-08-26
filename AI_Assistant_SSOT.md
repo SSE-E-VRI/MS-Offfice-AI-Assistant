@@ -419,7 +419,7 @@ Findings:
 | Mistral-neutral identity rename + legacy purge + data migration | Implemented |
 | From document → briefing deck (doc-to-deck) | Implemented (Verified in slice) |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
-| Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode; Plan/Edit unchanged from prior behavior) |
+| Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode. Plan mode is now real, not a no-op alias of Edit: `AssistantSession.ProcessAssistantResponse` builds a `Planner`-produced `Plan` instead of populating `OfficeActions`, rendered as an editable, executable `PlanTemplate` card — reorder/skip/remove steps, per-step approve, run, rollback, wired to the already-tested `PlanExecutor`. Single-host only; `CrossHostPlanCoordinator` is not wired into chat, since a single chat session's `ActionExtractor` is already host-scoped) |
 | Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text — click-to-navigate UI wiring not yet built) |
 | Skills and domain packs | Implemented (Phase B1–B5: `SkillRegistry` loading `general` (9 skills) and `railway` (13 skills) JSON manifests; `AppendDomainPackRules` prompt composition; evidence levels on Finding cards; context-aware skill-chip promotion) |
 | Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
@@ -677,11 +677,12 @@ structured actions visible in approval dialog; Excel in-cell edit rejections han
   abstraction named in the original plan was not built as a separate layer — the checkbox→enum mapping
   and per-controller readout getters deliver the same user-visible behavior more simply.
 - **A3** ✅ Response cards via `ResponseCardTemplateSelector` (`src/UI/Cards/`): Text, ActionPreview,
-  Warning, Finding, Recommendation, Summary — driven by a pure `ResponseCardCategoryClassifier`
-  (`HasOfficeActions` first, then a `**Warning:**`/`Warning:`-style content-prefix marker). **Plan** and
-  **Table** card types are NOT implemented — Plan needs Phase D's `PlanExecutor` wired into the chat
-  send flow (not done); Table is already handled inline by `MarkdownHelper` today with no distinct card
-  chrome. `ResponseCardCategoryTests`.
+  **Plan**, Warning, Finding, Recommendation, Summary — driven by a pure `ResponseCardCategoryClassifier`
+  (`HasPlan` first, then `HasOfficeActions`, then a `**Warning:**`/`Warning:`-style content-prefix
+  marker). Plan card added post-Phase-B once the chat-flow `PlanExecutor` wiring landed (see below) —
+  step list, reorder/skip/remove, per-step approve, run, rollback. **Table** is still NOT a distinct
+  card type — already handled inline by `MarkdownHelper` today with no distinct card chrome, so a
+  dedicated Table card remains low-value. `ResponseCardCategoryTests`.
 - **A4** ✅ Source-tag provenance (backend half only — click-to-navigate UI wiring is open): `.docx`
   paragraphs tagged `[¶N]`, `.xlsx` cells tagged with their real address and sheet name (resolved from
   `xl/workbook.xml`, falling back to an ordinal per-sheet on failure), Word excerpt labels carry a
@@ -695,15 +696,18 @@ structured actions visible in approval dialog; Excel in-cell edit rejections han
   replacing prior `MessageBox` dumps. `ConversationStoreSessionTests`.
 - **A7** ✅ Status indicator (Ready / Thinking / Reading / Awaiting approval / Applying / Verifying /
   Done / Failed / Cancelled — 9 of 10 named states, each tied to a real code transition) plus
-  `AutomationProperties.Name`/`LiveSetting="Polite"` accessibility labels. **Planning** is not
-  implemented — it needs Phase D's `PlanExecutor` connected to the chat send flow, which hasn't
-  happened. `AssistantStatusTests`.
+  `AutomationProperties.Name`/`LiveSetting="Polite"` accessibility labels. **Planning** (the 10th state)
+  is still not implemented — the Plan card's Run/Approve handlers call `PlanExecutor` synchronously on
+  the UI thread with no progress-callback-driven intermediate status update, so there's no real
+  "actively planning" moment distinct from the surrounding Applying/Verifying states to hang a Planning
+  status on. `AssistantStatusTests`.
 
 **Exit:** the user can see exactly what context is sent, switch modes, and receive structured cards.
 Mutation behavior unchanged except the new Chat-mode hard block (additive safety, not a regression).
-**Two items are explicitly open, not silently dropped:** click-to-navigate on source tags (A4), and a
-Plan-mode/Planning-status integration with the Phase D `PlanExecutor` (A3 + A7) — both require chat-flow
-wiring to backend systems (source locations, `PlanExecutor`) that exist but aren't yet connected here.
+**One item from the original two is now closed:** Plan mode is wired to the Phase D `PlanExecutor`
+(see the Chat/Plan/Edit modes row above and the Phase D integration entry below) — A3's Plan card and
+this wiring shipped together, after Phase B, as a separate follow-up slice. **Click-to-navigate on
+source tags (A4) remains open.**
 
 ### Phase B — Skills and domain packs (Implemented & Verified in 5/5 New Unit Suites; low risk, parallel with A)
 
@@ -767,6 +771,16 @@ references (every content-generating skill carries an explicit anti-fabrication 
 
 **Exit:** "Analyze these failures, build a dashboard, then draft a briefing" yields an editable plan
 that executes across hosts under approval with a full audit trail.
+
+**Post-Phase-B follow-up — chat integration.** D1/D2's backend (`Planner`, `PlanExecutor`) is now wired
+into the live chat send flow (`AssistantSession.ProcessAssistantResponse` + `ChatSidebar`'s `PlanTemplate`
+card, see the A1/A3 entries above) — Plan mode produces a real, editable, executable step list instead
+of behaving like Edit mode. This integration is **single-host only**: `CrossHostPlanCoordinator` (D3) is
+NOT wired into chat, since a single chat session's `ActionExtractor` only ever proposes same-host
+actions today, so there is no live multi-host plan for it to coordinate yet. `WorkSession` (D4)
+persistence is also not wired into chat — an active `Plan` lives only in memory on its `ChatMessage`
+(`[JsonIgnore]`), not saved/reloaded across sessions. Both remain genuinely open follow-ups, not
+silently dropped.
 
 ### Deferred past Phase D
 
