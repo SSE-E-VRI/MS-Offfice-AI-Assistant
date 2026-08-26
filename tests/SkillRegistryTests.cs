@@ -15,24 +15,43 @@ namespace MSOfficeAIAssistant.Tests
             TestNonexistentPackReturnsEmpty();
             TestGetAllPacksCombinesBoth();
             TestSkillRoundTrip();
+            TestAllSkillsHaveRequiredFields();
         }
 
         private static void TestLoadGeneralPack()
         {
             var skills = SkillRegistry.LoadPack("general");
             Assert(skills != null, "LoadPack should never return null");
-            Assert(skills.Count == 1, "general pack should have exactly 1 placeholder skill");
-            Assert(skills[0].Id == "placeholder_general_summary", "First skill ID should be placeholder_general_summary");
-            Assert(skills[0].DomainPack == "general", "DomainPack should be 'general'");
+            Assert(skills.Count == 9, "general pack should have exactly 9 skills");
+
+            bool foundOfficialLetter = false;
+            foreach (var skill in skills)
+            {
+                Assert(skill.DomainPack == "general", "All general pack skills should have DomainPack 'general'");
+                if (skill.Id == "official_letter")
+                    foundOfficialLetter = true;
+            }
+            Assert(foundOfficialLetter, "general pack should contain 'official_letter' skill");
         }
 
         private static void TestLoadRailwayPack()
         {
             var skills = SkillRegistry.LoadPack("railway");
             Assert(skills != null, "LoadPack should never return null");
-            Assert(skills.Count == 1, "railway pack should have exactly 1 placeholder skill");
-            Assert(skills[0].Id == "placeholder_railway_timetable", "First skill ID should be placeholder_railway_timetable");
-            Assert(skills[0].DomainPack == "railway", "DomainPack should be 'railway'");
+            Assert(skills.Count == 13, "railway pack should have exactly 13 skills");
+
+            bool foundOfficialLetter = false;
+            bool foundDrmBriefing = false;
+            foreach (var skill in skills)
+            {
+                Assert(skill.DomainPack == "railway", "All railway pack skills should have DomainPack 'railway'");
+                if (skill.Id == "official_letter")
+                    foundOfficialLetter = true;
+                if (skill.Id == "drm_briefing")
+                    foundDrmBriefing = true;
+            }
+            Assert(foundOfficialLetter, "railway pack should contain 'official_letter' skill (general duplicated in railway)");
+            Assert(foundDrmBriefing, "railway pack should contain 'drm_briefing' railway-specific skill");
         }
 
         private static void TestCaseInsensitivePackName()
@@ -57,17 +76,17 @@ namespace MSOfficeAIAssistant.Tests
         {
             var allSkills = SkillRegistry.GetAllPacks();
             Assert(allSkills != null, "GetAllPacks should never return null");
-            Assert(allSkills.Count == 2, "GetAllPacks should return 2 skills total (1 general + 1 railway)");
+            Assert(allSkills.Count == 22, "GetAllPacks should return 22 skills total (9 general + 13 railway)");
 
-            bool hasGeneral = false;
-            bool hasRailway = false;
+            int generalCount = 0;
+            int railwayCount = 0;
             foreach (var skill in allSkills)
             {
-                if (skill.DomainPack == "general") hasGeneral = true;
-                if (skill.DomainPack == "railway") hasRailway = true;
+                if (skill.DomainPack == "general") generalCount++;
+                if (skill.DomainPack == "railway") railwayCount++;
             }
-            Assert(hasGeneral, "GetAllPacks should include a general skill");
-            Assert(hasRailway, "GetAllPacks should include a railway skill");
+            Assert(generalCount == 9, "GetAllPacks should include exactly 9 general skills");
+            Assert(railwayCount == 13, "GetAllPacks should include exactly 13 railway skills");
         }
 
         private static void TestSkillRoundTrip()
@@ -102,6 +121,20 @@ namespace MSOfficeAIAssistant.Tests
             Assert(deserialized.DefaultMode == "Edit", "DefaultMode should round-trip correctly");
             Assert(deserialized.RiskCeiling == 2, "RiskCeiling should round-trip correctly");
             Assert(deserialized.DomainPack == "general", "DomainPack should round-trip correctly");
+        }
+
+        private static void TestAllSkillsHaveRequiredFields()
+        {
+            var allSkills = SkillRegistry.GetAllPacks();
+            Assert(allSkills.Count > 0, "Should have skills loaded");
+
+            foreach (var skill in allSkills)
+            {
+                Assert(!string.IsNullOrWhiteSpace(skill.Id), "Skill must have non-empty Id");
+                Assert(!string.IsNullOrWhiteSpace(skill.Name), "Skill must have non-empty Name");
+                Assert(!string.IsNullOrWhiteSpace(skill.Description), "Skill must have non-empty Description");
+                Assert(!string.IsNullOrWhiteSpace(skill.PromptTemplate), "Skill must have non-empty PromptTemplate");
+            }
         }
 
         private static void Assert(bool condition, string message)
