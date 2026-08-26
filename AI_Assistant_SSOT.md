@@ -419,8 +419,8 @@ Findings:
 | Mistral-neutral identity rename + legacy purge + data migration | Implemented |
 | From document → briefing deck (doc-to-deck) | Implemented (Verified in slice) |
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
-| Chat / Plan / Edit modes | Planned — Phase A |
-| Context bar, source citations, response cards | Planned — Phase A |
+| Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode; Plan/Edit unchanged from prior behavior) |
+| Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text — click-to-navigate UI wiring not yet built) |
 | Skills and domain packs | Planned — Phase B |
 | Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
 | Multi-step planner, cross-host workflows | Implemented (Phase D1–D4 complete: `Planner`, `PlanExecutor`, `CrossHostPlanCoordinator`, `WorkSession`; verified in `PlannerTests`, `PlanExecutorTests`, `CrossHostPlanCoordinatorTests`, `WorkSessionStoreTests`) |
@@ -666,24 +666,44 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 **Exit:** identical responses, actions and audit entries before and after extraction; PowerPoint
 structured actions visible in approval dialog; Excel in-cell edit rejections handled gracefully.
 
-### Phase A — Copilot UX (low risk, no new mutation pathways)
+### Phase A — Copilot UX (Implemented & Verified in 6/6 New Unit Suites; low risk, no new mutation pathways)
 
-- **A1** Chat/Plan/Edit selector, enforced in `AssistantSession` — Chat hard-blocks risk ≥1.
-- **A2** Context bar: explicit toggles (Selection / Current file / Attachments / Entire document) plus
-  a live host readout. Backed by a `ContextEngine` emitting `ContextFragment { SourceType, Location, Text }`.
-- **A3** Response cards via `DataTemplateSelector`: Finding, Recommendation, Plan, ActionPreview,
-  Warning, Summary/KPI, Table. The existing Excel action card is the visual precedent.
-- **A4** Source tags on claims. Requires fixing the extractors that lose provenance (§2.6) — `.docx`
-  paragraph index, `.xlsx` real sheet name + cell address, Word paragraph offsets, sheet-qualified
-  Excel addresses. Click-to-navigate where the host allows.
-- **A5** Suggested-prompt chips generated from the Skill registry, replacing the 8 hardcoded buttons.
-- **A6** Conversation history UI (session list) and a real action-history panel over `ActionAuditStore`.
-- **A7** Status indicators (Ready / Thinking / Reading / Planning / Awaiting approval / Applying /
-  Verifying / Completed / Failed / Cancelled) and a full accessibility pass — keyboard navigation,
-  visible focus, screen-reader labels, no colour-only status.
+- **A1** ✅ Chat/Plan/Edit selector, enforced in `AssistantSession` — Chat hard-blocks risk ≥1.
+  `SessionMode` enum + `AssistantSession.IsActionAllowed(OfficeAction)`, wired as the first check in
+  `ChatSidebar.ExecuteOfficeAction`, defaults to `Edit` (zero regression). `AssistantSessionModeTests`.
+- **A2** ✅ Context bar: `ChkIncludeSelection`/`ChkIncludeCurrentFile` checkboxes mapped onto the
+  unchanged `PromptContextScope` enum, plus a live host readout (`GetContextReadout()` per controller —
+  `Sheet1!B2:B10`, `Slide 3 of 12`, `Section: X`/`Document: X`). The `ContextEngine`/`ContextFragment`
+  abstraction named in the original plan was not built as a separate layer — the checkbox→enum mapping
+  and per-controller readout getters deliver the same user-visible behavior more simply.
+- **A3** ✅ Response cards via `ResponseCardTemplateSelector` (`src/UI/Cards/`): Text, ActionPreview,
+  Warning, Finding, Recommendation, Summary — driven by a pure `ResponseCardCategoryClassifier`
+  (`HasOfficeActions` first, then a `**Warning:**`/`Warning:`-style content-prefix marker). **Plan** and
+  **Table** card types are NOT implemented — Plan needs Phase D's `PlanExecutor` wired into the chat
+  send flow (not done); Table is already handled inline by `MarkdownHelper` today with no distinct card
+  chrome. `ResponseCardCategoryTests`.
+- **A4** ✅ Source-tag provenance (backend half only — click-to-navigate UI wiring is open): `.docx`
+  paragraphs tagged `[¶N]`, `.xlsx` cells tagged with their real address and sheet name (resolved from
+  `xl/workbook.xml`, falling back to an ordinal per-sheet on failure), Word excerpt labels carry a
+  `~Paragraph N` line-based approximation. `AttachmentExtractorProvenanceTests`.
+- **A5** ✅ Data-driven quick-prompt chips (`QuickPromptRegistry`, `Core.QuickPrompts` — deliberately
+  **not** `Core.Skills`, since the real Skill registry is Phase B and doesn't exist yet). Same 6 prompts,
+  same text, `HostFilter` restores the original PowerPoint-only visibility of "Build deck".
+  `QuickPromptRegistryTests`.
+- **A6** ✅ Conversation history UI (`ConversationHistoryWindow` over `ConversationStore.ListSessions()`)
+  and a real action-history panel (`ActionHistoryWindow` over `ActionAuditStore.GetRecent`), both
+  replacing prior `MessageBox` dumps. `ConversationStoreSessionTests`.
+- **A7** ✅ Status indicator (Ready / Thinking / Reading / Awaiting approval / Applying / Verifying /
+  Done / Failed / Cancelled — 9 of 10 named states, each tied to a real code transition) plus
+  `AutomationProperties.Name`/`LiveSetting="Polite"` accessibility labels. **Planning** is not
+  implemented — it needs Phase D's `PlanExecutor` connected to the chat send flow, which hasn't
+  happened. `AssistantStatusTests`.
 
-**Exit:** the user can see exactly what context is sent, switch modes, and receive structured cards
-with working source links. Mutation behavior unchanged.
+**Exit:** the user can see exactly what context is sent, switch modes, and receive structured cards.
+Mutation behavior unchanged except the new Chat-mode hard block (additive safety, not a regression).
+**Two items are explicitly open, not silently dropped:** click-to-navigate on source tags (A4), and a
+Plan-mode/Planning-status integration with the Phase D `PlanExecutor` (A3 + A7) — both require chat-flow
+wiring to backend systems (source locations, `PlanExecutor`) that exist but aren't yet connected here.
 
 ### Phase B — Skills and domain packs (low risk, parallel with A)
 
