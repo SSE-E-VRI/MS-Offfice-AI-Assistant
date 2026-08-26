@@ -19,6 +19,7 @@ using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.Actions;
 using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.Core.Session;
+using MSOfficeAIAssistant.Core.Skills;
 using MSOfficeAIAssistant.Hosts;
 using MSOfficeAIAssistant.Providers;
 
@@ -186,9 +187,8 @@ namespace MSOfficeAIAssistant.UI
             // Update badge immediately (UI thread, no COM calls)
             TxtDocumentBadge.Text = string.Format("{0} Document", _hostType);
 
-            // Update session host type and populate quick prompts
+            // Update session host type
             _session.HostType = _hostType;
-            QuickPromptsItemsControl.ItemsSource = QuickPromptRegistry.GetPrompts(_hostType);
 
             // Host controllers must be created on the Office STA UI thread.
             Dispatcher.BeginInvoke(new Action(InitializeHostOnUiThread), DispatcherPriority.Background);
@@ -228,6 +228,10 @@ namespace MSOfficeAIAssistant.UI
                 _session.CurrentDocumentKey = _currentDocumentKey;
                 _hostInitialized = true;
                 TxtDocumentBadge.Text = string.Format("{0}: {1}", _hostType, _currentDocumentKey);
+
+                // Populate quick prompts: static chips + skill-derived chips with context-aware promotion
+                PopulateQuickPrompts();
+
                 UpdateHostSpecificControls();
                 LoadConversationHistory();
             }
@@ -255,6 +259,53 @@ namespace MSOfficeAIAssistant.UI
             {
                 ChkTrackChanges.ToolTip = "Insert/rewrite the response as Word Track Changes.";
             }
+        }
+
+        private void PopulateQuickPrompts()
+        {
+            // Start with static quick prompts
+            List<QuickPrompt> chips = new List<QuickPrompt>(QuickPromptRegistry.GetPrompts(_hostType));
+
+            // Add skill-derived chips with context-aware promotion
+            string contextText = string.Empty;
+            if (_excelCtrl != null)
+            {
+                try
+                {
+                    string snapshot = _excelCtrl.GetWorksheetSnapshot(70, 26);
+                    if (!string.IsNullOrWhiteSpace(snapshot))
+                    {
+                        contextText = snapshot;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(string.Format("PopulateQuickPrompts: GetWorksheetSnapshot failed: {0}", ex.Message));
+                }
+            }
+
+            // Select skill-derived chips (max 3) and append to static chips
+            List<QuickPrompt> skillChips = SkillPicker.SelectChips(ConfigManager.Instance.DomainPack, _hostType, contextText, 3);
+
+            // De-duplicate by Id: skip skill chip if static chip with same Id already exists
+            foreach (QuickPrompt skillChip in skillChips)
+            {
+                bool isDuplicate = false;
+                foreach (QuickPrompt staticChip in chips)
+                {
+                    if (string.Equals(staticChip.Id, skillChip.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        isDuplicate = true;
+                        break;
+                    }
+                }
+                if (!isDuplicate)
+                {
+                    chips.Add(skillChip);
+                }
+            }
+
+            QuickPromptsItemsControl.ItemsSource = chips;
         }
 
         private void LoadConversationHistory()
