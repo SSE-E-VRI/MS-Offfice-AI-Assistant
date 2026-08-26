@@ -254,7 +254,14 @@ namespace MSOfficeAIAssistant.Attachments
 
                                 if (!string.IsNullOrEmpty(val))
                                 {
-                                    cellValues.Add(string.Format("{0}={1}", cellAddr, val));
+                                    // Sheet-qualified so NavigateToCitation resolves the correct sheet
+                                    // (adversarial-review fix — a bare "A1=value" tag under a multi-sheet
+                                    // workbook resolved to whatever sheet happened to be active at click
+                                    // time, not the sheet the value actually came from). Matches the
+                                    // existing "SheetName!Address" citation pattern (MarkdownHelper Pattern 3,
+                                    // EvidenceLevel, ChatSidebar.NavigateToCitation's excelSheetMatch) — no
+                                    // matcher/navigation changes needed, only emission.
+                                    cellValues.Add(string.Format("{0}!{1}={2}", sheetName, cellAddr, val));
                                 }
                             }
                             if (cellValues.Count > 0)

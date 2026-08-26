@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Text;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Hosts;
+using MSOfficeAIAssistant.UI.Cards;
 using System.Collections.Generic;
 
 namespace MSOfficeAIAssistant.Tests
@@ -72,6 +73,15 @@ namespace MSOfficeAIAssistant.Tests
                 Assert(text.Contains("B2="), "Expected cell address B2");
                 Assert(text.Contains("100"), "Expected cell value");
                 Assert(!text.Contains("Sheet 1"), "Should not use fallback ordinal when real name is available");
+
+                // Sheet-qualified citation format (adversarial-review fix): the cell tag must carry
+                // its sheet name so NavigateToCitation resolves the correct sheet in a multi-sheet
+                // workbook, not whatever sheet happens to be active. Round-trip it through the real
+                // classifier rather than a hand-built string, so this test breaks if emission and
+                // matching ever drift apart again.
+                Assert(text.Contains("Budget!B2=100"), "Expected sheet-qualified citation 'Budget!B2=100', got: " + text);
+                Assert(EvidenceLevelClassifier.Classify("Value taken from Budget!B2=100") == EvidenceLevel.DirectlyObserved,
+                    "Sheet-qualified cell citation must classify as DirectlyObserved via the real citation-pattern matcher");
             }
             finally
             {

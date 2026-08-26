@@ -111,7 +111,8 @@ namespace MSOfficeAIAssistant.Hosts
                 {
                     // msoTrue is -1.  Passing the explicit value avoids relying on
                     // the COM coercion of msoCTrue (1) when a presentation window is created.
-                    try { presentation = app.Presentations.Add(-1); } catch { }
+                    try { presentation = app.Presentations.Add(-1); }
+                    catch (Exception addEx) { Logger.Warn(string.Format("PowerPointController could not create presentation: {0}", addEx.Message)); }
                 }
                 return presentation;
             }
@@ -189,9 +190,11 @@ namespace MSOfficeAIAssistant.Hosts
                             {
                                 return slides.Add(1, 2); // ppLayoutText = 2
                             }
-                            catch
+                            catch (Exception layoutEx)
                             {
-                                try { return slides.Add(1, 1); } catch { }
+                                Logger.Warn(string.Format("PowerPointController could not add slide with ppLayoutText: {0}", layoutEx.Message));
+                                try { return slides.Add(1, 1); } // ppLayoutBlank = 1
+                                catch (Exception blankEx) { Logger.Warn(string.Format("PowerPointController could not create slide: {0}", blankEx.Message)); }
                             }
                         }
                     }
@@ -444,15 +447,6 @@ namespace MSOfficeAIAssistant.Hosts
                 Logger.Error("PowerPointController.InsertText failed", ex);
                 return false;
             }
-        }
-
-        /// <summary>
-        /// Builds a deck from the project slide format. If the active slide has content, new slides
-        /// are appended. If the active slide is blank, it is populated first.
-        /// </summary>
-        public void CreateOrUpdateDeckFromOutline(string outline)
-        {
-            InsertText(outline);
         }
 
         /// <summary>
@@ -920,7 +914,11 @@ namespace MSOfficeAIAssistant.Hosts
                 try { layout = sourceSlide != null ? sourceSlide.CustomLayout : null; } catch { }
                 if (layout != null)
                 {
-                    try { return presentation.Slides.AddSlide(insertIndex, layout); } catch { }
+                    // AddSlide is a mutation, not a probe — a rejected custom layout must be logged,
+                    // not swallowed, before falling back to the master's layouts (adversarial-review fix,
+                    // same class of bug as D-14's PowerPoint/Excel bare-catch mutation swallows).
+                    try { return presentation.Slides.AddSlide(insertIndex, layout); }
+                    catch (Exception layoutEx) { Logger.Warn(string.Format("PowerPointController could not add slide with source slide's custom layout: {0}", layoutEx.Message)); }
                 }
 
                 try
@@ -934,7 +932,10 @@ namespace MSOfficeAIAssistant.Hosts
                         return presentation.Slides.AddSlide(insertIndex, layouts[layoutIndex]);
                     }
                 }
-                catch { }
+                catch (Exception masterLayoutEx)
+                {
+                    Logger.Warn(string.Format("PowerPointController could not add slide with a master custom layout: {0}", masterLayoutEx.Message));
+                }
 
                 return presentation.Slides.Add(insertIndex, 2); // ppLayoutText
             }

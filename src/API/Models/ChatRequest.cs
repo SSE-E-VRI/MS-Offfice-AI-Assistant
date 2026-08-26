@@ -193,12 +193,6 @@ namespace MSOfficeAIAssistant.API.Models
             get { return _actions != null && _actions.Count > 0; }
         }
 
-        public void NotifyActionsChanged()
-        {
-            OnPropertyChanged("Actions");
-            OnPropertyChanged("HasActions");
-        }
-
         [JsonProperty("powerPointActions", NullValueHandling = NullValueHandling.Ignore)]
         public System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.PowerPointAction> PowerPointActions
         {
@@ -216,12 +210,6 @@ namespace MSOfficeAIAssistant.API.Models
         public bool HasPowerPointActions
         {
             get { return _powerPointActions != null && _powerPointActions.Count > 0; }
-        }
-
-        public void NotifyPowerPointActionsChanged()
-        {
-            OnPropertyChanged("PowerPointActions");
-            OnPropertyChanged("HasPowerPointActions");
         }
 
         /// <summary>

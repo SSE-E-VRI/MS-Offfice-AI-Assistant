@@ -17,6 +17,15 @@ namespace MSOfficeAIAssistant.Tests
         // Canonical SHA-256 hash of all baseline outputs (system prompts, context compositions,
         // XML parsed action DTOs, slide outline parsing, and audit record shape).
         // Any mutation, reordering, whitespace change, or regression in Phase 0.1+ will fail this hash.
+        //
+        // Process guardrail (adversarial-review finding — one prior bump, commit 188701e, changed
+        // this value with an empty commit body and no stated reason): every commit that changes this
+        // constant MUST say, in the commit body, (a) which baseline section changed and why, and
+        // (b) that `git diff tests/Fixtures/golden_master_baseline.txt` (if the fixture is checked in
+        // separately) or the equivalent baseline-output diff is purely additive. This comment is kept
+        // immediately above the value so it can't drift far from what it's guarding.
+        // Hash last changed: see `git log -L 20,20:tests/GoldenMasterBaselineTests.cs` for the true
+        // history — do not trust a "last changed" date hand-copied here, it will go stale.
         public const string ExpectedGoldenMasterSha256 = "821e8769e83ffe728d9ace283e0222a433868272a200819ba957bbea4f7ca054";
 
         public static void RunAll()
