@@ -170,7 +170,9 @@
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
     <Compile Include="UI\Converters\UtcToLocalTimeConverter.cs" />
+    <Compile Include="UI\Converters\EvidenceLevelConverter.cs" />
     <Compile Include="UI\Cards\ResponseCardCategory.cs" />
+    <Compile Include="UI\Cards\EvidenceLevel.cs" />
     <Compile Include="UI\Cards\ResponseCardTemplateSelector.cs" />
     <Compile Include="API\StreamingParser.cs" />
     <Compile Include="API\TokenCounter.cs" />

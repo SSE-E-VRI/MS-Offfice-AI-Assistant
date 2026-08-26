@@ -42,6 +42,7 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("XamlLoadTests", XamlLoadTests.RunAll),
                 Tuple.Create<string, Action>("AssistantSessionModeTests", AssistantSessionModeTests.RunAll),
                 Tuple.Create<string, Action>("ResponseCardCategoryTests", ResponseCardCategoryTests.RunAll),
+                Tuple.Create<string, Action>("EvidenceLevelTests", EvidenceLevelTests.RunAll),
                 Tuple.Create<string, Action>("AttachmentExtractorProvenanceTests", AttachmentExtractorProvenanceTests.RunAll),
                 Tuple.Create<string, Action>("QuickPromptRegistryTests", QuickPromptRegistryTests.RunAll),
                 Tuple.Create<string, Action>("SkillRegistryTests", SkillRegistryTests.RunAll),
