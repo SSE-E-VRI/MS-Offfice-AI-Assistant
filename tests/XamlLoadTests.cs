@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
+using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.UI;
 
 namespace MSOfficeAIAssistant.Tests
@@ -18,6 +20,7 @@ namespace MSOfficeAIAssistant.Tests
         {
             TestChatSidebarLoadsAndLaysOut();
             TestChatSidebarToolbarsReflowAtNarrowWidth();
+            TestChatSidebarSendButtonStaysVisibleAtNarrowWidth();
             TestSettingsWindowLoadsAndLaysOut();
         }
 
@@ -51,21 +54,74 @@ namespace MSOfficeAIAssistant.Tests
                 throw new Exception("RdoEditMode not found in the visual tree at narrow width.");
             }
 
-            if (editMode.ActualWidth <= 0 || editMode.ActualHeight <= 0)
+            AssertWithinVisibleBounds(sidebar, editMode, narrowWidth, "RdoEditMode");
+        }
+
+        /// <summary>
+        /// Regression test: the same clipping bug class, found separately in the input area's
+        /// Attach/quick-prompt-chips/Send row. That row nested a WrapPanel (Attach + chips + Insert
+        /// image) inside a Grid column with Width="Auto" — a Grid measures an Auto column's child
+        /// with effectively unlimited available width, so the WrapPanel never actually got a chance
+        /// to wrap; it always requested its full unwrapped width. With BtnSend in the Grid's other
+        /// Auto column, Send was the one silently pushed past the pane's visible edge once the
+        /// combined content overflowed. Fixed by splitting onto two lines (chips WrapPanel on top,
+        /// Send on its own guaranteed-visible line below) instead of one Grid row.
+        ///
+        /// A first version of this test passed even against the broken Grid layout — a freshly
+        /// constructed ChatSidebar never populates QuickPromptsItemsControl (that only happens
+        /// inside InitializeHostOnUiThread, which needs a live host and never runs in this headless
+        /// test), so the row's content was far too sparse to actually trigger the overflow a real
+        /// session with 5-8 populated chips hits. Manually populating the ItemsSource with
+        /// representative sample chips before layout is what makes this test meaningful.
+        /// </summary>
+        private static void TestChatSidebarSendButtonStaysVisibleAtNarrowWidth()
+        {
+            const double narrowWidth = 240;
+            var sidebar = new ChatSidebar();
+
+            var quickPrompts = sidebar.FindName("QuickPromptsItemsControl") as ItemsControl;
+            if (quickPrompts == null)
             {
-                throw new Exception(string.Format(
-                    "RdoEditMode has zero rendered size at {0}px width (ActualWidth={1}, ActualHeight={2}) — collapsed instead of reflowed.",
-                    narrowWidth, editMode.ActualWidth, editMode.ActualHeight));
+                throw new Exception("QuickPromptsItemsControl not found in the visual tree.");
+            }
+            quickPrompts.ItemsSource = new List<QuickPrompt>
+            {
+                new QuickPrompt { Id = "Summarize", Label = "Summarize", PromptText = "x" },
+                new QuickPrompt { Id = "Rewrite", Label = "Rewrite", PromptText = "x" },
+                new QuickPrompt { Id = "Outline", Label = "Outline", PromptText = "x" },
+                new QuickPrompt { Id = "Actions", Label = "Actions", PromptText = "x" },
+                new QuickPrompt { Id = "Review", Label = "Review", PromptText = "x" },
+                new QuickPrompt { Id = "Deck", Label = "Build deck", PromptText = "x" }
+            };
+
+            ForceLayout(sidebar, narrowWidth, 700);
+
+            var sendButton = sidebar.FindName("BtnSend") as FrameworkElement;
+            if (sendButton == null)
+            {
+                throw new Exception("BtnSend not found in the visual tree at narrow width.");
             }
 
-            Point topLeft = editMode.TransformToVisual(sidebar).Transform(new Point(0, 0));
-            double rightEdge = topLeft.X + editMode.ActualWidth;
+            AssertWithinVisibleBounds(sidebar, sendButton, narrowWidth, "BtnSend");
+        }
 
-            if (topLeft.X < 0 || rightEdge > narrowWidth)
+        private static void AssertWithinVisibleBounds(FrameworkElement container, FrameworkElement element, double containerWidth, string elementName)
+        {
+            if (element.ActualWidth <= 0 || element.ActualHeight <= 0)
             {
                 throw new Exception(string.Format(
-                    "RdoEditMode is positioned outside the {0}px visible width (left={1}, right={2}) — clipped, not wrapped onto a new line.",
-                    narrowWidth, topLeft.X, rightEdge));
+                    "{0} has zero rendered size at {1}px width (ActualWidth={2}, ActualHeight={3}) — collapsed instead of reflowed.",
+                    elementName, containerWidth, element.ActualWidth, element.ActualHeight));
+            }
+
+            Point topLeft = element.TransformToVisual(container).Transform(new Point(0, 0));
+            double rightEdge = topLeft.X + element.ActualWidth;
+
+            if (topLeft.X < 0 || rightEdge > containerWidth)
+            {
+                throw new Exception(string.Format(
+                    "{0} is positioned outside the {1}px visible width (left={2}, right={3}) — clipped, not wrapped onto a new line.",
+                    elementName, containerWidth, topLeft.X, rightEdge));
             }
         }
 

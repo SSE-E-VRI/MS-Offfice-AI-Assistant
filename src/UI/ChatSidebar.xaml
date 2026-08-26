@@ -551,16 +551,19 @@
                 </TextBox>
 
                 <!-- 3. Quick Action Buttons + Attach + Send -->
-                <Grid Grid.Row="3" Margin="0,8,0,0">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-
-                    <WrapPanel Grid.Column="0" Orientation="Horizontal">
+                <!-- Vertical stack, not a single Grid row: a WrapPanel placed inside a Grid column
+                     with Width="Auto" is measured with effectively unlimited available width (that's
+                     what "Auto" means to a Grid), so it never actually gets a chance to wrap — it
+                     always requests its full unwrapped width. With Send in the Grid's other Auto
+                     column, Send was the one silently pushed past the visible edge once the combined
+                     Attach/chip/Insert-image content plus Send overflowed a narrow pane. Splitting
+                     onto two lines gives the chip WrapPanel a real, correctly-constrained width to
+                     wrap within, and keeps Send permanently visible on its own guaranteed line
+                     regardless of how many chips wrap above it. -->
+                <StackPanel Grid.Row="3" Orientation="Vertical" Margin="0,8,0,0">
+                    <WrapPanel Orientation="Horizontal" Margin="0,0,0,6">
                         <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"
+                                FontSize="11" Padding="6,4" Margin="0,0,4,4" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"
                                 AutomationProperties.Name="Attach files to message"/>
                         <ItemsControl x:Name="QuickPromptsItemsControl">
                             <ItemsControl.ItemsPanel>
@@ -571,20 +574,20 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button Content="{Binding Label}" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                            FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickPrompt_Click" Tag="{Binding}"
+                                            FontSize="11" Padding="6,4" Margin="0,0,4,4" Click="BtnQuickPrompt_Click" Tag="{Binding}"
                                             AutomationProperties.Name="{Binding Label}"/>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <Button x:Name="BtnInsertVisual" Content="Insert image" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"
+                                FontSize="11" Padding="6,4" Margin="0,0,4,4" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"
                                 AutomationProperties.Name="Insert image into PowerPoint slide"/>
                     </WrapPanel>
 
-                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}"
-                            FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"
+                    <Button x:Name="BtnSend" Content="Send" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}"
+                            FontWeight="Bold" Padding="14,6" HorizontalAlignment="Right" Click="BtnSend_Click"
                             AutomationProperties.Name="Send message to AI Assistant"/>
-                </Grid>
+                </StackPanel>
             </Grid>
         </Border>
     </Grid>
