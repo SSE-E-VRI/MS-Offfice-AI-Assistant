@@ -54,6 +54,7 @@ namespace MSOfficeAIAssistant.UI
         private string _currentDocumentKey = "OfficeSession";
         private object _hostAppObj;
         private string _hostType = "Office";
+        private AssistantStatus _status = AssistantStatus.Ready;
 
         // Host Controllers — created lazily, not during startup
         private IOfficeHostController _hostController;
@@ -271,6 +272,30 @@ namespace MSOfficeAIAssistant.UI
             _session.SaveHistory();
         }
 
+        private void SetStatus(AssistantStatus status)
+        {
+            _status = status;
+            string label = AssistantStatusDisplay.GetLabel(status);
+            string icon = AssistantStatusDisplay.GetIcon(status);
+
+            if (TxtStatusLabel != null && TxtStatusIcon != null)
+            {
+                if (Thread.CurrentThread.ManagedThreadId == Dispatcher.Thread.ManagedThreadId)
+                {
+                    TxtStatusIcon.Text = icon;
+                    TxtStatusLabel.Text = label;
+                }
+                else
+                {
+                    Dispatcher.Invoke(new Action(() =>
+                    {
+                        TxtStatusIcon.Text = icon;
+                        TxtStatusLabel.Text = label;
+                    }));
+                }
+            }
+        }
+
         public async void ExecuteExternalPrompt(string prompt, string promptTitle)
         {
             await ExecuteExternalPromptAsync(prompt, promptTitle, GetPromptContextScope());
@@ -372,7 +397,9 @@ namespace MSOfficeAIAssistant.UI
             ScrollToBottom();
 
             BtnSend.IsEnabled = false;
-            TypingIndicator.Visibility = Visibility.Visible;
+            // The status bar itself (TypingIndicator) is always visible now (Phase A7) — only the
+            // Stop button toggles, since there's nothing to cancel outside an active generation.
+            BtnStopStreaming.Visibility = Visibility.Visible;
 
             var streamCts = coordinator.BeginStream();
 
@@ -382,6 +409,7 @@ namespace MSOfficeAIAssistant.UI
 
             try
             {
+                SetStatus(AssistantStatus.ReadingAttachments);
                 var attachmentPaths = _pendingAttachments.Select(a => a.FilePath).ToList();
                 var prepared = await _session.PreparePayloadAsync(selectedModel, attachmentPaths, assistantMsg);
 
@@ -390,6 +418,7 @@ namespace MSOfficeAIAssistant.UI
                     _messages.Insert(_messages.IndexOf(assistantMsg), new ChatMessage("system", "⚠ Note: Image attachments were omitted — the selected model does not support vision analysis."));
                 }
 
+                SetStatus(AssistantStatus.Thinking);
                 await _session.Orchestrator.StreamChatAsync(
                     prepared.Request,
                     delta =>
@@ -418,10 +447,13 @@ namespace MSOfficeAIAssistant.UI
 
                     _pendingAttachments.Clear();
                     UpdateAttachmentState();
+
+                    SetStatus(AssistantStatus.Done);
                 }));
             }
             catch (OperationCanceledException)
             {
+                SetStatus(AssistantStatus.Cancelled);
                 Dispatcher.Invoke(new Action(() =>
                 {
                     assistantMsg.Content += "\n\n*(Generation stopped)*";
@@ -431,6 +463,7 @@ namespace MSOfficeAIAssistant.UI
             catch (Exception ex)
             {
                 Logger.Error("Chat completion error", ex);
+                SetStatus(AssistantStatus.Failed);
                 Dispatcher.Invoke(new Action(() =>
                 {
                     assistantMsg.Content = string.Format("Error: {0}", ex.Message);
@@ -443,7 +476,7 @@ namespace MSOfficeAIAssistant.UI
                 Dispatcher.Invoke(new Action(() =>
                 {
                     BtnSend.IsEnabled = true;
-                    TypingIndicator.Visibility = Visibility.Collapsed;
+                    BtnStopStreaming.Visibility = Visibility.Collapsed;
                     ScrollToBottom();
                 }));
             }
@@ -659,6 +692,7 @@ namespace MSOfficeAIAssistant.UI
 
         private void BtnStopStreaming_Click(object sender, RoutedEventArgs e)
         {
+            SetStatus(AssistantStatus.Cancelled);
             if (_session != null)
             {
                 _session.StreamCoordinator.Cancel();
@@ -920,7 +954,9 @@ namespace MSOfficeAIAssistant.UI
             }
 
             action.Status = OfficeActionStatus.Applying;
+            SetStatus(AssistantStatus.Applying);
             HostOperationResult res = ToolRegistry.Execute(controller, action);
+            SetStatus(AssistantStatus.Verifying);
             var post = ActionVerifier.PostVerify(action, res);
 
             if (post.Outcome == VerificationOutcome.Success)
@@ -929,12 +965,14 @@ namespace MSOfficeAIAssistant.UI
                 action.ResultText = post.ObservedValue;
                 action.ErrorMessage = null;
                 RecordOfficeActionAudit(action, post.ObservedValue);
+                SetStatus(AssistantStatus.Done);
                 return true;
             }
             else if (post.Outcome == VerificationOutcome.HostBusyRetryable)
             {
                 action.Status = OfficeActionStatus.Failed;
                 action.ErrorMessage = post.DiagnosticMessage;
+                SetStatus(AssistantStatus.Failed);
                 MessageBox.Show(post.DiagnosticMessage, "Excel Busy - Action Not Applied", MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
             }
@@ -942,6 +980,7 @@ namespace MSOfficeAIAssistant.UI
             {
                 action.Status = OfficeActionStatus.Failed;
                 action.ErrorMessage = post.DiagnosticMessage;
+                SetStatus(AssistantStatus.Failed);
                 MessageBox.Show(post.DiagnosticMessage, "Formula Error Detected", MessageBoxButton.OK, MessageBoxImage.Warning);
                 RecordOfficeActionAudit(action, post.DiagnosticMessage);
                 return false;
@@ -950,6 +989,7 @@ namespace MSOfficeAIAssistant.UI
             {
                 action.Status = OfficeActionStatus.Failed;
                 action.ErrorMessage = post.DiagnosticMessage;
+                SetStatus(AssistantStatus.Failed);
                 MessageBox.Show(post.DiagnosticMessage ?? "Office action failed.", "Office Action Error", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return false;
             }
@@ -965,11 +1005,14 @@ namespace MSOfficeAIAssistant.UI
                 return false;
             }
 
-            return MessageBox.Show(
+            SetStatus(AssistantStatus.AwaitingApproval);
+            MessageBoxResult result = MessageBox.Show(
                 pre.ConfirmationPrompt,
                 string.Format("Review {0} Action", action.Host ?? _hostType),
                 MessageBoxButton.YesNo,
-                pre.IsUndoable && pre.RiskLevel < 3 ? MessageBoxImage.Question : MessageBoxImage.Warning) == MessageBoxResult.Yes;
+                pre.IsUndoable && pre.RiskLevel < 3 ? MessageBoxImage.Question : MessageBoxImage.Warning);
+            SetStatus(AssistantStatus.Ready);
+            return result == MessageBoxResult.Yes;
         }
 
         private string DescribeOfficeAction(OfficeAction action)
@@ -1366,6 +1409,9 @@ namespace MSOfficeAIAssistant.UI
             if (handler != null) handler(this, EventArgs.Empty);
 
             RefreshContextReadout();
+
+            // Initialize status display to Ready
+            SetStatus(AssistantStatus.Ready);
         }
 
         public bool IsPromptKeyboardFocused

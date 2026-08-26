@@ -212,6 +212,7 @@
     <Compile Include="Core\Planning\CrossHostPlanCoordinator.cs" />
     <Compile Include="Core\Session\StreamCoordinator.cs" />
     <Compile Include="Core\Session\SessionMode.cs" />
+    <Compile Include="Core\Session\AssistantStatus.cs" />
     <Compile Include="Core\Session\AssistantSession.cs" />
     <Compile Include="Core\Session\WorkSession.cs" />
     <Compile Include="Core\Session\WorkSessionStore.cs" />

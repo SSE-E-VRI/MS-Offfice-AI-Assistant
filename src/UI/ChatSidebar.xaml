@@ -264,15 +264,20 @@
                 <Button x:Name="BtnUndoChange" Grid.Column="4" Content="Undo" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="Undo the last Office change made by the assistant" Click="BtnUndoChange_Click" Margin="0,0,4,0" FontSize="11"/>
                 <Button x:Name="BtnActionHistory" Grid.Column="5" Content="Log" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"/>
+                        ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"
+                        AutomationProperties.Name="Action history log"/>
                 <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"/>
+                        ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"
+                        AutomationProperties.Name="Start new chat and clear history"/>
                 <Button x:Name="BtnConversationHistory" Grid.Column="7" Content="🕘" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="Conversation History" Click="BtnConversationHistory_Click" Margin="0,0,4,0" FontSize="14"/>
+                        ToolTip="Conversation History" Click="BtnConversationHistory_Click" Margin="0,0,4,0" FontSize="14"
+                        AutomationProperties.Name="Conversation history"/>
                 <Button x:Name="BtnSettings" Grid.Column="8" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"/>
+                        ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"
+                        AutomationProperties.Name="Settings and API configuration"/>
                 <Button x:Name="BtnHelp" Grid.Column="9" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="4,0,0,0"/>
+                        ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="4,0,0,0"
+                        AutomationProperties.Name="Help and user manual"/>
             </Grid>
         </Border>
 
@@ -294,10 +299,12 @@
                 <!-- Context scope: selection and current file checkboxes -->
                 <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Selection" IsChecked="True"
                           VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
-                          ToolTip="Send the current text selection"/>
+                          ToolTip="Send the current text selection"
+                          AutomationProperties.Name="Include current text selection in message"/>
                 <CheckBox x:Name="ChkIncludeCurrentFile" Grid.Column="2" Content="Current file" IsChecked="False"
                           VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,0"
-                          ToolTip="Send the current document/sheet/deck's relevant content"/>
+                          ToolTip="Send the current document/sheet/deck's relevant content"
+                          AutomationProperties.Name="Include current document content in message"/>
 
                 <!-- Live host context readout -->
                 <TextBlock x:Name="TxtContextReadout" Grid.Column="3" VerticalAlignment="Center" FontSize="11"
@@ -312,13 +319,16 @@
                     <TextBlock Text="Mode:" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"/>
                     <RadioButton x:Name="RdoChatMode" Content="Chat" GroupName="SessionMode" Click="RdoChatMode_Click"
                                  VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
-                                 ToolTip="Read-only mode: AI can explain but not modify documents."/>
+                                 ToolTip="Read-only mode: AI can explain but not modify documents."
+                                 AutomationProperties.Name="Chat mode, read-only interaction"/>
                     <RadioButton x:Name="RdoPlanMode" Content="Plan" GroupName="SessionMode" Click="RdoPlanMode_Click"
                                  VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
-                                 ToolTip="Planning mode: AI can propose and preview changes."/>
+                                 ToolTip="Planning mode: AI can propose and preview changes."
+                                 AutomationProperties.Name="Plan mode, preview changes"/>
                     <RadioButton x:Name="RdoEditMode" Content="Edit" GroupName="SessionMode" Click="RdoEditMode_Click" IsChecked="True"
                                  VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}"
-                                 ToolTip="Editing mode: AI can apply changes directly to documents."/>
+                                 ToolTip="Editing mode: AI can apply changes directly to documents."
+                                 AutomationProperties.Name="Edit mode, apply changes directly"/>
                 </StackPanel>
             </Grid>
         </Border>
@@ -375,14 +385,23 @@
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- 4. Typing Indicator -->
-        <Border x:Name="TypingIndicator" Grid.Row="3" Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" 
-                Padding="12,6" Visibility="Collapsed">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="AI Assistant is generating..." FontStyle="Italic" FontSize="11" Foreground="{StaticResource InkSubtleBrush}" VerticalAlignment="Center"/>
-                <Button x:Name="BtnStopStreaming" Content="Stop" Background="{StaticResource DangerSurfaceBrush}" Foreground="{StaticResource DangerBrush}" 
-                        FontSize="11" FontWeight="Bold" Padding="8,2" Margin="12,0,0,0" Click="BtnStopStreaming_Click"/>
-            </StackPanel>
+        <!-- 4. Status Display & Typing Indicator -->
+        <Border x:Name="TypingIndicator" Grid.Row="3" Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0"
+                Padding="12,6" AutomationProperties.LiveSetting="Polite">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="TxtStatusIcon" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="TxtStatusLabel" FontStyle="Italic" FontSize="11" Foreground="{StaticResource InkSubtleBrush}" VerticalAlignment="Center"/>
+                </StackPanel>
+                <Button x:Name="BtnStopStreaming" Grid.Column="2" Content="Stop" Background="{StaticResource DangerSurfaceBrush}" Foreground="{StaticResource DangerBrush}"
+                        FontSize="11" FontWeight="Bold" Padding="8,2" Click="BtnStopStreaming_Click" Visibility="Collapsed"
+                        AutomationProperties.Name="Stop AI response generation"/>
+            </Grid>
         </Border>
 
         <!-- 5. Input Area -->
@@ -456,7 +475,8 @@
 
                     <WrapPanel Grid.Column="0" Orientation="Horizontal">
                         <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"/>
+                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"
+                                AutomationProperties.Name="Attach files to message"/>
                         <ItemsControl x:Name="QuickPromptsItemsControl">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -466,16 +486,19 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Button Content="{Binding Label}" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                            FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickPrompt_Click" Tag="{Binding}"/>
+                                            FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickPrompt_Click" Tag="{Binding}"
+                                            AutomationProperties.Name="{Binding Label}"/>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
                         <Button x:Name="BtnInsertVisual" Content="Insert image" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"/>
+                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"
+                                AutomationProperties.Name="Insert image into PowerPoint slide"/>
                     </WrapPanel>
 
-                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}" 
-                            FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"/>
+                    <Button x:Name="BtnSend" Grid.Column="2" Content="Send" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}"
+                            FontWeight="Bold" Padding="14,6" Click="BtnSend_Click"
+                            AutomationProperties.Name="Send message to AI Assistant"/>
                 </Grid>
             </Grid>
         </Border>
