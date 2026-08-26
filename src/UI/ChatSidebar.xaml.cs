@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -72,6 +73,7 @@ namespace MSOfficeAIAssistant.UI
             AttachmentsItemsControl.ItemsSource = _pendingAttachments;
 
             this.Loaded += ChatSidebar_Loaded;
+            this.AddHandler(Hyperlink.ClickEvent, new RoutedEventHandler(OnCitationHyperlinkClick), true);
 
             _orchestrator = new ChatOrchestrator(ProviderFactory.CreateFromConfig(ConfigManager.Instance));
             _session = new AssistantSession(_orchestrator, _messages);
@@ -1924,6 +1926,122 @@ namespace MSOfficeAIAssistant.UI
             {
                 Logger.Error("BtnPlanStepApprove_Click failed", ex);
                 MessageBox.Show(string.Format("Step approval error: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void OnCitationHyperlinkClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var link = e.OriginalSource as Hyperlink;
+                if (link == null) return;
+
+                string citation = link.Tag as string;
+                if (string.IsNullOrEmpty(citation)) return;
+
+                NavigateToCitation(citation);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("OnCitationHyperlinkClick failed: {0}", ex.Message));
+            }
+        }
+
+        private void NavigateToCitation(string citation)
+        {
+            // Pattern 1 & 2: Word citations ([¶N] or ~Paragraph N)
+            Match wordParagraphMatch = Regex.Match(citation, @"^\[¶(\d+)\]$");
+            if (wordParagraphMatch.Success)
+            {
+                int paragraphIndex = int.Parse(wordParagraphMatch.Groups[1].Value);
+                if (_wordCtrl != null)
+                {
+                    if (!_wordCtrl.NavigateToParagraph(paragraphIndex))
+                    {
+                        MessageBox.Show("Could not navigate to that location.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("This citation refers to a Word document, but Word is not the active host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                return;
+            }
+
+            Match wordExcerptMatch = Regex.Match(citation, @"^~Paragraph\s+(\d+)$");
+            if (wordExcerptMatch.Success)
+            {
+                int paragraphIndex = int.Parse(wordExcerptMatch.Groups[1].Value);
+                if (_wordCtrl != null)
+                {
+                    if (!_wordCtrl.NavigateToParagraph(paragraphIndex))
+                    {
+                        MessageBox.Show("Could not navigate to that location.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("This citation refers to a Word document, but Word is not the active host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                return;
+            }
+
+            // Pattern 3: Excel sheet-qualified cell (SheetName!CellAddress)
+            Match excelSheetMatch = Regex.Match(citation, @"^([A-Za-z0-9_]+)!(\$?[A-Z]+\$?\d+)$");
+            if (excelSheetMatch.Success)
+            {
+                string sheetName = excelSheetMatch.Groups[1].Value;
+                string cellAddress = excelSheetMatch.Groups[2].Value;
+                if (_excelCtrl != null)
+                {
+                    if (!_excelCtrl.NavigateToCell(sheetName, cellAddress))
+                    {
+                        MessageBox.Show("Could not navigate to that location.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("This citation refers to an Excel workbook, but Excel is not the active host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                return;
+            }
+
+            // Pattern 4: Excel bare cell address (CellAddress=Value — extract just the address)
+            Match excelBareMatch = Regex.Match(citation, @"^([A-Z]{1,3}\d{1,7})=$");
+            if (excelBareMatch.Success)
+            {
+                string cellAddress = excelBareMatch.Groups[1].Value;
+                if (_excelCtrl != null)
+                {
+                    if (!_excelCtrl.NavigateToCell(null, cellAddress))
+                    {
+                        MessageBox.Show("Could not navigate to that location.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("This citation refers to an Excel workbook, but Excel is not the active host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                return;
+            }
+
+            // Pattern 5: PowerPoint slide (Slide N of M)
+            Match powerpointMatch = Regex.Match(citation, @"^Slide\s+(\d+)\s+of\s+\d+$");
+            if (powerpointMatch.Success)
+            {
+                int slideNumber = int.Parse(powerpointMatch.Groups[1].Value);
+                if (_pptCtrl != null)
+                {
+                    if (!_pptCtrl.NavigateToSlide(slideNumber))
+                    {
+                        MessageBox.Show("Could not navigate to that location.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    }
+                }
+                else
+                {
+                    MessageBox.Show("This citation refers to a PowerPoint presentation, but PowerPoint is not the active host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                return;
             }
         }
     }

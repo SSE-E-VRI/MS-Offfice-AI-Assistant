@@ -964,6 +964,50 @@ namespace MSOfficeAIAssistant.Hosts
                    normalized.IndexOf("follow up", StringComparison.Ordinal) >= 0 ||
                    normalized.IndexOf("follow-up", StringComparison.Ordinal) >= 0;
         }
+
+        /// <summary>
+        /// Navigate to a specific paragraph by 1-based index (matching [¶N] citation numbering).
+        /// Defensive: returns false on any error without throwing.
+        /// </summary>
+        public bool NavigateToParagraph(int paragraphIndex)
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null)
+                    return false;
+
+                if (paragraphIndex < 1 || paragraphIndex > app.ActiveDocument.Paragraphs.Count)
+                    return false;
+
+                Word.Paragraph paragraph = app.ActiveDocument.Paragraphs[paragraphIndex];
+                if (paragraph == null || paragraph.Range == null)
+                    return false;
+
+                paragraph.Range.Select();
+
+                // Attempt to scroll into view if the API is available
+                try
+                {
+                    if (app.ActiveWindow != null)
+                    {
+                        app.ActiveWindow.ScrollIntoView(paragraph.Range, true);
+                    }
+                }
+                catch
+                {
+                    // If ScrollIntoView is not available or fails, the selection alone is usually enough
+                    // for Word to scroll to the current selection on its own.
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.NavigateToParagraph failed: {0}", ex.Message));
+                return false;
+            }
+        }
     }
 
     /// <summary>

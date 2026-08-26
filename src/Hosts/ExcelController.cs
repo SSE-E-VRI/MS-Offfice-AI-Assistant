@@ -1301,5 +1301,63 @@ namespace MSOfficeAIAssistant.Hosts
             catch { }
             return "ExcelWorkbook";
         }
+
+        /// <summary>
+        /// Navigate to a specific cell by sheet name and cell address (A1 notation).
+        /// If sheetName is null or empty, uses the active sheet.
+        /// Defensive: returns false on any error without throwing.
+        /// </summary>
+        public bool NavigateToCell(string sheetName, string cellAddress)
+        {
+            try
+            {
+                // Validate cell address first
+                if (string.IsNullOrEmpty(cellAddress) || !SpreadsheetActionParser.IsSafeTarget(cellAddress))
+                    return false;
+
+                dynamic app = _rawAppObj;
+                if (app == null)
+                    return false;
+
+                dynamic ws = null;
+                if (string.IsNullOrEmpty(sheetName))
+                {
+                    // Use active sheet
+                    try { ws = app.ActiveSheet; } catch { }
+                }
+                else
+                {
+                    // Activate the specified worksheet by name
+                    try { ws = app.Worksheets[sheetName]; } catch { }
+                    if (ws != null)
+                    {
+                        try { ws.Activate(); } catch { }
+                    }
+                }
+
+                if (ws == null)
+                    return false;
+
+                // Select and activate the cell
+                dynamic targetRange = null;
+                try { targetRange = ws.Range(cellAddress); } catch { }
+                if (targetRange == null)
+                    return false;
+
+                // Select is the actual navigation — must not be silently swallowed, or a real
+                // failure here (e.g. protected sheet) would still report success. Let it
+                // propagate to the outer catch, which correctly logs and returns false.
+                // Activate() is secondary window-focus polish and stays optional.
+                targetRange.Select();
+                try { targetRange.Activate(); } catch { }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ExcelController.NavigateToCell failed: {0}", ex.Message));
+                return false;
+            }
+        }
     }
 }

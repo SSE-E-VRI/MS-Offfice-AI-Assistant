@@ -466,9 +466,89 @@ namespace MSOfficeAIAssistant.UI.Helpers
                     var italic = new Italic(new Run(inner));
                     targetInlines.Add(italic);
                 }
-                // 5. Plain Text
+                // 5. Plain Text (may contain citation patterns that become hyperlinks)
                 else
                 {
+                    AddPlainTextWithCitations(targetInlines, part);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tokenizes plain text for citation patterns and renders them as Hyperlink elements,
+        /// while keeping plain text as inert Run elements.
+        /// Five citation patterns are recognized:
+        /// 1. [¶N] — Word paragraph tag (e.g. [¶12])
+        /// 2. ~Paragraph N — Word excerpt label (e.g. ~Paragraph 5)
+        /// 3. SheetName!Address — Excel sheet-qualified cell (e.g. Sheet1!B7)
+        /// 4. Address=Value — Excel bare cell tag (e.g. B7=1234; only Address is clickable)
+        /// 5. Slide N of M — PowerPoint slide reference (e.g. Slide 3 of 12)
+        /// </summary>
+        private static void AddPlainTextWithCitations(InlineCollection targetInlines, string text)
+        {
+            if (string.IsNullOrEmpty(text))
+                return;
+
+            // Combined regex that captures all 5 citation patterns
+            // Pattern 1: [¶N] - Word paragraph tag
+            // Pattern 2: ~Paragraph N - Word excerpt label
+            // Pattern 3: Sheet!Address - Excel sheet-qualified cell
+            // Pattern 4: Address=Value - Excel bare cell tag
+            // Pattern 5: Slide N of M - PowerPoint slide reference
+            string pattern =
+                @"(\[¶\d+\])" +                                    // Group 1: [¶N]
+                @"|" + @"(~Paragraph\s+\d+)" +                     // Group 2: ~Paragraph N
+                @"|" + @"([A-Za-z0-9_]+!\$?[A-Z]+\$?\d+)" +        // Group 3: Sheet!Address
+                @"|" + @"([A-Z]{1,3}\d{1,7}=)" +                   // Group 4: Address= (full match with =)
+                @"|" + @"(Slide\s+\d+\s+of\s+\d+)";                // Group 5: Slide N of M
+
+            string[] parts = Regex.Split(text, pattern);
+
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string part = parts[i];
+                if (string.IsNullOrEmpty(part))
+                    continue;
+
+                // Determine if this part is a citation by checking if it matches any pattern
+                bool isCitation = false;
+
+                // Check each pattern
+                if (Regex.IsMatch(part, @"^\[¶\d+\]$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^~Paragraph\s+\d+$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^[A-Za-z0-9_]+!\$?[A-Z]+\$?\d+$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^[A-Z]{1,3}\d{1,7}=$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^Slide\s+\d+\s+of\s+\d+$"))
+                {
+                    isCitation = true;
+                }
+
+                if (isCitation)
+                {
+                    // Create a clickable hyperlink for this citation
+                    var link = new Hyperlink(new Run(part))
+                    {
+                        Tag = part,
+                        Foreground = PrimaryBrush
+                    };
+                    link.TextDecorations = null;  // Remove default underline for subtle inline citation
+                    targetInlines.Add(link);
+                }
+                else
+                {
+                    // Plain text, not a citation
                     targetInlines.Add(new Run(part));
                 }
             }

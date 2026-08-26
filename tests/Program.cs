@@ -39,6 +39,7 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("PlanExecutorTests", PlanExecutorTests.RunAll),
                 Tuple.Create<string, Action>("CrossHostPlanCoordinatorTests", CrossHostPlanCoordinatorTests.RunAll),
                 Tuple.Create<string, Action>("MarkdownHelperTests", MarkdownHelperTests.RunAll),
+                Tuple.Create<string, Action>("MarkdownHelperCitationTests", MarkdownHelperCitationTests.RunAll),
                 Tuple.Create<string, Action>("XamlLoadTests", XamlLoadTests.RunAll),
                 Tuple.Create<string, Action>("AssistantSessionModeTests", AssistantSessionModeTests.RunAll),
                 Tuple.Create<string, Action>("AssistantSessionPlanModeTests", AssistantSessionPlanModeTests.RunAll),

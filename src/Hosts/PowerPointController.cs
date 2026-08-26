@@ -1163,5 +1163,46 @@ namespace MSOfficeAIAssistant.Hosts
             }
             return string.Empty;
         }
+
+        /// <summary>
+        /// Navigate to a specific slide by 1-based slide number.
+        /// Defensive: returns false on any error without throwing.
+        /// </summary>
+        public bool NavigateToSlide(int slideNumber)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null)
+                    return false;
+
+                dynamic presentation = GetActivePresentation();
+                if (presentation == null || presentation.Slides == null)
+                    return false;
+
+                int slideCount = 0;
+                try { slideCount = Convert.ToInt32(presentation.Slides.Count); } catch { }
+
+                if (slideNumber < 1 || slideNumber > slideCount)
+                    return false;
+
+                dynamic activeWin = null;
+                try { activeWin = app.ActiveWindow; } catch { }
+                if (activeWin == null || activeWin.View == null)
+                    return false;
+
+                // GotoSlide is the actual navigation — must not be silently swallowed, or a real
+                // failure here (e.g. wrong view mode, protected view) would still report success.
+                // Let it propagate to the outer catch, which correctly logs and returns false.
+                activeWin.View.GotoSlide(slideNumber);
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PowerPointController.NavigateToSlide failed: {0}", ex.Message));
+                return false;
+            }
+        }
     }
 }
