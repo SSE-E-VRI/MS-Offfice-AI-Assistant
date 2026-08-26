@@ -8,6 +8,7 @@ using MSOfficeAIAssistant.API;
 using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Core.Actions;
+using MSOfficeAIAssistant.Core.Planning;
 using MSOfficeAIAssistant.Providers;
 
 namespace MSOfficeAIAssistant.Core.Session
@@ -170,18 +171,45 @@ namespace MSOfficeAIAssistant.Core.Session
             assistantMsg.IsStreaming = false;
 
             var extraction = ActionExtractor.Extract(fullAssistantText, _hostType);
-            if (extraction != null && extraction.HasActions)
+            if (extraction == null || !extraction.HasActions)
             {
+                // No actions extracted — plain text response
+                assistantMsg.Content = fullAssistantText;
+                return;
+            }
+
+            // Actions were extracted; behavior differs by mode
+            if (_mode == SessionMode.Plan)
+            {
+                // Plan mode: build a Plan and attach it to the message
+                // Derive title from cleaned text (first ~60 chars) or use fallback
+                string title = extraction.CleanText;
+                if (!string.IsNullOrWhiteSpace(title))
+                {
+                    title = title.Length > 60 ? title.Substring(0, 60) + "..." : title;
+                }
+                else
+                {
+                    title = "AI-proposed plan";
+                }
+
+                // SourceRequest is not readily available here without signature change;
+                // per instructions, pass null if not available
+                var plan = Planner.BuildPlanFromActions(title, null, extraction.Actions);
+                assistantMsg.Plan = plan;
+                assistantMsg.Content = extraction.CleanText;
+                assistantMsg.NotifyPlanChanged();
+            }
+            else
+            {
+                // Chat and Edit modes: use traditional OfficeActions attachment
                 assistantMsg.Content = extraction.CleanText;
                 foreach (var act in extraction.Actions)
                 {
                     assistantMsg.OfficeActions.Add(act);
                 }
                 assistantMsg.NotifyOfficeActionsChanged();
-                return;
             }
-
-            assistantMsg.Content = fullAssistantText;
         }
 
         public void SaveHistory()

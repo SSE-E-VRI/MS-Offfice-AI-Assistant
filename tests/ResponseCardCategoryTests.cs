@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Core.Actions;
+using MSOfficeAIAssistant.Core.Planning;
 using MSOfficeAIAssistant.UI.Cards;
 
 namespace MSOfficeAIAssistant.Tests
@@ -12,6 +13,8 @@ namespace MSOfficeAIAssistant.Tests
         {
             TestClassifyNull();
             TestClassifyWithOfficeActions();
+            TestClassifyWithPlan();
+            TestClassifyWithBothPlanAndOfficeActions();
             TestClassifyWarning();
             TestClassifyFinding();
             TestClassifyRecommendation();
@@ -39,6 +42,56 @@ namespace MSOfficeAIAssistant.Tests
             var result = ResponseCardCategoryClassifier.Classify(message);
             Assert(result == ResponseCardCategory.ActionPreview,
                 "Message with HasOfficeActions=true should be ActionPreview");
+        }
+
+        private static void TestClassifyWithPlan()
+        {
+            var message = new ChatMessage("assistant", "Here is your plan");
+            var plan = new Plan();
+            plan.Title = "Test Plan";
+            var step = new PlanStep
+            {
+                Order = 1,
+                Description = "Step 1",
+                Action = null,
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Pending
+            };
+            plan.Steps.Add(step);
+            message.Plan = plan;
+
+            var result = ResponseCardCategoryClassifier.Classify(message);
+            Assert(result == ResponseCardCategory.Plan,
+                "Message with HasPlan=true should be Plan");
+        }
+
+        private static void TestClassifyWithBothPlanAndOfficeActions()
+        {
+            // Deliberately construct a message with both Plan and OfficeActions (even though
+            // ProcessAssistantResponse doesn't produce this combination) to verify priority order
+            var message = new ChatMessage("assistant", "Here is your plan with actions");
+
+            var plan = new Plan();
+            plan.Title = "Test Plan";
+            plan.Steps.Add(new PlanStep
+            {
+                Order = 1,
+                Description = "Step 1",
+                Action = null,
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Pending
+            });
+            message.Plan = plan;
+
+            var action = new OfficeAction();
+            action.ActionId = Guid.NewGuid().ToString("N");
+            action.Host = "Word";
+            action.Operation = "write_value";
+            message.OfficeActions.Add(action);
+
+            var result = ResponseCardCategoryClassifier.Classify(message);
+            Assert(result == ResponseCardCategory.Plan,
+                "Message with both Plan and OfficeActions should prioritize Plan");
         }
 
         private static void TestClassifyWarning()
