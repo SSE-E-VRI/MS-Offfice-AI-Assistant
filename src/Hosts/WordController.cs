@@ -547,16 +547,6 @@ namespace MSOfficeAIAssistant.Hosts
         }
 
         /// <summary>
-        /// Legacy context entry point.  For long documents it now samples the entire document
-        /// rather than always returning only the opening characters.
-        /// </summary>
-        public string GetDocumentText(int maxCharacters)
-        {
-            string fullText = GetFullDocumentText();
-            return BuildRelevantDocumentContext(fullText, string.Empty, maxCharacters);
-        }
-
-        /// <summary>
         /// Produces a bounded, prompt-aware context from all of the active document.  It keeps
         /// document opening/closing context, ranks prompt-relevant passages, and includes text
         /// around the current cursor where possible.
@@ -579,32 +569,7 @@ namespace MSOfficeAIAssistant.Hosts
         }
 
         /// <summary>
-        /// Returns Word heading structure when styles are available, otherwise a conservative
-        /// text-derived outline.  Useful as grounding for outline, summary, and rewrite prompts.
-        /// </summary>
-        public string GetDocumentOutline(int maxCharacters)
-        {
-            if (maxCharacters <= 0) maxCharacters = 4000;
-
-            string liveOutline = TryGetLiveDocumentOutline(maxCharacters);
-            if (!string.IsNullOrEmpty(liveOutline)) return liveOutline;
-
-            return BuildDocumentOutline(GetFullDocumentText(), maxCharacters);
-        }
-
-        /// <summary>
-        /// Extracts plausible TODOs, owners, deadlines, and next steps from the active document.
-        /// The output is context for an AI prompt, not a claim that every item is an assignment.
-        /// </summary>
-        public string GetActionItemContext(int maxCharacters)
-        {
-            if (maxCharacters <= 0) maxCharacters = 4000;
-            return BuildActionItemContext(GetFullDocumentText(), maxCharacters);
-        }
-
-        /// <summary>
-        /// Replaces a selected Markdown table with a native Word table.  The generated text is
-        /// parsed first, so ordinary prose cannot accidentally be converted into a table.
+        /// Returns the active document's file name, or a generic fallback if unavailable.
         /// </summary>
         public string GetActiveDocumentName()
         {

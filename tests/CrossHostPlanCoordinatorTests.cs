@@ -17,6 +17,7 @@ namespace MSOfficeAIAssistant.Tests
             TestIsMultiHostReturnsFalseForSingleHost();
             TestIsMultiHostReturnsTrueForMultipleHosts();
             TestExecuteForCurrentHostSkipsOutOfHostStepsAndContinues();
+            TestExecuteForCurrentHostDoesNotReexecuteSkippedStep();
             TestGetNextPendingHostAfterMultiHostExecution();
             TestPausedForDifferentHostResult();
             TestSingleHostPlanExecutesCompletely();
@@ -168,6 +169,53 @@ namespace MSOfficeAIAssistant.Tests
                 "Should have executed at least 2 steps on Excel (step 1 and step 3)");
 
             Console.WriteLine("  [PASS] ExecuteForCurrentHost skips out-of-host steps and continues to same-host steps later in sequence");
+        }
+
+        /// <summary>
+        /// Regression test: ExecuteForCurrentHost's "already-terminal steps" guard only checked
+        /// Applied/RolledBack, missing Skipped — the exact same bug class already found and fixed
+        /// in PlanExecutor.ExecuteAll/ContinueFromStep, but never mirrored here even though this
+        /// file's own GetNextPendingHost (and the guard a few lines above ExecuteForCurrentHost's
+        /// own out-of-scope check) already used the correct three-way check. Found during an
+        /// adversarial review pass; fixed alongside this test by copying the same three-way check
+        /// from elsewhere in this file.
+        /// </summary>
+        private static void TestExecuteForCurrentHostDoesNotReexecuteSkippedStep()
+        {
+            var plan = new Plan();
+
+            var step1 = new PlanStep
+            {
+                StepId = "step-skipped",
+                Order = 1,
+                Description = "Skipped step",
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Skipped
+                // Action left null -> IsReasoningOnly == true; if ExecuteStep were wrongly called
+                // on this step, a reasoning-only step ALWAYS succeeds and flips to Applied - a
+                // clean, unambiguous signal that the "skip" guard failed to actually skip it.
+            };
+            plan.Steps.Add(step1);
+
+            var step2 = new PlanStep
+            {
+                StepId = "step-pending",
+                Order = 2,
+                Description = "Pending step",
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Pending
+            };
+            plan.Steps.Add(step2);
+
+            var executor = new PlanExecutor(plan, new ExcelController(null));
+            CrossHostPlanCoordinator.ExecuteForCurrentHost(plan, executor, "Excel");
+
+            Assert(step1.Status == PlanStepStatus.Skipped,
+                string.Format("Skipped step must remain Skipped, but got {0}", step1.Status));
+            Assert(step2.Status == PlanStepStatus.Applied,
+                "Pending step after skipped step should have been executed");
+
+            Console.WriteLine("  [PASS] ExecuteForCurrentHost does not re-execute a Skipped step");
         }
 
         private static void TestGetNextPendingHostAfterMultiHostExecution()

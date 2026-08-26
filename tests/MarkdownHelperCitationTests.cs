@@ -21,6 +21,8 @@ namespace MSOfficeAIAssistant.Tests
             TestExcelSheetQualifiedCellRendersAsHyperlink();
             TestExcelBareAddressEqualsValueRendersAsHyperlink();
             TestPowerPointSlideReferenceRendersAsHyperlink();
+            TestPowerPointSlideTagBracketFormatRendersAsHyperlink();
+            TestPowerPointSlideTagDashFormatRendersAsHyperlink();
             TestPlainTextWithoutCitationsHasNoHyperlinks();
             TestEvidenceLevelBracketedTagDoesNotBecomeHyperlink();
             TestCitationInSentenceRendersCorrectly();
@@ -74,6 +76,37 @@ namespace MSOfficeAIAssistant.Tests
             Hyperlink link = FindHyperlinkByTag(textBlock, "Slide 3 of 12");
             Assert(link != null, "PowerPoint slide reference Slide 3 of 12 should render as a Hyperlink");
             Assert(link.Tag.Equals("Slide 3 of 12"), "Hyperlink Tag should be exactly 'Slide 3 of 12'");
+        }
+
+        /// <summary>
+        /// PowerPointController.GetSlideTextInternal's real emitted format — this is the format
+        /// that actually reaches the model as context for a full-deck fetch or review context,
+        /// unlike "Slide N of M" which is only ever used for the A2 context-readout UI label and
+        /// never sent as content. Found missing during an adversarial review pass; fixed alongside
+        /// this test.
+        /// </summary>
+        private static void TestPowerPointSlideTagBracketFormatRendersAsHyperlink()
+        {
+            var textBlock = new TextBlock();
+            MarkdownHelper.SetMarkdownText(textBlock, "See [Slide #3: Overview] for details.");
+
+            Hyperlink link = FindHyperlinkByTag(textBlock, "[Slide #3: Overview]");
+            Assert(link != null, "PowerPoint slide tag [Slide #3: Overview] should render as a Hyperlink");
+            Assert(link.Tag.Equals("[Slide #3: Overview]"), "Hyperlink Tag should be exactly '[Slide #3: Overview]'");
+        }
+
+        /// <summary>
+        /// AttachmentExtractor's real emitted format for .pptx slide sections — the second of the
+        /// two real, actually-used-as-content PowerPoint formats that "Slide N of M" alone missed.
+        /// </summary>
+        private static void TestPowerPointSlideTagDashFormatRendersAsHyperlink()
+        {
+            var textBlock = new TextBlock();
+            MarkdownHelper.SetMarkdownText(textBlock, "From --- Slide 5 --- we can see the trend.");
+
+            Hyperlink link = FindHyperlinkByTag(textBlock, "--- Slide 5 ---");
+            Assert(link != null, "PowerPoint slide tag --- Slide 5 --- should render as a Hyperlink");
+            Assert(link.Tag.Equals("--- Slide 5 ---"), "Hyperlink Tag should be exactly '--- Slide 5 ---'");
         }
 
         private static void TestPlainTextWithoutCitationsHasNoHyperlinks()

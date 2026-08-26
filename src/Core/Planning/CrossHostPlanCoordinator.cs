@@ -100,7 +100,7 @@ namespace MSOfficeAIAssistant.Core.Planning
             foreach (var step in plan.Steps)
             {
                 // Skip already-terminal steps
-                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack)
+                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack || step.Status == PlanStepStatus.Skipped)
                 {
                     continue;
                 }

@@ -13,6 +13,8 @@ namespace MSOfficeAIAssistant.Tests
             TestCitationPatternExcelSheetQualified();
             TestCitationPatternExcelBareCellTag();
             TestCitationPatternPowerPointSlide();
+            TestCitationPatternPowerPointSlideTagBracketFormat();
+            TestCitationPatternPowerPointSlideTagDashFormat();
             TestBracketedTagCalculated();
             TestBracketedTagStrongInference();
             TestBracketedTagPossibleInference();
@@ -71,6 +73,28 @@ namespace MSOfficeAIAssistant.Tests
             EvidenceLevel level = EvidenceLevelClassifier.Classify(content);
             Assert(level == EvidenceLevel.DirectlyObserved,
                 "Finding content containing Slide pattern should be DirectlyObserved");
+        }
+
+        /// <summary>
+        /// GetSlideTextInternal's real emitted format — this is what actually reaches the model as
+        /// content, unlike "Slide N of M" which is only the A2 context-readout UI label. Found
+        /// missing during an adversarial review pass; fixed alongside this test.
+        /// </summary>
+        private static void TestCitationPatternPowerPointSlideTagBracketFormat()
+        {
+            string content = "Finding: [Slide #3: Overview] shows the trend clearly";
+            EvidenceLevel level = EvidenceLevelClassifier.Classify(content);
+            Assert(level == EvidenceLevel.DirectlyObserved,
+                "Finding content containing [Slide #N: Title] pattern should be DirectlyObserved");
+        }
+
+        /// <summary>AttachmentExtractor's real emitted format for .pptx slide sections.</summary>
+        private static void TestCitationPatternPowerPointSlideTagDashFormat()
+        {
+            string content = "Finding: --- Slide 5 --- shows the trend clearly";
+            EvidenceLevel level = EvidenceLevelClassifier.Classify(content);
+            Assert(level == EvidenceLevel.DirectlyObserved,
+                "Finding content containing --- Slide N --- pattern should be DirectlyObserved");
         }
 
         private static void TestBracketedTagCalculated()

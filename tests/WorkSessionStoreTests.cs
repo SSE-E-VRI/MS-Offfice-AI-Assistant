@@ -215,13 +215,13 @@ namespace MSOfficeAIAssistant.Tests
                 session1.DocumentKey = "Doc1";
                 session1.Title = "Doc1 Session 1";
                 store.Save(session1);
-                System.Threading.Thread.Sleep(10);  // Small delay to ensure different timestamps
+                WaitForClockToAdvance();
 
                 var session2 = new WorkSession();
                 session2.DocumentKey = "Doc1";
                 session2.Title = "Doc1 Session 2";
                 store.Save(session2);
-                System.Threading.Thread.Sleep(10);
+                WaitForClockToAdvance();
 
                 var session3 = new WorkSession();
                 session3.DocumentKey = "Doc2";
@@ -325,6 +325,28 @@ namespace MSOfficeAIAssistant.Tests
             finally
             {
                 try { if (Directory.Exists(tempDir)) Directory.Delete(tempDir, true); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// WorkSessionStore.Save unconditionally stamps session.UpdatedUtc = DateTime.UtcNow on
+        /// every call, with no way for a caller to override it — so ordering tests can't pin an
+        /// explicit timestamp the way ConversationStoreSessionTests does via File.SetLastWriteTimeUtc.
+        /// A fixed Thread.Sleep(10) between two Save() calls is not reliably longer than Windows'
+        /// default ~15.6ms system clock tick, so two back-to-back DateTime.UtcNow reads can return
+        /// the identical value, making List.Sort's tie-break order for that pair genuinely
+        /// unpredictable (List.Sort is not a stable sort). Found during an adversarial review pass
+        /// (the same flaky-timing-test class already caught once for ConversationStoreSessionTests,
+        /// fixed there via a different mechanism since that store orders by file timestamp, not an
+        /// in-memory field). Fixed here at the root by busy-waiting until the clock has genuinely
+        /// advanced, instead of guessing a "safe enough" sleep duration.
+        /// </summary>
+        private static void WaitForClockToAdvance()
+        {
+            DateTime before = DateTime.UtcNow;
+            while (DateTime.UtcNow <= before)
+            {
+                System.Threading.Thread.Sleep(1);
             }
         }
 

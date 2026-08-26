@@ -56,7 +56,7 @@ from source inspection alone.
 
 ---
 
-## 2. Current architecture (v0.4.0, as built)
+## 2. Current architecture (v0.5.0, as built)
 
 ```text
 Word │ Excel │ PowerPoint
@@ -136,16 +136,20 @@ incident in Appendix A. Two mitigations are therefore mandatory and are implemen
 ### 2.2 Ribbon
 
 One tab, `tabAIAssistant`, labelled **AI Assistant** (`src/Addin/Ribbon.xml`, embedded resource loaded
-in `Connect.cs:322-340`). Four groups, 14 buttons, all handled in `src/Addin/RibbonCallback.cs`:
+in `Connect.cs:322-340`). Four groups, 24 top-level controls total, all handled in
+`src/Addin/RibbonCallback.cs` (the original 14 plus D-9's 9-item Translate submenu, added to `More`
+after this table was first written and never reflected here until now):
 
 | Group | Buttons |
 |---|---|
 | Chat | Open AI Chat, New Chat, Configure |
 | Draft | Generate, Continue, Summarize, Rewrite |
-| More | Expand, Shorten, Outline, Actions, Review, Slides |
+| More | Expand, Shorten, Outline, Actions, Review, Slides, **Translate** (submenu: Tamil, Hindi, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, English → `OnTranslate`) |
 | Help | User Manual |
 
-Every callback is `ShowPane()` + `ExecutePrompt(<hardcoded prompt>, <title>)`.
+Every simple callback is `ShowPane()` + `ExecutePrompt(<prompt>, <title>)`, with the 10 non-dynamic
+prompt strings (all of the above except `OnTranslate`, which builds its prompt per selected language)
+consolidated into `QuickPromptRegistry.GetRibbonPrompts()` (Phase B3) rather than hardcoded inline.
 
 ### 2.3 Task pane — three hosting strategies
 
@@ -171,7 +175,9 @@ All four paths construct the same `ChatSidebar` WPF control.
   `user`, `assistant`. `FullContent` carries the real prompt while `Content` carries the short
   display title.
 - History is `ObservableCollection<ChatMessage>` in `ChatSidebar`, persisted per document by
-  `ConversationStore` (DPAPI `.dat` under `%LOCALAPPDATA%\MistralOfficeAddin\Conversations\`).
+  `ConversationStore` (DPAPI `.dat` under `%LOCALAPPDATA%\MSOfficeAIAssistant\Conversations\`,
+  via `AppPaths.InDataDirectory` — the pre-rename `MistralOfficeAddin` path only appears in the
+  §2.1 migration table above as historical "Was" documentation, not the live path).
 - **Token budget is 24,000**, applied by `TokenCounter.TruncateToFit` — a heuristic estimator
   (`src/API/TokenCounter.cs`), not a real tokenizer. The budget is hardcoded at the call site.
 - Streaming is live SSE. The delta callback throttles to **every 5th delta** and marshals via
@@ -194,12 +200,15 @@ cancellation, streaming pass-through. It contains no prompt, Office, or action l
 
 ### 2.6 Office context extraction
 
+**Post-A4 state** (this table originally described the pre-Phase-A4 gaps; most were closed, one
+genuine gap remains — noted per row):
+
 | Host | Method | Location fidelity |
 |---|---|---|
-| Excel | `GetWorksheetSnapshot(70, 26)` — sheet name, ActiveCell, Selection, UsedRange, per-cell `A1=value` with formula annotations | **Good** — the only place addresses survive. Active sheet only; addresses not sheet-qualified. |
-| Word | `GetRelevantDocumentContext` → chunk-and-score against prompt terms, plus live outline and cursor context | **Poor** — output labelled only `[Excerpt i of n]`; no paragraph numbers or offsets. |
-| PowerPoint | `GetPresentationReviewContext`, `GetPresentationText`, `GetPresentationOutline` | **Partial** — slide numbers in some paths, absent in others. |
-| Attachments | `AttachmentExtractor` — OpenXML, PdfPig | **Mixed** — PDF keeps real page numbers; `.pptx`/`.xlsx` emit ordinal indices only; `.xlsx` **drops cell addresses entirely**; `.docx` has no paragraph index. |
+| Excel | `GetWorksheetSnapshot(70, 26)` — sheet name, ActiveCell, Selection, UsedRange, per-cell `A1=value` with formula annotations | **Good, one real gap remains**: addresses survive but are still active-sheet-only, NOT sheet-qualified (`A1=value`, not `Sheet1!A1=value`) — A4 sheet-qualified `.xlsx` *attachment* extraction (below), not this live-COM snapshot read. `Slide N of M`/`Sheet1!B7`-style qualification only exists in `GetContextReadout` (Phase A2, a UI label, not content sent to the model). |
+| Word | `GetRelevantDocumentContext` → chunk-and-score against prompt terms, plus live outline and cursor context | **Fixed by A4** — excerpt labels are now `[Excerpt i of n, ~Paragraph N]` (the `~` is deliberate: a line-based approximation of a Word paragraph, not a guaranteed match to Word's own `Paragraphs` numbering). |
+| PowerPoint | `GetPresentationReviewContext`, `GetPresentationText` (internally `GetSlideTextInternal`, emitting `[Slide #N: Title]`) | **Real citation format, but was unrecognized by click-to-navigate/evidence classification until a later adversarial-review fix** — `GetPresentationOutline` (referenced here originally) was deleted by D-10 and never existed as a real method; the citation-pattern regexes in `MarkdownHelper`/`EvidenceLevel`/`ChatSidebar.NavigateToCitation` now recognize `[Slide #N: Title]` and `--- Slide N ---` in addition to the `Slide N of M` UI-label format. |
+| Attachments | `AttachmentExtractor` — OpenXML, PdfPig | **Fixed by A4 for .docx/.xlsx**: PDF keeps real page numbers; `.docx` paragraphs tagged `[¶N]`; `.xlsx` cells tagged with real address AND real sheet name (resolved from `xl/workbook.xml`). `.pptx` still emits an ordinal `--- Slide N ---` (no per-slide title resolution) — now at least recognized as a citation pattern, but still less informative than the other two formats. |
 
 Scope is chosen by the user: `Selection`, `CurrentFile`, `SelectionAndFile`, `AttachmentsOnly`.
 
@@ -208,37 +217,56 @@ Legacy `.doc/.xls/.ppt/.rtf` are rejected outright.
 
 ### 2.7 Structured actions and write-back
 
-Three **mutually incompatible** extraction mechanisms exist today:
+*(This subsection originally described the pre-Phase-C architecture — three mutually incompatible
+extractors, Word with no structured actions, risk as a single boolean. Phase C unified all of that;
+rewritten below to describe the current, verified state. Kept for historical contrast: the legacy
+`<excel_actions>`/`<powerpoint_actions>` XML dialects are still accepted as a compatibility path, not
+replaced.)*
 
-1. **Excel — `<excel_actions>` XML.** `SpreadsheetActionParser.ExtractActions`
-   (`src/Core/SpreadsheetAction.cs:252-364`). 13 action types. Hardened `XmlReader`
-   (`DtdProcessing.Prohibit`, `XmlResolver = null`). Safety bounds: max 25 actions, 12,000 chars per
-   action, 100,000 cells, 200 KB block, and **bounded-A1 targets only** — sheet-qualified refs
-   (`Sheet1!A1`), whole columns (`B:B`) and multi-area ranges are deliberately rejected.
-   This is the only parser wired into the chat response path.
-2. **PowerPoint — `<powerpoint_actions>` XML.** `PowerPointActionParser` (4 allowed types).
-   Invoked from inside `PowerPointController.InsertText`, **not** from the response pipeline.
-3. **Excel free text.** `ExcelController.ExtractCleanExcelContent` — regex heuristics for the
-   Insert button.
+`ActionExtractor.Extract(text, currentHost, nativeToolCalls)` (`src/Core/Actions/ActionExtractor.cs`)
+is the **single, unified, host-agnostic extraction entry point** used by the live chat response
+pipeline for all three hosts, accepting — in priority order — native provider tool calls, a
+host-agnostic `<office_actions>` JSON-ish block, and the two legacy XML dialects as a compatibility
+path:
 
-**Word has no structured action format at all.** The model returns prose and the whole response is
-inserted.
+1. **`<office_actions>`** — the modern, unified schema. Word, Excel, and PowerPoint operations are
+   all expressed as `OfficeAction { Host, Operation, Target, ... }` and resolved against
+   `ToolRegistry` (`src/Core/Actions/ToolRegistry.cs`), the single source of truth for what
+   operations exist, their `RiskLevel` (0-3), and whether they `RequiresApproval` — **Word now has
+   real structured actions** (`word.add_comment`, `word.insert_table`, `word.accept_all_revisions`,
+   etc.), closing the original gap entirely.
+2. **`<excel_actions>` XML** (legacy, still accepted) — `SpreadsheetActionParser.ExtractActions`
+   (`src/Core/SpreadsheetAction.cs`). 13 action types, hardened `XmlReader`
+   (`DtdProcessing.Prohibit`, `XmlResolver = null`), the same safety bounds as before (max 25
+   actions, 12,000 chars/action, 100,000 cells, bounded-A1 targets only).
+3. **`<powerpoint_actions>` XML** (legacy, still accepted) — `PowerPointActionParser`, now parsed
+   from the SAME unified `ActionExtractor.Extract` call as everything else, **not** from inside
+   `PowerPointController.InsertText` as originally documented — that approval-hole (D-1) was closed.
+4. **Excel free text** — `ExcelController.ExtractCleanExcelContent` — regex heuristics, still used
+   only by the legacy `InsertText` path the Insert button calls directly (see the Phase A forward-
+   guidance note in §3: the UI bypasses several `Execute*` wrappers on purpose, left for a future
+   redesign rather than rewired twice).
 
-Approval is `System.Windows.MessageBox` in every case. The entire risk model is one boolean,
-`SpreadsheetAction.IsUndoable`, which is `false` for RemoveDuplicates, CreateTable, Chart,
-PivotTable and NamedRange.
+Approval is still `System.Windows.MessageBox` in every case — the SSOT plan's original "risk-badged
+preview cards" replacing MessageBox never happened; this claim from the original document remains
+accurate. The risk model is **no longer a single boolean** — `ActionVerifier.PreVerify` re-syncs
+`RiskLevel`/`RequiresApproval`/`IsUndoable` from `ToolRegistry.GetTool(...)` on every call, the single
+source of truth (§Phase C2, D-5).
 
-### 2.8 Undo
+### 2.8 Undo and rollback
 
-Three unrelated mechanisms, none unified:
+*(Originally: "three unrelated mechanisms, none unified... no before-state capture, no snapshot, no
+custom rollback anywhere." Phase C5 shipped exactly that unification; rewritten below.)*
 
-- **Word** — real Office undo grouping via `UndoRecord.StartCustomRecord` / `EndCustomRecord`
-  (`WordController.cs:641,660`), degrading gracefully on Word 2007. **This is the pattern to generalize.**
-- **Excel** — bare `app.Undo()`. Unreliable from COM; useless for the five non-undoable types. A
-  batch apply produces N separate undo steps, or none.
-- **PowerPoint** — `app.CommandBars.ExecuteMso("Undo")`.
-
-There is **no before-state capture, no snapshot, and no custom rollback anywhere.**
+`RollbackExecutor` (`src/Core/Actions/RollbackExecutor.cs`) is now the unified rollback layer for all
+three hosts: `CaptureBeforeState` snapshots formula-preserving state before a RiskLevel≥2 undoable
+mutation runs, and `RollbackBatch` performs strict-LIFO programmatic inverse execution across a whole
+batch — real before-state capture and real custom rollback exist, closing the original gap. The
+per-host mutation mechanisms themselves are unchanged and still host-specific under the hood: Word's
+real Office undo-grouping (`UndoRecord.StartCustomRecord`/`EndCustomRecord`), Excel's `app.Undo()`,
+PowerPoint's `app.CommandBars.ExecuteMso("Undo")` — `RollbackExecutor` sits above these as the actual
+unification layer the original text called for, rather than generalizing Word's grouping pattern
+directly into the other two hosts.
 
 ### 2.9 Storage and security
 
@@ -285,19 +313,27 @@ never through cross-process live COM.
 
 ### 2.12 Error handling conventions
 
-**No `COMException` is caught anywhere in the codebase** — everything catches bare `Exception`. Three
-patterns are in use:
+*(Originally: "No COMException is caught anywhere... ApplySpreadsheetAction is the only structured
+error channel." D-12/D-13 changed both; rewritten below. `ApplySpreadsheetAction` itself no longer
+exists — deleted as dead code once `ExecuteSpreadsheetAction` fully replaced it, see D-13.)*
 
-1. **Swallow-and-warn** on read paths — log, return empty/false. The caller cannot distinguish
-   "empty document" from "COM failed".
+`SafeOfficeProbe.Probe<T>`/`TryExecute` (`src/Core/SafeOfficeProbe.cs`, D-12) explicitly catches
+`COMException` (surfacing the real HRESULT) with a fallback to a generic `Exception` catch, and is
+used for the read/probe/version-compatibility-check call sites that adopted it. Three patterns are in
+use:
+
+1. **Swallow-and-warn** on read paths not yet migrated to `SafeOfficeProbe` — log, return empty/false.
 2. **Log-and-rethrow** on mutating paths — surfaces as a `MessageBox`.
-3. **Status object** — `ExcelController.ApplySpreadsheetAction` (`:317-323`) sets
-   `Status`/`ErrorMessage` and returns false. **This is the only structured error channel in the
-   controller layer** and the natural seed for a tool-result envelope.
+3. **Structured `HostOperationResult`** — the primary error channel today. Every UI-reachable
+   mutation method across all three controllers has an `Execute*` wrapper returning
+   `HostOperationResult` (`Ok()`/`Failed()`/`FromException()`, the latter capturing the real HRESULT
+   via `Marshal.GetHRForException`), per D-13 Tier 1+2. This fully replaces the single-controller,
+   single-field "status object" pattern this subsection originally described.
 
-Additionally ~60 bare `try { … } catch { }` blocks wrap individual COM property reads. This is
-intentional — it absorbs Office 2010↔365 API differences — but it means **a failed sub-step is
-invisible**, which any future verification layer must account for.
+D-13 (see §3's defect log) is fully closed: every mutation path reports a structured result. ~67
+internal read/probe `catch { }` sites remain, intentionally — they absorb Office 2010↔365 API
+differences and are a deliberate, declined-not-deferred decision (see D-13's SSOT entry for the exact
+reasoning), not an oversight.
 
 ### 2.13 Build, install, verify
 
@@ -330,7 +366,9 @@ invisible**, which any future verification layer must account for.
 ### 2.14 Tests
 
 `tests/MSOfficeAIAssistant.Tests.csproj` — a **hand-rolled console runner**, no NUnit/xUnit/MSTest.
-`tests/Program.cs` runs 5 suites and returns exit 0/1.
+`tests/Program.cs` runs 33 suites (as of the last verified commit — this number grows with every
+phase; do not treat it as fixed, re-count via `grep -c "RunAll();" tests/Program.cs` before quoting
+it) and returns exit 0/1.
 
 Run: build the tests csproj, execute `bin\{plat}\Release\MSOfficeAIAssistant.Tests.exe`.
 
@@ -406,7 +444,7 @@ Findings:
 | Feature | Status |
 |---|---|
 | Shared COM add-in, Word/Excel/PowerPoint, Office 2010→365 | Implemented |
-| Ribbon (14 buttons), custom task pane, 3 hosting strategies | Implemented |
+| Ribbon (24 controls incl. 9-item Translate submenu — see §2.2), custom task pane, 3 hosting strategies | Implemented |
 | Provider abstraction + Mistral / Gemini / Groq / Custom | Implemented |
 | SSE streaming with cancellation | Implemented |
 | Attachments: docx/xlsx/pptx/pdf/images + vision routing | Implemented |
@@ -422,7 +460,7 @@ Findings:
 | Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode. Plan mode is now real, not a no-op alias of Edit: `AssistantSession.ProcessAssistantResponse` builds a `Planner`-produced `Plan` instead of populating `OfficeActions`, rendered as an editable, executable `PlanTemplate` card — reorder/skip/remove steps, per-step approve, run, rollback, wired to the already-tested `PlanExecutor`. Single-host only; `CrossHostPlanCoordinator` is not wired into chat, since a single chat session's `ActionExtractor` is already host-scoped) |
 | Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Plan/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text, now clickable — `MarkdownHelper` renders citation patterns as `Hyperlink`s wired to `NavigateToParagraph`/`NavigateToCell`/`NavigateToSlide` on the active host controller) |
 | Skills and domain packs | Implemented (Phase B1–B5: `SkillRegistry` loading `general` (9 skills) and `railway` (13 skills) JSON manifests; `AppendDomainPackRules` prompt composition; evidence levels on Finding cards; context-aware skill-chip promotion) |
-| Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
+| Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 test suites passing at the time Phase C shipped — the project's total suite count has grown well past that since; see §2.14 for the current count) |
 | Multi-step planner, cross-host workflows | Implemented (Phase D1–D4 complete: `Planner`, `PlanExecutor`, `CrossHostPlanCoordinator`, `WorkSession`; verified in `PlannerTests`, `PlanExecutorTests`, `CrossHostPlanCoordinatorTests`, `WorkSessionStoreTests`) |
 | Web search / external grounding | Deferred (Post-Phase D) — opt-in BYOK client-side search |
 | AI Pages, model routing, knowledge library, feedback capture | Not Implemented — deferred past Phase D |
@@ -446,7 +484,7 @@ Findings:
 | ~~D-10~~ | — | **RESOLVED.** Deleted all four dead methods (`ExcelController.CreatePreviewDescription`, `ExcelController.WriteFormula`, `PowerPointController.GetPresentationOutline`, `PowerPointController.SetSpeakerNotes`). Verified each shared private helper (`GetSlideTitle`, `GetSectionName`, `AppendBounded`, `CleanMarkdown`) still has other live callers before removing the dead wrapper. |
 | ~~D-11~~ | — | **RESOLVED.** `README.md` documented the non-existent `build.bat` and `register.cmd`; corrected to `install.cmd` plus a direct-MSBuild loop. |
 | ~~D-12~~ | — | **RESOLVED.** Implemented `OleMessageFilter` (`CoRegisterMessageFilter` on STA thread) to handle Excel in-cell edit busy rejections (`0x800AC472` / `RPC_E_SERVERCALL_RETRYLATER`) with 10s retry window; previous filter restored on add-in disconnect. Added typed `SafeOfficeProbe` helpers. |
-| ~~D-13~~ | — | **RESOLVED — FULLY CLOSED, no follow-up tracked.** Every UI-reachable mutation method across `WordController`/`ExcelController`/`PowerPointController` now has an `Execute*` wrapper returning `HostOperationResult` (Tier 1, Phase C4: `ExecuteMoveSlide`/`ExecuteCreateSectionBeforeSlide`/`ExecuteRenameSectionInPlace`/`ExecuteSetSpeakerNotesInPlace`; Tier 2: `ExecuteAcceptRevisionsInSelection`/`ExecuteRejectRevisionsInSelection`/`ExecuteUndoLastChange` on Word, `ExecuteUndoLastAction`/`ExecuteInsertText` on Excel, `ExecuteUndo`/`ExecuteInsertText` on PowerPoint), each covered by headless tests in `HostOperationResultTests.cs`. Also removed 7 additional dead methods found during the sweep beyond D-10's original scope (`WordController.ApplyTrackChanges`/`ConvertSelectedMarkdownTableToWordTable`/`InsertMarkdownTableAtCursor`/`ConvertSelectedTextToWordTable`, `ExcelController.ApplySpreadsheetAction`, `PowerPointController.ApplyPowerPointAction`/`ExecutePowerPointAction`/`UndoLastChange`). The original blocking criterion — "Phase C5 verification cannot ship while any UI-reachable mutation swallows" — is satisfied: Phase C5 shipped and every mutation entry point now reports a structured result. **"Tier 3" (converting ~67 internal read/probe `catch { }` sites — Word 10 / Excel 18 / PowerPoint 39 — to the `SafeOfficeProbe<T>` pattern from D-12) was evaluated and explicitly declined, not deferred:** every one of those sites is a non-mutating probe (COM cross-version property reads, best-effort range/target resolution) already nested *inside* a method Tier 1/2 fully wrapped — no correctness, safety, or blocking criterion depends on it, and the only benefit would be a named diagnostic log line if one of these already-degraded-gracefully reads happens to fail. Decision: not worth ~67 mechanical edits across 3 controller files for a logging-only improvement to code paths that already fail safe. This is a closed decision, not an open item — do not re-open without a concrete diagnostic need (e.g. a real support case where the missing log trail actually blocked root-causing something). |
+| ~~D-13~~ | — | **RESOLVED — FULLY CLOSED, no follow-up tracked.** Every UI-reachable mutation method across `WordController`/`ExcelController`/`PowerPointController` now has an `Execute*` wrapper returning `HostOperationResult` (Tier 1, Phase C4: `ExecuteMoveSlide`/`ExecuteCreateSectionBeforeSlide`/`ExecuteRenameSectionInPlace`/`ExecuteSetSpeakerNotesInPlace`; Tier 2: `ExecuteAcceptRevisionsInSelection`/`ExecuteRejectRevisionsInSelection`/`ExecuteUndoLastChange` on Word, `ExecuteUndoLastAction`/`ExecuteInsertText` on Excel, `ExecuteUndo`/`ExecuteInsertText` on PowerPoint), each covered by headless tests in `HostOperationResultTests.cs`. Also removed 7 additional dead methods found during the sweep beyond D-10's original scope (`WordController.ApplyTrackChanges`/`ConvertSelectedMarkdownTableToWordTable`/`InsertMarkdownTableAtCursor`/`ConvertSelectedTextToWordTable`, `ExcelController.ApplySpreadsheetAction`, `PowerPointController.ApplyPowerPointAction`/`ExecutePowerPointAction`/`UndoLastChange`). The original blocking criterion — "Phase C5 verification cannot ship while any UI-reachable mutation swallows" — is satisfied: Phase C5 shipped and every mutation entry point now reports a structured result. **"Tier 3" (converting the internal read/probe `catch { }` sites to the `SafeOfficeProbe<T>` pattern from D-12) was evaluated and explicitly declined, not deferred:** the exact count drifts as the codebase grows (recount via `grep -cE "catch \{ ?\}$|catch$" src/Hosts/{Word,Excel,PowerPoint}Controller.cs` rather than trusting a number quoted here — it was ~67 (Word 10/Excel 18/PowerPoint 39) when this decision was made and is higher now, purely from normal subsequent development, not from the decision being wrong) — every one of those sites is a non-mutating probe (COM cross-version property reads, best-effort range/target resolution) already nested *inside* a method Tier 1/2 fully wrapped — no correctness, safety, or blocking criterion depends on it, and the only benefit would be a named diagnostic log line if one of these already-degraded-gracefully reads happens to fail. Decision: not worth ~67 mechanical edits across 3 controller files for a logging-only improvement to code paths that already fail safe. This is a closed decision, not an open item — do not re-open without a concrete diagnostic need (e.g. a real support case where the missing log trail actually blocked root-causing something). |
 | Note (Phase A forward guidance) | — | `src/UI/ChatSidebar.xaml.cs` calls several legacy controller methods directly (e.g. `_wordCtrl.InsertTextAtCursor`, `_excelCtrl.UndoLastAction`, `_pptCtrl.Undo`) instead of the `Execute*`/`HostOperationResult` wrappers above. Left as-is deliberately — this UI surface is being redesigned by Phase A (mode selector, response cards, approval flow), so rewiring it now would likely be partially thrown away. Phase A's action-approval UI should route through `Execute*` wrappers, not legacy methods. |
 
 ---
@@ -656,7 +694,7 @@ Built on the clean `AssistantSession` core following Phase 0.2. The pipeline alr
 
 ### Phase 0 — Foundation breakdown
 
-| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (`88e58388...`) and `golden_master_baseline.txt` fixture committed to gate changes against byte-for-byte drift. | Verification Gate | Verified |
+| 0.0 | **Golden Master Baseline:** Lift prompt assembly to pure static function; create headless test fixture recording prompt strings, action parsing DTOs, and audit serialization. Canonical SHA-256 (see `ExpectedGoldenMasterSha256` in `tests/GoldenMasterBaselineTests.cs` for the current value — it moves whenever prompt-assembly output legitimately changes, most recently for Phase B3's domain-pack rules; do not hardcode it here a second time, that's exactly how this line went stale) and `golden_master_baseline.txt` fixture committed to gate changes against byte-for-byte drift. | Verification Gate | Verified |
 | 0.1 | **Extract Orchestrator:** Move prompt, streaming, and session logic into `src/Core/Session/` (`AssistantSession`, `PromptAssembler`, `StreamCoordinator`). View keeps rendering & HWND hooks only. | D-6 | Verified |
 | 0.2 | **COM Resilience:** Implement `IOleMessageFilter` for Excel busy rejection (`0x800AC472`); implement typed `SafeOfficeProbe<T>` for 2010↔365 version probing; unswallow mutation errors. | **D-12**, §2.12 | Verified |
 | 0.3 | **UI Foundation & Theme:** Design system `Tokens.xaml` + `Controls.xaml`; re-enabled list virtualization; incremental markdown. ElementHost Per-Monitor v2 DPI handling investigated (§2.16) and deliberately deferred — out of scope, host-process-level concern. | D-7, D-8 | Verified |
@@ -789,8 +827,14 @@ silently dropped.
 
 ### Deferred past Phase D
 
-AI Pages · model routing (fast vs reasoning) · local knowledge library · document-comparison skill ·
-local feedback capture. Documented as **not activated**; requires §11 change control to start.
+AI Pages · model routing (fast vs reasoning) · local knowledge library · local feedback capture.
+Documented as **not activated**; requires §11 change control to start.
+
+**Document comparison — partially shipped, not fully deferred.** A `document_comparison` prompt
+skill exists in both domain packs (`src/Core/Skills/Manifests/general.json`/`railway.json`, Phase
+B2) — the AI can be asked to compare two supplied texts and report differences. What remains
+genuinely deferred is a dedicated comparison UI/tool (e.g. a structured diff viewer) — this entry
+originally implied nothing existed at all, which stopped being accurate once Phase B2 shipped.
 
 ### Feature backlog — ranked
 
@@ -804,7 +848,7 @@ confirm-before-write), not against Copilot's feature list.
 | 3 | **`@` mention local files** | Same local grounding, better UX. Pure WPF work over `AttachmentExtractor`. Delivers the "Copilot `/file`" feel with no cloud dependency. Helps Word, Excel and doc-to-deck alike. |
 | 4 | Chart/Pivot "explain + suggest" | Cheap. Prompt work over the existing `excel_actions` chart/pivot types. A chip, not a project. |
 | 5 | Persistent memory | **Largely already done** — `ConversationStore` is per-document DPAPI history. Only worth revisiting for cross-document memory or a user-editable fact list. |
-| 6 | Outlook summarise/reply | Feasible (`OutlookController` exists, see D-4) but widens the product to a fourth host with its own Explorer/Inspector lifecycles and registration surface. Tighten the three-app loop first. |
+| 6 | Outlook summarise/reply | Feasible, but starting from scratch — `OutlookController.cs` was found orphaned (git-tracked, never compiled — see §2, the csproj-omission trap) and deleted as dead code (D-4), not kept as a head start. Widens the product to a fourth host with its own Explorer/Inspector lifecycles and registration surface. Tighten the three-app loop first. |
 | 7 | Plan/agent loop | Highest effort; this is Phases C–D. Bounded action XML already covers the common cases. |
 | ↓ | **Web search / external grounding** | **Deferred (Post-Phase D).** Client-side, provider-neutral, opt-in BYOK search (e.g. Brave Search / SearXNG HTTP API), off by default to maintain zero-middleman and privacy guarantees. Enables drafting tasks citing external statutes, tax codes, and ISO standards without cloud lock-in. |
 | ✗ | PowerPoint text-to-image | Rejected. Needs paid image endpoints, adds content-policy surface, and contradicts the deliberate "Insert image = a local file you approved" rule. |

@@ -477,30 +477,43 @@ namespace MSOfficeAIAssistant.UI.Helpers
         /// <summary>
         /// Tokenizes plain text for citation patterns and renders them as Hyperlink elements,
         /// while keeping plain text as inert Run elements.
-        /// Five citation patterns are recognized:
+        /// Seven citation patterns are recognized (must stay in sync with EvidenceLevel.cs's
+        /// ContainsCitationPattern and ChatSidebar.xaml.cs's NavigateToCitation — a drift between
+        /// what gets emitted by the extractors/controllers and what gets matched here silently
+        /// breaks evidence classification and click-to-navigate; this exact class of bug was found
+        /// once already for the PowerPoint patterns below):
         /// 1. [¶N] — Word paragraph tag (e.g. [¶12])
         /// 2. ~Paragraph N — Word excerpt label (e.g. ~Paragraph 5)
         /// 3. SheetName!Address — Excel sheet-qualified cell (e.g. Sheet1!B7)
         /// 4. Address=Value — Excel bare cell tag (e.g. B7=1234; only Address is clickable)
-        /// 5. Slide N of M — PowerPoint slide reference (e.g. Slide 3 of 12)
+        /// 5. Slide N of M — PowerPoint slide reference, from GetContextReadout (e.g. Slide 3 of 12)
+        /// 6. [Slide #N: Title] — PowerPoint slide tag, from GetSlideTextInternal (e.g. [Slide #3: Overview])
+        /// 7. --- Slide N --- — PowerPoint slide tag, from .pptx attachment extraction (e.g. --- Slide 3 ---)
+        /// Deliberately NOT matched: PowerPointController.GetPresentationReviewContext's bare
+        /// "Slide N: Title" format (no brackets/dashes) — too collision-risky against ordinary
+        /// prose that happens to mention "Slide 3: <topic>" without meaning it as a citation.
         /// </summary>
         private static void AddPlainTextWithCitations(InlineCollection targetInlines, string text)
         {
             if (string.IsNullOrEmpty(text))
                 return;
 
-            // Combined regex that captures all 5 citation patterns
+            // Combined regex that captures all 7 citation patterns
             // Pattern 1: [¶N] - Word paragraph tag
             // Pattern 2: ~Paragraph N - Word excerpt label
             // Pattern 3: Sheet!Address - Excel sheet-qualified cell
             // Pattern 4: Address=Value - Excel bare cell tag
-            // Pattern 5: Slide N of M - PowerPoint slide reference
+            // Pattern 5: Slide N of M - PowerPoint slide reference (context-readout format)
+            // Pattern 6: [Slide #N: Title] - PowerPoint slide tag (GetSlideTextInternal format)
+            // Pattern 7: --- Slide N --- - PowerPoint slide tag (attachment-extraction format)
             string pattern =
                 @"(\[¶\d+\])" +                                    // Group 1: [¶N]
                 @"|" + @"(~Paragraph\s+\d+)" +                     // Group 2: ~Paragraph N
                 @"|" + @"([A-Za-z0-9_]+!\$?[A-Z]+\$?\d+)" +        // Group 3: Sheet!Address
                 @"|" + @"([A-Z]{1,3}\d{1,7}=)" +                   // Group 4: Address= (full match with =)
-                @"|" + @"(Slide\s+\d+\s+of\s+\d+)";                // Group 5: Slide N of M
+                @"|" + @"(Slide\s+\d+\s+of\s+\d+)" +               // Group 5: Slide N of M
+                @"|" + @"(\[Slide\s+#\d+:[^\]]*\])" +              // Group 6: [Slide #N: Title]
+                @"|" + @"(---\s*Slide\s+\d+\s*---)";               // Group 7: --- Slide N ---
 
             string[] parts = Regex.Split(text, pattern);
 
@@ -531,6 +544,14 @@ namespace MSOfficeAIAssistant.UI.Helpers
                     isCitation = true;
                 }
                 else if (Regex.IsMatch(part, @"^Slide\s+\d+\s+of\s+\d+$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^\[Slide\s+#\d+:[^\]]*\]$"))
+                {
+                    isCitation = true;
+                }
+                else if (Regex.IsMatch(part, @"^---\s*Slide\s+\d+\s*---$"))
                 {
                     isCitation = true;
                 }
