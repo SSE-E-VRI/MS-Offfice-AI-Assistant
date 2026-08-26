@@ -68,6 +68,7 @@ namespace MSOfficeAIAssistant.Core
         public int MaxTokens { get; set; }
         public string SystemPrompt { get; set; }
         public bool AutoInsertResponse { get; set; }
+        public string DomainPack { get; set; }
         public bool LoadFailed { get; private set; }
 
         // Backward-compatibility accessors
@@ -102,6 +103,7 @@ namespace MSOfficeAIAssistant.Core
             MaxTokens = 4096;
             SystemPrompt = "You are an expert AI assistant embedded inside Microsoft Office. Help the user draft, refine, summarize, and analyze documents with professional quality.";
             AutoInsertResponse = false;
+            DomainPack = "general";
 
             _configDirectory = AppPaths.DataDirectory;
             _configFilePath = Path.Combine(_configDirectory, "config.dat");
@@ -156,7 +158,8 @@ namespace MSOfficeAIAssistant.Core
                         Temperature = this.Temperature,
                         MaxTokens = this.MaxTokens,
                         SystemPrompt = this.SystemPrompt,
-                        AutoInsertResponse = this.AutoInsertResponse
+                        AutoInsertResponse = this.AutoInsertResponse,
+                        DomainPack = this.DomainPack
                     };
 
                     string json = JsonConvert.SerializeObject(dto, Formatting.Indented);
@@ -231,6 +234,7 @@ namespace MSOfficeAIAssistant.Core
                         this.MaxTokens = dto.MaxTokens > 0 ? dto.MaxTokens : 4096;
                         this.SystemPrompt = !string.IsNullOrWhiteSpace(dto.SystemPrompt) ? dto.SystemPrompt : this.SystemPrompt;
                         this.AutoInsertResponse = dto.AutoInsertResponse;
+                        this.DomainPack = !string.IsNullOrWhiteSpace(dto.DomainPack) ? dto.DomainPack : "general";
 
                         Logger.Info("Configuration successfully loaded and decrypted.");
                     }
@@ -295,6 +299,7 @@ namespace MSOfficeAIAssistant.Core
             public int MaxTokens { get; set; }
             public string SystemPrompt { get; set; }
             public bool AutoInsertResponse { get; set; }
+            public string DomainPack { get; set; }
         }
     }
 }

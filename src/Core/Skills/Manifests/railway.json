@@ -1,0 +1,14 @@
+[
+  {
+    "id": "placeholder_railway_timetable",
+    "name": "Timetable Assistant (placeholder)",
+    "description": "Placeholder skill — Phase B2 replaces this manifest with the real railway-pack catalog.",
+    "required_context": ["Selection"],
+    "preferred_host": null,
+    "prompt_template": "Assist with railway operations and timetable coordination.",
+    "output_structure": "Structured operational guidance",
+    "default_mode": "Chat",
+    "risk_ceiling": 0,
+    "domain_pack": "railway"
+  }
+]

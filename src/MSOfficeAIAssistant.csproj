@@ -199,6 +199,8 @@
     <Compile Include="Core\OleMessageFilter.cs" />
     <Compile Include="Core\SafeOfficeProbe.cs" />
     <Compile Include="Core\QuickPrompts\QuickPromptRegistry.cs" />
+    <Compile Include="Core\Skills\Skill.cs" />
+    <Compile Include="Core\Skills\SkillRegistry.cs" />
     <Compile Include="Core\Actions\OfficeAction.cs" />
     <Compile Include="Core\Actions\ActionExtractor.cs" />
     <Compile Include="Core\Actions\ToolDefinition.cs" />
@@ -255,6 +257,8 @@
   <ItemGroup>
     <EmbeddedResource Include="Addin\Ribbon.xml" />
     <EmbeddedResource Include="Help\UserManual.html" />
+    <EmbeddedResource Include="Core\Skills\Manifests\general.json" />
+    <EmbeddedResource Include="Core\Skills\Manifests\railway.json" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
