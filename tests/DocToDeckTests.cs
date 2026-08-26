@@ -104,8 +104,11 @@ namespace MSOfficeAIAssistant.Tests
             Assert(pptCtrl.InsertText(string.Empty) == false, "InsertText(empty) should return false");
             Assert(pptCtrl.InsertText("Slide 1: Test\n- Bullet 1") == false, "Headless InsertText should return false without crashing");
 
-            // Outline builder
-            pptCtrl.CreateOrUpdateDeckFromOutline("Slide 1: Heading\n- Item A\n- Item B");
+            // Outline builder — routed through the HostOperationResult wrapper (adversarial-review
+            // fix: the void CreateOrUpdateDeckFromOutline that used to sit here was deleted as dead
+            // code once BtnInsertMessage_Click was rewired onto this same wrapper, see D-15/D-16).
+            var deckResult = pptCtrl.ExecuteCreateDeckFromOutline("Slide 1: Heading\n- Item A\n- Item B");
+            Assert(!deckResult.Success, "Headless ExecuteCreateDeckFromOutline should fail safely (no app) without crashing");
 
             // Context and name safety
             Assert(pptCtrl.GetActiveDocumentName() == "Presentation", "Document name fallback should be 'Presentation'");
