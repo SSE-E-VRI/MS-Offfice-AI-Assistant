@@ -162,41 +162,6 @@ namespace MSOfficeAIAssistant.Hosts
             return GetRelevantDocumentContext(prompt, maxCharacters > 0 ? maxCharacters : 24000);
         }
 
-        public void ReplaceSelection(string text)
-        {
-            if (text == null) text = string.Empty;
-            try
-            {
-                var app = GetApp();
-                if (app != null)
-                {
-                    bool undoRecordStarted = TryStartUndoRecord(app, "AI Assistant replace");
-                    try
-                    {
-                        if (string.IsNullOrWhiteSpace(text))
-                        {
-                            DeleteCurrentSelection(app);
-                        }
-                        else
-                        {
-                            // The renderer clears a non-collapsed selection before it inserts the
-                            // formatted Markdown content.  This avoids losing tables and lists.
-                            WordMarkdownRenderer.Render(app, text);
-                        }
-                    }
-                    finally
-                    {
-                        EndUndoRecord(app, undoRecordStarted);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.ReplaceSelection failed", ex);
-                throw;
-            }
-        }
-
         /// <summary>
         /// Inserts text with Word revision tracking enabled.  A non-collapsed selection is
         /// preserved and therefore replaced, which makes this suitable for AI rewrites.
@@ -285,44 +250,6 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
-        public HostOperationResult ExecuteReplaceSelection(string text)
-        {
-            try
-            {
-                var app = GetApp();
-                if (app == null)
-                    return HostOperationResult.Failed("Word application is not accessible.");
-
-                ReplaceSelection(text);
-                return HostOperationResult.Ok("Selection replaced.");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.ExecuteReplaceSelection failed", ex);
-                return HostOperationResult.FromException(ex, "WordController.ExecuteReplaceSelection");
-            }
-        }
-
-        public HostOperationResult ExecuteInsertWithTrackChanges(string markdown, bool replaceSelection)
-        {
-            try
-            {
-                var app = GetApp();
-                if (app == null)
-                    return HostOperationResult.Failed("Word application is not accessible.");
-
-                bool ok = RenderWithTrackChanges(markdown, replaceSelection);
-                if (ok)
-                    return HostOperationResult.Ok("Inserted text with Track Changes.");
-                else
-                    return HostOperationResult.Failed("Word Track Changes insertion returned false.");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("WordController.ExecuteInsertWithTrackChanges failed", ex);
-                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertWithTrackChanges");
-            }
-        }
 
         public HostOperationResult ExecuteAcceptAllRevisions()
         {

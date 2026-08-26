@@ -911,6 +911,10 @@ namespace MSOfficeAIAssistant.UI
             bool hasNonUndoable = false;
             foreach (var act in pendingActions)
             {
+                // Sync RiskLevel/IsUndoable from ToolRegistry before displaying, so the preview
+                // (and its non-undoable warning) matches what ExecuteOfficeAction will actually
+                // gate and run — not whatever the extractor/model set locally.
+                ActionVerifier.PreVerify(act, !string.IsNullOrEmpty(act.Host) ? act.Host : _hostType);
                 preview.AppendLine(DescribeOfficeAction(act));
                 preview.AppendLine();
                 if (!act.IsUndoable) hasNonUndoable = true;
@@ -970,23 +974,26 @@ namespace MSOfficeAIAssistant.UI
         {
             if (action == null) return false;
 
-            var gate = _session.IsActionAllowed(action);
-            if (!gate.Allowed)
-            {
-                action.Status = OfficeActionStatus.Failed;
-                action.ErrorMessage = gate.Reason;
-                MessageBox.Show(gate.Reason, "Action Blocked by Chat Mode", MessageBoxButton.OK, MessageBoxImage.Information);
-                return false;
-            }
-
             string host = !string.IsNullOrEmpty(action.Host) ? action.Host : _hostType;
 
+            // PreVerify FIRST — it re-syncs RiskLevel/RequiresApproval/IsUndoable from ToolRegistry,
+            // the single source of truth (§2.7). The mode gate below must read the synced value, not
+            // whatever RiskLevel the extractor/model happened to set locally.
             var pre = ActionVerifier.PreVerify(action, host);
             if (!pre.IsValid)
             {
                 action.Status = OfficeActionStatus.Failed;
                 action.ErrorMessage = string.Join("; ", pre.ValidationErrors.ToArray());
                 MessageBox.Show(action.ErrorMessage, "Action Validation Failed", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return false;
+            }
+
+            var gate = _session.IsActionAllowed(action);
+            if (!gate.Allowed)
+            {
+                action.Status = OfficeActionStatus.Failed;
+                action.ErrorMessage = gate.Reason;
+                MessageBox.Show(gate.Reason, "Action Blocked by Chat Mode", MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
             }
 
@@ -1149,67 +1156,100 @@ namespace MSOfficeAIAssistant.UI
                 {
                     if (ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
                     {
-                        if (!string.IsNullOrWhiteSpace(_wordCtrl.GetSelectedText()))
-                            _wordCtrl.ReplaceSelectionWithTrackChanges(content);
+                        // These already return bool (RenderWithTrackChanges) — capture it instead of
+                        // discarding, so a false (e.g. no accessible ActiveDocument/Selection) doesn't
+                        // get recorded as a success (adversarial-review fix — audit-integrity gap).
+                        bool trackedOk = !string.IsNullOrWhiteSpace(_wordCtrl.GetSelectedText())
+                            ? _wordCtrl.ReplaceSelectionWithTrackChanges(content)
+                            : _wordCtrl.InsertTextAtCursorWithTrackChanges(content);
+                        if (trackedOk)
+                        {
+                            ActionAuditStore.Instance.Record(
+                                "Word",
+                                "Tracked edit",
+                                "Selection / cursor",
+                                content,
+                                true,
+                                GetLastUserPrompt(),
+                                _currentDocumentKey,
+                                GetSelectedModelName(),
+                                content,
+                                "Inserted with Track Changes");
+                        }
                         else
-                            _wordCtrl.InsertTextAtCursorWithTrackChanges(content);
-                        ActionAuditStore.Instance.Record(
-                            "Word",
-                            "Tracked edit",
-                            "Selection / cursor",
-                            content,
-                            true,
-                            GetLastUserPrompt(),
-                            _currentDocumentKey,
-                            GetSelectedModelName(),
-                            content,
-                            "Inserted with Track Changes");
+                        {
+                            MessageBox.Show("Could not insert the tracked edit into the active Word document.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
                     }
                     else
                     {
-                        _wordCtrl.InsertTextAtCursor(content);
-                        ActionAuditStore.Instance.Record(
-                            "Word",
-                            "Insert",
-                            "Selection / cursor",
-                            content,
-                            true,
-                            GetLastUserPrompt(),
-                            _currentDocumentKey,
-                            GetSelectedModelName(),
-                            content,
-                            "Inserted at cursor");
+                        // Routed through ExecuteInsertText (HostOperationResult) instead of the raw
+                        // void InsertTextAtCursor — the raw method silently no-ops (no exception, no
+                        // signal) when GetApp() returns null, which the void call site couldn't detect.
+                        HostOperationResult insertRes = _wordCtrl.ExecuteInsertText(content);
+                        if (insertRes.Success)
+                        {
+                            ActionAuditStore.Instance.Record(
+                                "Word",
+                                "Insert",
+                                "Selection / cursor",
+                                content,
+                                true,
+                                GetLastUserPrompt(),
+                                _currentDocumentKey,
+                                GetSelectedModelName(),
+                                content,
+                                "Inserted at cursor");
+                        }
+                        else
+                        {
+                            MessageBox.Show(string.Format("Could not insert text: {0}", insertRes.ErrorMessage), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
                     }
                 }
                 else if (_excelCtrl != null)
                 {
-                    _excelCtrl.InsertText(content);
-                    ActionAuditStore.Instance.Record(
-                        "Excel",
-                        "Insert",
-                        "Selection",
-                        content,
-                        true,
-                        GetLastUserPrompt(),
-                        _currentDocumentKey,
-                        GetSelectedModelName(),
-                        content,
-                        "Inserted into Excel");
+                    HostOperationResult insertRes = _excelCtrl.ExecuteInsertText(content);
+                    if (insertRes.Success)
+                    {
+                        ActionAuditStore.Instance.Record(
+                            "Excel",
+                            "Insert",
+                            "Selection",
+                            content,
+                            true,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            content,
+                            "Inserted into Excel");
+                    }
+                    else
+                    {
+                        MessageBox.Show(string.Format("Could not insert text: {0}", insertRes.ErrorMessage), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
                 }
                 else if (_pptCtrl != null)
                 {
-                    _pptCtrl.CreateOrUpdateDeckFromOutline(content);
-                    ActionAuditStore.Instance.Record(
-                        "PowerPoint",
-                        "Create or update slides",
-                        "Active deck",
-                        content,
-                        true,
-                        GetLastUserPrompt(),
-                        _currentDocumentKey,
-                        GetSelectedModelName(),
-                        content,
-                        "Created or updated slides");
+                    HostOperationResult deckRes = _pptCtrl.ExecuteCreateDeckFromOutline(content);
+                    if (deckRes.Success)
+                    {
+                        ActionAuditStore.Instance.Record(
+                            "PowerPoint",
+                            "Create or update slides",
+                            "Active deck",
+                            content,
+                            true,
+                            GetLastUserPrompt(),
+                            _currentDocumentKey,
+                            GetSelectedModelName(),
+                            content,
+                            "Created or updated slides");
+                    }
+                    else
+                    {
+                        MessageBox.Show(string.Format("Could not create or update slides: {0}", deckRes.ErrorMessage), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    }
                 }
                 else
                     MessageBox.Show("No Office document is active. Open a document and try again.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -1347,10 +1387,17 @@ namespace MSOfficeAIAssistant.UI
             bool applied = false;
             try
             {
-                if (hasSelection)
-                    applied = accept ? _wordCtrl.AcceptRevisionsInSelection() : _wordCtrl.RejectRevisionsInSelection();
-                else
-                    applied = accept ? _wordCtrl.AcceptAllRevisions() : _wordCtrl.RejectAllRevisions();
+                // Routed through the D-13 Tier-2 Execute* wrappers (structured HostOperationResult,
+                // guarded GetApp()/ActiveDocument checks, HRESULT-capturing catch) rather than the raw
+                // bool methods, so the tested code path is also the live one (adversarial-review fix).
+                HostOperationResult res = hasSelection
+                    ? (accept ? _wordCtrl.ExecuteAcceptRevisionsInSelection() : _wordCtrl.ExecuteRejectRevisionsInSelection())
+                    : (accept ? _wordCtrl.ExecuteAcceptAllRevisions() : _wordCtrl.ExecuteRejectAllRevisions());
+                applied = res.Success;
+                if (!applied && !string.IsNullOrEmpty(res.ErrorMessage))
+                {
+                    Logger.Warn(string.Format("Tracked revision decision failed: {0}", res.ErrorMessage));
+                }
             }
             catch (Exception ex)
             {

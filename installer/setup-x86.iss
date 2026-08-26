@@ -50,11 +50,15 @@ Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MSOfficeAIAssis
 Root: HKCU; Subkey: "Software\Microsoft\Office\PowerPoint\Addins\MSOfficeAIAssistant.Addin"; ValueType: dword; ValueName: "LoadBehavior"; ValueData: "3"; Flags: uninsdeletekey
 
 ; Task pane ActiveX (Office CreateCTP requires HKLM CLSID + Control categories)
-Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Control"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\MiscStatus"; ValueType: string; ValueName: ""; ValueData: "131473"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{7DD95801-9882-11CF-9FA9-00AA006C42C4}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{7DD95802-9882-11CF-9FA9-00AA006C42C4}"; Flags: uninsdeletekey
-Root: HKLM; Subkey: "Software\Classes\CLSID\{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{40FC6ED4-2438-11CF-A3DB-080036F12502}"; Flags: uninsdeletekey
+; NOTE: every literal { in a quoted string is escaped as {{ — Inno Setup treats an
+; unescaped { as the start of a {constant} reference (like {app} above) even inside
+; quotes, and a bare CLSID/category GUID here is not a known constant, so it would
+; fail to compile ("Unknown constant") without escaping every opening brace.
+Root: HKLM; Subkey: "Software\Classes\CLSID\{{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Control"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\CLSID\{{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\MiscStatus"; ValueType: string; ValueName: ""; ValueData: "131473"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\CLSID\{{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{{7DD95801-9882-11CF-9FA9-00AA006C42C4}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\CLSID\{{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{{7DD95802-9882-11CF-9FA9-00AA006C42C4}"; Flags: uninsdeletekey
+Root: HKLM; Subkey: "Software\Classes\CLSID\{{9B3C7624-5A1D-4C5E-8C9B-12D3E4F5A6B7}\Implemented Categories\{{40FC6ED4-2438-11CF-A3DB-080036F12502}"; Flags: uninsdeletekey
 
 [Run]
 ; Unregister any old COM registration first to avoid stale assembly version conflicts.
@@ -84,6 +88,8 @@ begin
 end;
 
 function InitializeSetup(): Boolean;
+var
+  ResultCode: Integer;
 begin
   Result := True;
   if not IsDotNet48Installed() then
@@ -91,7 +97,10 @@ begin
     if MsgBox('.NET Framework 4.8 or higher was not detected.' + #13#10 +
               'Would you like to open Microsoft''s download page to install it now?', mbConfirmation, MB_YESNO) = IDYES then
     begin
-      ShellExec('open', 'https://dotnet.microsoft.com/download/dotnet-framework/net48', '', '', SW_SHOWNORMAL, ewNoWait, 0);
+      // ShellExec's final parameter is declared "var Integer" (an out param for the
+      // process's exit code) — it must be a variable, not a literal; passing 0 fails
+      // to compile with "Variable expected".
+      ShellExec('open', 'https://dotnet.microsoft.com/download/dotnet-framework/net48', '', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
     end;
   end;
 end;

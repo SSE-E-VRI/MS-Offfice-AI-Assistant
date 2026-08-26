@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using MSOfficeAIAssistant.Core.Actions;
 using MSOfficeAIAssistant.Core.Session;
@@ -16,6 +17,7 @@ namespace MSOfficeAIAssistant.Tests
             TestChatModeRiskLevel3Blocked();
             TestPlanModeHighRiskAllowed();
             TestEditModeHighRiskAllowed();
+            TestChatModeBlocksAfterPreVerifySyncsRiskLevel();
         }
 
         private static void TestDefaultModeIsEdit()
@@ -82,6 +84,37 @@ namespace MSOfficeAIAssistant.Tests
             var result = session.IsActionAllowed(action);
             Assert(result.Allowed == true, "Edit mode should allow high-risk actions");
             Assert(result.Reason == null, "Allowed action should have no reason");
+        }
+
+        /// <summary>
+        /// Regression test for the ExecuteOfficeAction ordering fix (§2.7): the Chat-mode gate must
+        /// read the ToolRegistry-synced RiskLevel, not whatever a locally-forged/stale action carried.
+        /// "excel.write_formula" is registered at RiskLevel 2; a caller constructing the OfficeAction
+        /// with RiskLevel 0 (e.g. a buggy extractor) must still be blocked in Chat mode once PreVerify
+        /// has run — exactly the order ExecuteOfficeAction now uses (PreVerify before IsActionAllowed).
+        /// </summary>
+        private static void TestChatModeBlocksAfterPreVerifySyncsRiskLevel()
+        {
+            var session = new AssistantSession();
+            session.Mode = SessionMode.Chat;
+            var action = new OfficeAction
+            {
+                Host = "Excel",
+                Operation = "excel.write_formula",
+                RiskLevel = 0,
+                Target = new ActionTarget { Range = "B2" }
+            };
+            action.Parameters = new Dictionary<string, object> { { "formula", "=SUM(A1:A10)" } };
+
+            // Simulate ExecuteOfficeAction's fixed order: PreVerify syncs RiskLevel from ToolRegistry
+            // (2, not the locally-set 0) before the mode gate is consulted.
+            var pre = ActionVerifier.PreVerify(action, "Excel");
+            Assert(pre.Tool != null, "excel.write_formula should be a recognized tool");
+            Assert(action.RiskLevel == 2, "PreVerify should sync RiskLevel to the registry value (2), even when other validation is still pending");
+
+            var result = session.IsActionAllowed(action);
+            Assert(result.Allowed == false, "Chat mode should block the action once RiskLevel is synced to 2");
+            Assert(!string.IsNullOrEmpty(result.Reason), "Blocked action should have a reason");
         }
 
         private static void Assert(bool condition, string message)

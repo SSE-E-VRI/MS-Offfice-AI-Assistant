@@ -894,7 +894,8 @@ namespace MSOfficeAIAssistant.Hosts
                 throw new InvalidOperationException("Use color_scale, data_bar, greater_than:value, less_than:value, or equal_to:value for conditional formatting.");
 
             dynamic condition = formats.Add(1, comparison, criterion);
-            try { condition.Interior.Color = 13551615; } catch { }
+            try { condition.Interior.Color = 13551615; }
+            catch (Exception ex) { Logger.Warn(string.Format("Conditional format fill color not applied: {0}", ex.Message)); }
             return "Conditional formatting rule added";
         }
 

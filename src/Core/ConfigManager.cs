@@ -125,18 +125,6 @@ namespace MSOfficeAIAssistant.Core
             }
         }
 
-        public ProviderSettings GetSettingsForProvider(AIProviderType providerType)
-        {
-            switch (providerType)
-            {
-                case AIProviderType.Groq: return Groq;
-                case AIProviderType.Gemini: return Gemini;
-                case AIProviderType.Custom: return Custom;
-                case AIProviderType.Mistral:
-                default: return Mistral;
-            }
-        }
-
         public void Save()
         {
             lock (_lock)
