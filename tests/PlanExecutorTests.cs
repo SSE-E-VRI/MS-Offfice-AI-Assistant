@@ -24,6 +24,7 @@ namespace MSOfficeAIAssistant.Tests
             TestRollbackAllHealsActionStatusAfterRoundTripAndUpdatesPlanStep();
             TestBusyRetryableStateRetriesUpTo3Times();
             TestPostVerifyNonRetryableFailureSetsExecutorFailed();
+            TestSkippedStepIsNotReexecuted();
 
             Console.WriteLine("All PlanExecutor State Machine tests passed!");
         }
@@ -512,6 +513,53 @@ namespace MSOfficeAIAssistant.Tests
                 "ExecuteAll must not continue past PostVerify non-retryable failure");
 
             Console.WriteLine("  [PASS] PostVerify non-retryable failure sets executor Failed and halts ExecuteAll");
+        }
+
+        private static void TestSkippedStepIsNotReexecuted()
+        {
+            // Regression test for Step 0 bug: Skipped steps were not being skipped in ExecuteAll
+            // and ContinueFromStep, causing them to be re-executed even though they should be terminal.
+            var plan = new Plan();
+
+            // Step 1: reasoning-only, Status = Skipped
+            var step1 = new PlanStep
+            {
+                StepId = "step-skipped",
+                Order = 1,
+                Description = "Skipped step",
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Skipped
+                // Action left null -> IsReasoningOnly == true
+            };
+            plan.Steps.Add(step1);
+
+            // Step 2: reasoning-only, Status = Pending (should execute)
+            var step2 = new PlanStep
+            {
+                StepId = "step-pending",
+                Order = 2,
+                Description = "Pending step",
+                TargetHost = "Excel",
+                Status = PlanStepStatus.Pending
+            };
+            plan.Steps.Add(step2);
+
+            var executor = new PlanExecutor(plan, new ExcelController(null));
+            executor.ExecuteAll(null);
+
+            // Step 1 must remain Skipped (not Applied, Applying, Failed, etc.)
+            Assert(step1.Status == PlanStepStatus.Skipped,
+                string.Format("Skipped step must remain Skipped, but got {0}", step1.Status));
+
+            // Step 2 should have been executed
+            Assert(step2.Status == PlanStepStatus.Applied,
+                "Pending step after skipped step should have been executed");
+
+            // Executor should have completed successfully
+            Assert(executor.State == PlanExecutionState.Completed,
+                "Executor should reach Completed state when all steps finish (either skipped or applied)");
+
+            Console.WriteLine("  [PASS] Skipped step is not re-executed and does not block subsequent steps");
         }
 
         /// <summary>

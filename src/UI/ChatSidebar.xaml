@@ -213,6 +213,93 @@
             </StackPanel>
         </DataTemplate>
 
+        <!-- Plan Template: Multi-step execution preview with inline controls -->
+        <DataTemplate x:Key="PlanTemplate">
+            <StackPanel>
+                <!-- Plan Header -->
+                <Border Background="{StaticResource SurfaceSubtleBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6" Padding="8,6" Margin="0,0,0,6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="{Binding Plan.Title}" FontSize="12" FontWeight="Bold" Foreground="{StaticResource InkBrush}" Margin="0,0,0,2"/>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Plan.CompletedStepCount}" FontSize="11" Foreground="{StaticResource InkMutedBrush}"/>
+                                <TextBlock Text=" of " FontSize="11" Foreground="{StaticResource InkMutedBrush}"/>
+                                <TextBlock Text="{Binding Plan.TotalStepCount}" FontSize="11" Foreground="{StaticResource InkMutedBrush}"/>
+                                <TextBlock Text=" steps completed" FontSize="11" Foreground="{StaticResource InkMutedBrush}"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button x:Name="BtnPlanRun" Content="Run Plan" Background="{StaticResource SuccessBrush}" Foreground="{StaticResource SurfaceBrush}"
+                                    FontSize="11" FontWeight="SemiBold" Padding="8,4" BorderBrush="{StaticResource SuccessStrongBrush}" BorderThickness="1"
+                                    Click="BtnPlanRun_Click" Tag="{Binding}" ToolTip="Execute the plan steps" Margin="0,0,6,0"/>
+                            <Button x:Name="BtnPlanRollback" Content="Rollback" Background="{StaticResource DangerSurfaceBrush}" Foreground="{StaticResource DangerBrush}"
+                                    FontSize="11" FontWeight="SemiBold" Padding="8,4" BorderBrush="{StaticResource DangerBrush}" BorderThickness="1"
+                                    Click="BtnPlanRollback_Click" Tag="{Binding}" ToolTip="Rollback applied changes" Margin="0,0,0,0"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- Plan Status Banner -->
+                <TextBlock x:Name="TxtPlanStatus" Margin="0,0,0,6" FontSize="11" Foreground="{StaticResource InkMutedBrush}" TextWrapping="Wrap"/>
+
+                <!-- Steps List -->
+                <ItemsControl ItemsSource="{Binding Plan.Steps}" Margin="0,0,0,6">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{StaticResource SurfaceAltBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="4" Padding="8,6" Margin="0,0,0,4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <!-- Step Header: Order, Description, Host -->
+                                    <StackPanel Grid.Row="0" Grid.Column="0">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,2">
+                                            <Border Background="{StaticResource InkBrush}" CornerRadius="3" Padding="4,1" Margin="0,0,6,0">
+                                                <TextBlock Text="{Binding Order}" Foreground="{StaticResource SurfaceBrush}" FontSize="10" FontWeight="Bold"/>
+                                            </Border>
+                                            <TextBlock Text="{Binding Description}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource InkBrush}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding TargetHost}" FontSize="10" Foreground="{StaticResource InkMutedBrush}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding StatusDisplay}" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,2,0,0"/>
+                                    </StackPanel>
+
+                                    <!-- Step Buttons -->
+                                    <StackPanel Grid.Row="0" Grid.RowSpan="2" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                                        <Button Content="▲" Background="{StaticResource SurfaceSubtleBrush}" Foreground="{StaticResource InkBrush}"
+                                                FontSize="11" Padding="4,2" Margin="0,0,2,0" Click="BtnPlanStepMoveUp_Click" Tag="{Binding}"
+                                                ToolTip="Move step up"/>
+                                        <Button Content="▼" Background="{StaticResource SurfaceSubtleBrush}" Foreground="{StaticResource InkBrush}"
+                                                FontSize="11" Padding="4,2" Margin="0,0,2,0" Click="BtnPlanStepMoveDown_Click" Tag="{Binding}"
+                                                ToolTip="Move step down"/>
+                                        <Button Content="Skip" Background="{StaticResource SurfaceSubtleBrush}" Foreground="{StaticResource InkBrush}"
+                                                FontSize="11" Padding="6,2" Margin="0,0,2,0" Click="BtnPlanStepSkip_Click" Tag="{Binding}"
+                                                ToolTip="Skip this step"/>
+                                        <Button Content="Approve" Background="{StaticResource PrimarySurfaceBrush}" Foreground="{StaticResource PrimaryTextBrush}"
+                                                FontSize="11" Padding="6,2" Margin="0,0,2,0" Click="BtnPlanStepApprove_Click" Tag="{Binding}"
+                                                ToolTip="Approve and execute this step"/>
+                                        <Button Content="Remove" Background="{StaticResource DangerSurfaceBrush}" Foreground="{StaticResource DangerBrush}"
+                                                FontSize="11" Padding="6,2" Click="BtnPlanStepRemove_Click" Tag="{Binding}"
+                                                ToolTip="Remove step from plan"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </DataTemplate>
+
         <!-- Response Card Template Selector -->
         <cards:ResponseCardTemplateSelector x:Key="ResponseCardSelector"
             TextTemplate="{StaticResource TextTemplate}"
@@ -220,7 +307,8 @@
             WarningTemplate="{StaticResource WarningTemplate}"
             FindingTemplate="{StaticResource FindingTemplate}"
             RecommendationTemplate="{StaticResource RecommendationTemplate}"
-            SummaryTemplate="{StaticResource SummaryTemplate}"/>
+            SummaryTemplate="{StaticResource SummaryTemplate}"
+            PlanTemplate="{StaticResource PlanTemplate}"/>
 
         <Style TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
