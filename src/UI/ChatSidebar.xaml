@@ -333,86 +333,74 @@
         </Grid.RowDefinitions>
 
         <!-- 1. Header -->
+        <!-- WrapPanel, not a fixed-column Grid: Auto-sized Grid columns never shrink below their
+             content's natural width, so at narrow docked-pane widths the rightmost buttons (Settings,
+             Help) were silently clipped off-screen with no scrollbar or warning. WrapPanel reflows
+             overflow onto a second line instead, so nothing is ever hidden regardless of pane width. -->
         <Border Grid.Row="0" Background="{StaticResource InkBrush}" Padding="12,10">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                <StackPanel Grid.Column="1" VerticalAlignment="Center" ToolTip="AI Assistant v0.5.0&#x0a;Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302">
-                    <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="{StaticResource SurfaceSubtleBrush}" FontSize="14"/>
-                    <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="{StaticResource InkFaintBrush}"/>
+            <WrapPanel Orientation="Horizontal">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,4"
+                            ToolTip="AI Assistant v0.5.0&#x0a;Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302">
+                    <TextBlock Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="AI Assistant" FontWeight="Bold" Foreground="{StaticResource SurfaceSubtleBrush}" FontSize="14"/>
+                        <TextBlock x:Name="TxtDocumentBadge" Text="Active Document" FontSize="11" Foreground="{StaticResource InkFaintBrush}"/>
+                    </StackPanel>
                 </StackPanel>
 
-                <Button x:Name="BtnAcceptRevisions" Grid.Column="2" Content="Accept" Background="Transparent" Foreground="{StaticResource SuccessFaintBrush}"
-                        ToolTip="Accept tracked AI edits in the selection, or all tracked edits" Click="BtnAcceptRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
-                <Button x:Name="BtnRejectRevisions" Grid.Column="3" Content="Reject" Background="Transparent" Foreground="{StaticResource DangerFaintBrush}"
-                        ToolTip="Reject tracked AI edits in the selection, or all tracked edits" Click="BtnRejectRevisions_Click" Margin="0,0,4,0" FontSize="11" Visibility="Collapsed"/>
-                <Button x:Name="BtnUndoChange" Grid.Column="4" Content="Undo" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="Undo the last Office change made by the assistant" Click="BtnUndoChange_Click" Margin="0,0,4,0" FontSize="11"/>
-                <Button x:Name="BtnActionHistory" Grid.Column="5" Content="Log" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"
+                <Button x:Name="BtnAcceptRevisions" Content="Accept" Background="Transparent" Foreground="{StaticResource SuccessFaintBrush}"
+                        ToolTip="Accept tracked AI edits in the selection, or all tracked edits" Click="BtnAcceptRevisions_Click" Margin="0,0,4,4" FontSize="11" Visibility="Collapsed"/>
+                <Button x:Name="BtnRejectRevisions" Content="Reject" Background="Transparent" Foreground="{StaticResource DangerFaintBrush}"
+                        ToolTip="Reject tracked AI edits in the selection, or all tracked edits" Click="BtnRejectRevisions_Click" Margin="0,0,4,4" FontSize="11" Visibility="Collapsed"/>
+                <Button x:Name="BtnUndoChange" Content="Undo" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="Undo the last Office change made by the assistant" Click="BtnUndoChange_Click" Margin="0,0,4,4" FontSize="11"/>
+                <Button x:Name="BtnActionHistory" Content="Log" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,4" FontSize="11"
                         AutomationProperties.Name="Action history log"/>
-                <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"
+                <Button x:Name="BtnNewChat" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,4" FontSize="14"
                         AutomationProperties.Name="Start new chat and clear history"/>
-                <Button x:Name="BtnConversationHistory" Grid.Column="7" Content="🕘" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="Conversation History" Click="BtnConversationHistory_Click" Margin="0,0,4,0" FontSize="14"
+                <Button x:Name="BtnConversationHistory" Content="🕘" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="Conversation History" Click="BtnConversationHistory_Click" Margin="0,0,4,4" FontSize="14"
                         AutomationProperties.Name="Conversation history"/>
-                <Button x:Name="BtnSettings" Grid.Column="8" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"
+                <Button x:Name="BtnSettings" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14" Margin="0,0,4,4"
                         AutomationProperties.Name="Settings and API configuration"/>
-                <Button x:Name="BtnHelp" Grid.Column="9" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
-                        ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="4,0,0,0"
+                <Button x:Name="BtnHelp" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="0,0,4,4"
                         AutomationProperties.Name="Help and user manual"/>
-            </Grid>
+            </WrapPanel>
         </Border>
 
         <!-- 2. Controls & Model Toolbar -->
+        <!-- WrapPanel, not a fixed-column Grid — see the identical rationale on the header above.
+             This is the row that was actually observed clipping "Edit" (the rightmost control) off
+             the visible pane at narrow docked widths, since it was the last Auto column in the Grid. -->
         <Border Grid.Row="1" Background="{StaticResource SurfaceAltBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10,6">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
+            <WrapPanel Orientation="Horizontal">
                 <!-- Model Selector -->
-                <ComboBox x:Name="CmbModel" Grid.Column="0" Margin="0,0,6,0" Padding="4,2" FontSize="11" IsEditable="False" SelectionChanged="CmbModel_SelectionChanged"/>
+                <ComboBox x:Name="CmbModel" Width="140" Margin="0,0,6,4" Padding="4,2" FontSize="11" IsEditable="False" SelectionChanged="CmbModel_SelectionChanged"/>
 
                 <!-- Context scope: selection and current file checkboxes -->
-                <CheckBox x:Name="ChkIncludeSelection" Grid.Column="1" Content="Selection" IsChecked="True"
-                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
+                <CheckBox x:Name="ChkIncludeSelection" Content="Selection" IsChecked="True"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,4"
                           ToolTip="Send the current text selection"
                           AutomationProperties.Name="Include current text selection in message"/>
-                <CheckBox x:Name="ChkIncludeCurrentFile" Grid.Column="2" Content="Current file" IsChecked="False"
-                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,0"
+                <CheckBox x:Name="ChkIncludeCurrentFile" Content="Current file" IsChecked="False"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,4"
                           ToolTip="Send the current document/sheet/deck's relevant content"
                           AutomationProperties.Name="Include current document content in message"/>
 
                 <!-- Live host context readout -->
-                <TextBlock x:Name="TxtContextReadout" Grid.Column="3" VerticalAlignment="Center" FontSize="11"
-                           Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,0"/>
+                <TextBlock x:Name="TxtContextReadout" VerticalAlignment="Center" FontSize="11"
+                           Foreground="{StaticResource InkMutedBrush}" Margin="0,0,6,4"/>
 
-                <CheckBox x:Name="ChkTrackChanges" Grid.Column="4" Content="Track edits"
-                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" IsChecked="True"
+                <CheckBox x:Name="ChkTrackChanges" Content="Track edits"
+                          VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" IsChecked="True" Margin="0,0,6,4"
                           ToolTip="When in Word, insert/rewrite responses as Track Changes."/>
 
                 <!-- Mode Selector: Chat / Plan / Edit -->
-                <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0,0,0">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,4">
                     <TextBlock Text="Mode:" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"/>
                     <RadioButton x:Name="RdoChatMode" Content="Chat" GroupName="SessionMode" Click="RdoChatMode_Click"
                                  VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource InkMutedBrush}" Margin="0,0,4,0"
@@ -427,7 +415,7 @@
                                  ToolTip="Editing mode: AI can apply changes directly to documents."
                                  AutomationProperties.Name="Edit mode, apply changes directly"/>
                 </StackPanel>
-            </Grid>
+            </WrapPanel>
         </Border>
 
         <!-- 3. Chat Messages Area -->
