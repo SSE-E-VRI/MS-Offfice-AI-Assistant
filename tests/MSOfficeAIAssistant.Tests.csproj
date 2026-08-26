@@ -105,6 +105,7 @@
     <Compile Include="AssistantSessionModeTests.cs" />
     <Compile Include="ResponseCardCategoryTests.cs" />
     <Compile Include="AttachmentExtractorProvenanceTests.cs" />
+    <Compile Include="QuickPromptRegistryTests.cs" />
   </ItemGroup>
 
   <ItemGroup>

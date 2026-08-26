@@ -17,6 +17,7 @@ using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.Actions;
+using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.Core.Session;
 using MSOfficeAIAssistant.Hosts;
 using MSOfficeAIAssistant.Providers;
@@ -184,6 +185,10 @@ namespace MSOfficeAIAssistant.UI
             // Update badge immediately (UI thread, no COM calls)
             TxtDocumentBadge.Text = string.Format("{0} Document", _hostType);
 
+            // Update session host type and populate quick prompts
+            _session.HostType = _hostType;
+            QuickPromptsItemsControl.ItemsSource = QuickPromptRegistry.GetPrompts(_hostType);
+
             // Host controllers must be created on the Office STA UI thread.
             Dispatcher.BeginInvoke(new Action(InitializeHostOnUiThread), DispatcherPriority.Background);
         }
@@ -239,7 +244,6 @@ namespace MSOfficeAIAssistant.UI
             ChkTrackChanges.IsEnabled = isWord;
             if (BtnAcceptRevisions != null) BtnAcceptRevisions.Visibility = isWord ? Visibility.Visible : Visibility.Collapsed;
             if (BtnRejectRevisions != null) BtnRejectRevisions.Visibility = isWord ? Visibility.Visible : Visibility.Collapsed;
-            if (BtnQuickDeck != null) BtnQuickDeck.Visibility = isPowerPoint ? Visibility.Visible : Visibility.Collapsed;
             if (BtnInsertVisual != null) BtnInsertVisual.Visibility = isPowerPoint ? Visibility.Visible : Visibility.Collapsed;
             if (!isWord)
             {
@@ -1242,20 +1246,21 @@ namespace MSOfficeAIAssistant.UI
             }
         }
 
-        private async void BtnQuickAction_Click(object sender, RoutedEventArgs e)
+        private async void BtnQuickPrompt_Click(object sender, RoutedEventArgs e)
         {
             var btn = sender as Button;
-            if (btn != null && btn.Tag is string)
+            var qp = btn != null ? btn.Tag as QuickPrompt : null;
+            if (qp != null)
             {
-                string prompt = (string)btn.Tag;
-                string title = btn.Content != null ? btn.Content.ToString() : null;
+                string prompt = qp.PromptText;
+                string title = qp.Label;
                 PromptContextScope scope = GetPromptContextScope();
-                if (_pptCtrl != null && btn.Name == "BtnQuickDeck")
+                if (_pptCtrl != null && qp.Id == "Deck")
                 {
                     prompt = PromptAssembler.BuildBriefingDeckPrompt(null, null, 5);
                     scope = PromptContextScope.SelectionAndFile;
                 }
-                else if (_pptCtrl != null && btn.Name == "BtnQuickReview")
+                else if (_pptCtrl != null && qp.Id == "Review")
                 {
                     scope = PromptContextScope.SelectionAndFile;
                 }

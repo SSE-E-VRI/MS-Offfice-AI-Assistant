@@ -191,6 +191,7 @@
     <Compile Include="Core\PromptAssembler.cs" />
     <Compile Include="Core\OleMessageFilter.cs" />
     <Compile Include="Core\SafeOfficeProbe.cs" />
+    <Compile Include="Core\QuickPrompts\QuickPromptRegistry.cs" />
     <Compile Include="Core\Actions\OfficeAction.cs" />
     <Compile Include="Core\Actions\ActionExtractor.cs" />
     <Compile Include="Core\Actions\ToolDefinition.cs" />

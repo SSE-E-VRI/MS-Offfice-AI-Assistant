@@ -452,20 +452,21 @@
                     </Grid.ColumnDefinitions>
 
                     <WrapPanel Grid.Column="0" Orientation="Horizontal">
-                        <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
+                        <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"/>
-                        <Button x:Name="BtnQuickSummarize" Content="Summarize" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Summarize the selected text or document clearly."/>
-                        <Button x:Name="BtnQuickRewrite" Content="Rewrite" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" 
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Rewrite the selected text for improved clarity and tone."/>
-                        <Button x:Name="BtnQuickOutline" Content="Outline" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow."/>
-                        <Button x:Name="BtnQuickActions" Content="Actions" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickAction_Click" Tag="Extract decisions, action items, owners where stated, deadlines where stated, and risks. Do not invent owners or dates."/>
-                        <Button x:Name="BtnQuickReview" Content="Review" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Click="BtnQuickAction_Click" Tag="Review this content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, also assess story flow and weak slides."/>
-                        <Button x:Name="BtnQuickDeck" Content="Build deck" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
-                                FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnQuickAction_Click" Tag="Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide."/>
+                        <ItemsControl x:Name="QuickPromptsItemsControl">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <WrapPanel Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding Label}" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
+                                            FontSize="11" Padding="6,4" Margin="0,0,4,0" Click="BtnQuickPrompt_Click" Tag="{Binding}"/>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                         <Button x:Name="BtnInsertVisual" Content="Insert image" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="4,0,0,0" Click="BtnInsertVisual_Click" ToolTip="Insert a local image into the active PowerPoint slide with accessible alt text"/>
                     </WrapPanel>
