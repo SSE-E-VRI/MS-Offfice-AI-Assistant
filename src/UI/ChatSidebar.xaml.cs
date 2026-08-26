@@ -702,24 +702,34 @@ namespace MSOfficeAIAssistant.UI
                     return;
                 }
 
-                var log = new StringBuilder();
-                log.AppendLine("Recent approved AI actions (stored locally and encrypted):");
-                log.AppendLine();
-                foreach (var entry in entries)
-                {
-                    log.AppendFormat("{0:u} | {1} | {2}", entry.TimestampUtc, entry.Host, entry.ActionType);
-                    if (!string.IsNullOrWhiteSpace(entry.Target)) log.AppendFormat(" | {0}", entry.Target);
-                    log.AppendLine();
-                    if (!string.IsNullOrWhiteSpace(entry.Summary)) log.AppendLine(entry.Summary);
-                    log.AppendLine();
-                }
-
-                MessageBox.Show(log.ToString(), "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Information);
+                var window = new ActionHistoryWindow(entries);
+                window.ShowDialog();
             }
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("Could not show action history: {0}", ex.Message));
                 MessageBox.Show("The local AI action log could not be opened.", "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnConversationHistory_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var window = new ConversationHistoryWindow();
+                if (window.ShowDialog() == true && !string.IsNullOrWhiteSpace(window.SelectedDocumentKey))
+                {
+                    SaveConversationHistory();
+                    _currentDocumentKey = window.SelectedDocumentKey;
+                    _session.CurrentDocumentKey = _currentDocumentKey;
+                    LoadConversationHistory();
+                    TxtDocumentBadge.Text = string.Format("{0}: {1}", _hostType, _currentDocumentKey);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not open conversation history: {0}", ex.Message));
+                MessageBox.Show("The conversation history could not be opened.", "Conversation History", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 

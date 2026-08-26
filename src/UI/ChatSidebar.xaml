@@ -248,6 +248,7 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0" Text="&#x1F916;" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
@@ -266,9 +267,11 @@
                         ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,0" FontSize="11"/>
                 <Button x:Name="BtnNewChat" Grid.Column="6" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,0" FontSize="14"/>
-                <Button x:Name="BtnSettings" Grid.Column="7" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                <Button x:Name="BtnConversationHistory" Grid.Column="7" Content="🕘" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="Conversation History" Click="BtnConversationHistory_Click" Margin="0,0,4,0" FontSize="14"/>
+                <Button x:Name="BtnSettings" Grid.Column="8" Content="&#x2699;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="Settings &amp; API Key" Click="BtnSettings_Click" FontSize="14"/>
-                <Button x:Name="BtnHelp" Grid.Column="8" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                <Button x:Name="BtnHelp" Grid.Column="9" Content="?" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="User Manual" Click="BtnHelp_Click" FontSize="14" Margin="4,0,0,0"/>
             </Grid>
         </Border>

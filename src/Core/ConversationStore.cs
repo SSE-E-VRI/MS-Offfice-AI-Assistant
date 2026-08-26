@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using MSOfficeAIAssistant.API.Models;
@@ -8,6 +9,14 @@ using Newtonsoft.Json;
 
 namespace MSOfficeAIAssistant.Core
 {
+    public class ConversationSessionSummary
+    {
+        public string DocumentKey { get; set; }
+        public string Title { get; set; }
+        public int MessageCount { get; set; }
+        public DateTime LastUpdatedUtc { get; set; }
+    }
+
     public class ConversationStore
     {
         private static readonly object _lock = new object();
@@ -139,6 +148,72 @@ namespace MSOfficeAIAssistant.Core
                     Logger.Warn(string.Format("ConversationStore could not delete history file for '{0}': {1}", documentKey, ex.Message));
                 }
             }
+        }
+
+        public List<ConversationSessionSummary> ListSessions()
+        {
+            var summaries = new List<ConversationSessionSummary>();
+
+            try
+            {
+                if (!Directory.Exists(_storageDir))
+                {
+                    return summaries;
+                }
+
+                string[] datFiles = Directory.GetFiles(_storageDir, "*.dat");
+                foreach (string filePath in datFiles)
+                {
+                    try
+                    {
+                        string filename = Path.GetFileNameWithoutExtension(filePath);
+                        string documentKey = filename;
+
+                        var history = LoadFromDisk(documentKey);
+                        if (history == null || history.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        string title = documentKey;
+                        var firstUserMsg = history.FirstOrDefault(m => m.IsUser);
+                        if (firstUserMsg != null && !string.IsNullOrWhiteSpace(firstUserMsg.Content))
+                        {
+                            string content = firstUserMsg.Content.Trim();
+                            if (content.Length > 60)
+                            {
+                                title = content.Substring(0, 60) + "…";
+                            }
+                            else
+                            {
+                                title = content;
+                            }
+                        }
+
+                        DateTime lastUpdated = File.GetLastWriteTimeUtc(filePath);
+
+                        summaries.Add(new ConversationSessionSummary
+                        {
+                            DocumentKey = documentKey,
+                            Title = title,
+                            MessageCount = history.Count,
+                            LastUpdatedUtc = lastUpdated
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(string.Format("ConversationStore.ListSessions could not process file '{0}': {1}", filePath, ex.Message));
+                    }
+                }
+
+                summaries = summaries.OrderByDescending(s => s.LastUpdatedUtc).ToList();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("ConversationStore.ListSessions failed: {0}", ex.Message));
+            }
+
+            return summaries;
         }
 
         private List<ChatMessage> LoadFromDisk(string documentKey)

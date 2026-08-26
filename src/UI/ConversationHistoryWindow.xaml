@@ -1,0 +1,98 @@
+<Window x:Class="MSOfficeAIAssistant.UI.ConversationHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:converters="clr-namespace:MSOfficeAIAssistant.UI.Converters"
+        Title="Conversation History" Height="500" Width="700"
+        WindowStartupLocation="CenterScreen" ResizeMode="CanResize"
+        Background="{DynamicResource SurfaceSubtleBrush}" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme/Tokens.xaml"/>
+                <ResourceDictionary Source="Theme/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <converters:UtcToLocalTimeConverter x:Key="UtcToLocalConverter"/>
+
+            <Style TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource InkBrush}"/>
+            </Style>
+            <Style TargetType="Button">
+                <Setter Property="Padding" Value="8,4"/>
+                <Setter Property="FontWeight" Value="SemiBold"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="FontSize" Value="12"/>
+            </Style>
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <TextBlock Text="🕘" FontSize="18" Margin="0,0,8,0"/>
+                <TextBlock Text="Conversation History" FontSize="16" FontWeight="Bold" Foreground="{StaticResource InkStrongBrush}"/>
+            </StackPanel>
+            <TextBlock Text="Select a conversation to load" Foreground="{StaticResource InkSubtleBrush}" FontSize="12" Margin="0,4,0,0"/>
+        </StackPanel>
+
+        <!-- Sessions List -->
+        <Border Grid.Row="1" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="8" Margin="0,0,0,12">
+            <ListBox x:Name="SessionsListBox" Background="Transparent" BorderThickness="0">
+            <ListBox.ItemTemplate>
+                <DataTemplate>
+                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="6" Padding="12,10" Margin="4">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Vertical">
+                                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource InkStrongBrush}" TextTrimming="CharacterEllipsis"/>
+                                <TextBlock Margin="0,4,0,0" FontSize="11">
+                                    <Run Text="Updated: " Foreground="{StaticResource InkSubtleBrush}"/>
+                                    <Run Text="{Binding LastUpdatedUtc, Converter={StaticResource UtcToLocalConverter}, StringFormat=g}" Foreground="{StaticResource InkMutedBrush}"/>
+                                    <Run Text=" — " Foreground="{StaticResource InkSubtleBrush}"/>
+                                    <Run Text="{Binding MessageCount}" Foreground="{StaticResource InkMutedBrush}"/>
+                                    <Run Text=" message(s)" Foreground="{StaticResource InkSubtleBrush}"/>
+                                </TextBlock>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
+                                <Button x:Name="BtnLoad" Content="Load"
+                                        Background="{StaticResource PrimaryBrush}"
+                                        Foreground="{StaticResource SurfaceBrush}"
+                                        Margin="0,0,8,0" Click="BtnLoad_Click"
+                                        Padding="12,4"/>
+                                <Button x:Name="BtnDelete" Content="Delete"
+                                        Background="{StaticResource SurfaceAltBrush}"
+                                        Foreground="{StaticResource InkStrongBrush}"
+                                        Padding="12,4" Click="BtnDelete_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
+
+        <!-- Empty State -->
+        <TextBlock x:Name="EmptyStateText" Grid.Row="1" Text="No saved conversations found."
+                   Foreground="{StaticResource InkSubtleBrush}"
+                   HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="14"
+                   Visibility="Collapsed"/>
+
+        <!-- Buttons -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Cancel" Width="90" Margin="0,0,8,0"
+                    Background="{StaticResource SurfaceAltBrush}"
+                    Foreground="{StaticResource InkSecondaryBrush}"
+                    Click="BtnCancel_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
