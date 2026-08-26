@@ -80,6 +80,23 @@ namespace MSOfficeAIAssistant.UI
 
                 if (TxtSystemPrompt != null) TxtSystemPrompt.Text = config.SystemPrompt;
 
+                if (CmbDomainPack != null)
+                {
+                    foreach (ComboBoxItem item in CmbDomainPack.Items)
+                    {
+                        string tag = item.Tag as string;
+                        if (string.Equals(tag, config.DomainPack, StringComparison.OrdinalIgnoreCase))
+                        {
+                            CmbDomainPack.SelectedItem = item;
+                            break;
+                        }
+                    }
+                    if (CmbDomainPack.SelectedItem == null && CmbDomainPack.Items.Count > 0)
+                    {
+                        CmbDomainPack.SelectedIndex = 0;
+                    }
+                }
+
                 PopulateProviderFields(_selectedProviderType);
             }
             finally
@@ -419,6 +436,15 @@ namespace MSOfficeAIAssistant.UI
             config.Temperature = Math.Round(SldTemp.Value, 2);
             config.MaxTokens = (int)SldMaxTokens.Value;
             config.SystemPrompt = TxtSystemPrompt.Text.Trim();
+
+            if (CmbDomainPack != null && CmbDomainPack.SelectedItem != null)
+            {
+                var selectedItem = CmbDomainPack.SelectedItem as ComboBoxItem;
+                if (selectedItem != null && selectedItem.Tag is string)
+                {
+                    config.DomainPack = selectedItem.Tag as string;
+                }
+            }
 
             config.Save();
             this.DialogResult = true;

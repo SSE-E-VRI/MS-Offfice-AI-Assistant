@@ -1,0 +1,14 @@
+[
+  {
+    "id": "placeholder_general_summary",
+    "name": "Summarize (placeholder)",
+    "description": "Placeholder skill — Phase B2 replaces this manifest with the real general-pack catalog.",
+    "required_context": ["Selection"],
+    "preferred_host": null,
+    "prompt_template": "Summarize the supplied content clearly and concisely.",
+    "output_structure": "Plain prose summary",
+    "default_mode": "Chat",
+    "risk_ceiling": 0,
+    "domain_pack": "general"
+  }
+]
