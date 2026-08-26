@@ -421,7 +421,7 @@ Findings:
 | Live verification across the full Office/bitness matrix | **Not Implemented** |
 | Chat / Plan / Edit modes | Implemented (Phase A1: SessionMode gate hard-blocks RiskLevel ≥1 in Chat mode; Plan/Edit unchanged from prior behavior) |
 | Context bar, source citations, response cards | Implemented (Phase A2–A4: checkbox context scope + live host readout; DataTemplateSelector over Text/ActionPreview/Warning/Finding/Recommendation/Summary; paragraph/cell/sheet provenance tags in extracted text — click-to-navigate UI wiring not yet built) |
-| Skills and domain packs | Planned — Phase B |
+| Skills and domain packs | Implemented (Phase B1–B5: `SkillRegistry` loading `general` (9 skills) and `railway` (13 skills) JSON manifests; `AppendDomainPackRules` prompt composition; evidence levels on Finding cards; context-aware skill-chip promotion) |
 | Unified action schema, tool registry, risk levels, verification, rollback | Implemented (Phase C0–C5 complete, 16/16 unit test suites passing) |
 | Multi-step planner, cross-host workflows | Implemented (Phase D1–D4 complete: `Planner`, `PlanExecutor`, `CrossHostPlanCoordinator`, `WorkSession`; verified in `PlannerTests`, `PlanExecutorTests`, `CrossHostPlanCoordinatorTests`, `WorkSessionStoreTests`) |
 | Web search / external grounding | Deferred (Post-Phase D) — opt-in BYOK client-side search |
@@ -705,18 +705,44 @@ Mutation behavior unchanged except the new Chat-mode hard block (additive safety
 Plan-mode/Planning-status integration with the Phase D `PlanExecutor` (A3 + A7) — both require chat-flow
 wiring to backend systems (source locations, `PlanExecutor`) that exist but aren't yet connected here.
 
-### Phase B — Skills and domain packs (low risk, parallel with A)
+### Phase B — Skills and domain packs (Implemented & Verified in 5/5 New Unit Suites; low risk, parallel with A)
 
-- **B1** `src/Core/Skills/` — `Skill`, `SkillRegistry`, JSON manifests as embedded resources.
-- **B2** Ship the `general` and `railway` packs (§6). Selector in Settings.
-- **B3** Move every inline prompt literal — `BuildHostAwareSystemPrompt`, the 13 `RibbonCallback`
-  prompts, the `ConfigManager` default — into `PromptAssembler`, composed as
-  *base + host rules + domain pack + selected skill*.
-- **B4** Evidence levels rendered on Finding cards, backed by real `Source` locations from A4.
-- **B5** Context-aware skill promotion, surfaced through A5 chips.
+- **B1** ✅ `src/Core/Skills/` — `Skill` (plain Newtonsoft.Json model, snake_case properties),
+  `SkillRegistry.LoadPack`/`GetAllPacks` (embedded JSON manifests, case-insensitive pack name, never
+  throws/never null), `ConfigManager.DomainPack` (persisted, defaults `general`), Settings pack
+  selector. `SkillRegistryTests`.
+- **B2** ✅ Real catalog content: `general.json` (9 skills — Official Letter, Minutes of Meeting,
+  Inspection Report, Technical Note, Management Summary, Root Cause Analysis, Management Dashboard,
+  Improve Official Language, Document Comparison) and `railway.json` (all 9 general + 4 railway-
+  specific — DRM Briefing, Failure Analysis & Pareto, Substation/OHE Asset Health, Deficiency
+  Tracker — 13 total). Every skill whose output could misrepresent source data carries an explicit
+  anti-fabrication instruction (preserve values exactly, flag missing information, distinguish
+  evidence from inference). All 10 railway terms (Depot, Substation, OHE, TRD, PM/CM, Breakdown, DRM,
+  Sr.DEE, SSE, JE) used accurately across the 4 railway-specific skills.
+- **B3** ✅ `PromptAssembler.AppendDomainPackRules(systemPrompt, domainPack)` — appends railway
+  vocabulary guidance when `ConfigManager.DomainPack == "railway"`, no-op for `general`; wired into
+  `AssistantSession.PreparePayloadAsync`. `QuickPromptRegistry.GetRibbonPrompts()` consolidates the 10
+  simple `RibbonCallback` hardcoded prompts into the same data-driven catalog Phase A5 introduced.
+  **"Selected skill" composition is NOT wired** — no skill-selection UI exists in the live chat flow
+  yet (B5 only surfaces skill chips as one-shot prompts, not as a persisted "active skill" the AI
+  stays aware of turn-to-turn); this remains open for a future slice. First deliberate change to
+  `PromptAssembler` since the Golden Master gate was established — hash updated following the
+  documented fixture-diff procedure, confirmed purely additive both times (once for the initial
+  change, once more after a terminology-accuracy fix caught in review).
+- **B4** ✅ Evidence levels (`DirectlyObserved`/`Calculated`/`StrongInference`/`PossibleInference`/
+  `InsufficientEvidence`) rendered on Finding cards (A3), classified from real Phase-A4 citation
+  patterns in the message text (`[¶N]`, `~Paragraph N`, `Sheet1!B7`, `B7=value`, `Slide N of M`) as
+  the primary signal, an explicit bracketed structured tag as a secondary signal, and
+  `InsufficientEvidence` as the honest default — **never from the model's self-reported confidence**,
+  per the plan's explicit requirement.
+- **B5** ✅ `SkillPicker.SelectChips` surfaces up to 3 skill-derived chips through the existing A5
+  quick-prompt row (not a new picker UI — out of scope for this slice), with context-aware promotion:
+  an Excel sheet whose column headers contain failure-related keywords (failure/breakdown/fault/
+  defect) promotes `failure_analysis_pareto` to the front when the railway pack is active.
 
-**Exit:** the same prompt under `general` and `railway` produces an appropriately different register;
-domain rules demonstrably suppress invented references.
+**Exit:** the same prompt under `general` and `railway` produces an appropriately different register
+(railway vocabulary guidance is real and wired); domain rules demonstrably suppress invented
+references (every content-generating skill carries an explicit anti-fabrication instruction).
 
 ### Phase C — Safe execution (Implemented & Verified in 16/16 Unit Suites)
 
