@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using MSOfficeAIAssistant.Hosts;
 
 namespace MSOfficeAIAssistant.Tests
@@ -10,6 +10,7 @@ namespace MSOfficeAIAssistant.Tests
             TestInterfaceImplementations();
             TestHeadlessSafeOperations();
             TestPolymorphicDispatch();
+            TestSourceSelectionBookmarkHeadlessSafety();
         }
 
         private static void TestInterfaceImplementations()
@@ -77,6 +78,27 @@ namespace MSOfficeAIAssistant.Tests
             }
 
             Assert(count == 3, "Expected 3 controllers in polymorphic test");
+        }
+
+        /// <summary>
+        /// The Selection-scope pin/restore feature (WordController.CreateSelectionBookmark /
+        /// TrySelectSourceBookmark / ForgetSourceBookmark) must degrade to safe no-ops with no
+        /// Word application present, exactly like every other WordController mutation method --
+        /// never throw, and never claim a bookmark exists that doesn't.
+        /// </summary>
+        private static void TestSourceSelectionBookmarkHeadlessSafety()
+        {
+            var word = new WordController(null);
+
+            Assert(word.CreateSelectionBookmark() == null, "Headless CreateSelectionBookmark must return null, not throw");
+            Assert(word.TrySelectSourceBookmark("AIAsstSel1") == false, "Headless TrySelectSourceBookmark must return false");
+            Assert(word.TrySelectSourceBookmark(null) == false, "A null bookmark name must return false, not throw");
+            Assert(word.TrySelectSourceBookmark(string.Empty) == false, "An empty bookmark name must return false, not throw");
+
+            // Must not throw even though nothing was ever created.
+            word.ForgetSourceBookmark("AIAsstSel1");
+            word.ForgetSourceBookmark(null);
+            word.ForgetSourceBookmark(string.Empty);
         }
 
         private static void Assert(bool condition, string message)

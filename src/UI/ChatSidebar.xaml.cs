@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -22,6 +22,7 @@ using MSOfficeAIAssistant.Core.Planning;
 using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.Core.Session;
 using MSOfficeAIAssistant.Core.Skills;
+using MSOfficeAIAssistant.UI.Helpers;
 using MSOfficeAIAssistant.Hosts;
 using MSOfficeAIAssistant.Providers;
 
@@ -371,6 +372,9 @@ namespace MSOfficeAIAssistant.UI
             string documentContext = PromptAssembler.IncludesCurrentFile(scope) ? GetCurrentFileContext(prompt) : string.Empty;
             string fullPrompt = prompt;
             string displayTitle = promptTitle;
+            // Pinned in the same breath as the text above is read, so the bookmark can never
+            // mark a different range than what the model was actually shown.
+            string sourceBookmark = !string.IsNullOrWhiteSpace(selectedText) ? PinSelectionIfApplicable() : null;
 
             if (!string.IsNullOrWhiteSpace(selectedText))
             {
@@ -392,7 +396,7 @@ namespace MSOfficeAIAssistant.UI
                 fullPrompt = string.Format("{0}\n\n[Current File Context]:\n{1}", fullPrompt, documentContext);
             }
 
-            await SendMessageAsync(fullPrompt, displayTitle);
+            await SendMessageAsync(fullPrompt, displayTitle, sourceBookmark);
         }
 
         private string GetSelectedTextOnly()
@@ -412,6 +416,27 @@ namespace MSOfficeAIAssistant.UI
             return string.Empty;
         }
 
+        /// <summary>
+        /// Pins the current Word selection with a bookmark so the Insert button can replace this
+        /// exact text later, even if the user clicks or scrolls elsewhere in the document while
+        /// the response is still streaming in. Word only; every other host (and Word with nothing
+        /// selected) returns null, which callers treat as "resolve the target at Insert time",
+        /// exactly like before this existed.
+        /// </summary>
+        private string PinSelectionIfApplicable()
+        {
+            if (_wordCtrl == null) return null;
+            try
+            {
+                return _wordCtrl.CreateSelectionBookmark();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("PinSelectionIfApplicable failed: {0}", ex.Message));
+                return null;
+            }
+        }
+
         private async void BtnSend_Click(object sender, RoutedEventArgs e)
         {
             if (_session.StreamCoordinator.IsSending) return;
@@ -420,12 +445,14 @@ namespace MSOfficeAIAssistant.UI
             TxtInput.Clear();
 
             RefreshContextReadout();
-            string fullPrompt = ComposePromptWithContext(text, GetPromptContextScope());
+            PromptContextScope scope = GetPromptContextScope();
+            string fullPrompt = ComposePromptWithContext(text, scope);
+            string sourceBookmark = PromptAssembler.IncludesSelection(scope) ? PinSelectionIfApplicable() : null;
 
-            await SendMessageAsync(fullPrompt, null);
+            await SendMessageAsync(fullPrompt, null, sourceBookmark);
         }
 
-        private async Task SendMessageAsync(string promptToSend, string customDisplayTitle)
+        private async Task SendMessageAsync(string promptToSend, string customDisplayTitle, string sourceSelectionBookmark = null)
         {
             var config = ConfigManager.Instance;
             if (string.IsNullOrWhiteSpace(config.ApiKey) && config.ActiveProvider != AIProviderType.Custom)
@@ -446,7 +473,7 @@ namespace MSOfficeAIAssistant.UI
             _messages.Add(userMsg);
             ScrollToBottom();
 
-            var assistantMsg = new ChatMessage("assistant", "") { IsStreaming = true };
+            var assistantMsg = new ChatMessage("assistant", "") { IsStreaming = true, SourceSelectionBookmark = sourceSelectionBookmark };
             _messages.Add(assistantMsg);
             ScrollToBottom();
 
@@ -1111,14 +1138,23 @@ namespace MSOfficeAIAssistant.UI
         {
             var msg = GetMessageFromSender(sender);
             if (msg == null || string.IsNullOrEmpty(msg.Content)) return;
-            try { Clipboard.SetText(msg.Content); } catch { }
+            // Was Clipboard.SetText(raw), which pasted the chat wrapper and literal "**" markers
+            // into Word. MarkdownClipboard writes CF_HTML (real bold/headings/lists on paste) plus
+            // a marker-stripped text fallback, both cleaned the same way the Insert button cleans.
+            if (!MarkdownClipboard.SetResponse(msg.Content))
+            {
+                MessageBox.Show("Could not copy to the clipboard. Another application may be holding it open.",
+                    "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void BtnPreviewMessage_Click(object sender, RoutedEventArgs e)
         {
             var msg = GetMessageFromSender(sender);
             if (msg == null || string.IsNullOrWhiteSpace(msg.Content)) return;
-            MessageBox.Show(msg.Content, "AI Response Preview", MessageBoxButton.OK, MessageBoxImage.Information);
+            // Was a raw MessageBox showing literal "**" markers and the model's trailing commentary.
+            // The window renders the same cleaned content Insert applies, with a raw-response toggle.
+            ResponsePreviewWindow.ShowFor(msg.Content);
         }
 
         /// <summary>
@@ -1148,12 +1184,30 @@ namespace MSOfficeAIAssistant.UI
 
             var msg = GetMessageFromSender(sender);
             if (msg == null || string.IsNullOrEmpty(msg.Content)) return;
-            string content = msg.Content;
+            // Only the document body is inserted: the model's "Here's a polished draft:" lead-in
+            // and its trailing "Notes for Customization" block belong in the chat pane, and were
+            // otherwise landing inside finished letters. Copy/Preview still show the raw response,
+            // and ConfirmInsert previews the cleaned text so what is shown is what gets applied.
+            string content = (ConfigManager.Instance != null && !ConfigManager.Instance.StripConversationalWrapper)
+                ? msg.Content
+                : ResponseContentCleaner.ExtractInsertableContent(msg.Content);
+            if (string.IsNullOrWhiteSpace(content)) return;
             try
             {
                 if (!ConfirmInsert(content)) return;
                 if (_wordCtrl != null)
                 {
+                    // Restore the exact range this response was generated from, if one was pinned
+                    // (Selection-scope prompts pin a bookmark at Send time). This is what lets
+                    // Insert replace the original selection even after the user has clicked or
+                    // scrolled elsewhere in the document while waiting for the response -- without
+                    // it, the checks below would only ever see whatever is live-selected right now.
+                    // A false return (bookmark already consumed, or the pinned text was edited
+                    // away in the meantime) just leaves the live selection as-is, same as before
+                    // this existed.
+                    bool hadPinnedSelection = !string.IsNullOrEmpty(msg.SourceSelectionBookmark)
+                        && _wordCtrl.TrySelectSourceBookmark(msg.SourceSelectionBookmark);
+
                     if (ChkTrackChanges != null && ChkTrackChanges.IsChecked == true)
                     {
                         // These already return bool (RenderWithTrackChanges) — capture it instead of
@@ -1167,7 +1221,7 @@ namespace MSOfficeAIAssistant.UI
                             ActionAuditStore.Instance.Record(
                                 "Word",
                                 "Tracked edit",
-                                "Selection / cursor",
+                                hadPinnedSelection ? "Original selection (restored)" : "Selection / cursor",
                                 content,
                                 true,
                                 GetLastUserPrompt(),
@@ -1192,7 +1246,7 @@ namespace MSOfficeAIAssistant.UI
                             ActionAuditStore.Instance.Record(
                                 "Word",
                                 "Insert",
-                                "Selection / cursor",
+                                hadPinnedSelection ? "Original selection (restored)" : "Selection / cursor",
                                 content,
                                 true,
                                 GetLastUserPrompt(),
@@ -1205,6 +1259,12 @@ namespace MSOfficeAIAssistant.UI
                         {
                             MessageBox.Show(string.Format("Could not insert text: {0}", insertRes.ErrorMessage), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
                         }
+                    }
+
+                    if (!string.IsNullOrEmpty(msg.SourceSelectionBookmark))
+                    {
+                        _wordCtrl.ForgetSourceBookmark(msg.SourceSelectionBookmark);
+                        msg.SourceSelectionBookmark = null;
                     }
                 }
                 else if (_excelCtrl != null)
@@ -1312,8 +1372,18 @@ namespace MSOfficeAIAssistant.UI
             else
                 operation = "insert the response";
 
-            string preview = content.Length > 3000 ? content.Substring(0, 3000) + "\n...[preview truncated]" : content;
-            return MessageBox.Show(string.Format("{0} will {1}. Review the preview before continuing:\n\n{2}", host, operation, preview),
+            // MessageBox can't render Markdown, so a raw preview showed literal "**"/"###"/table
+            // pipes instead of readable text -- run it through the same plain-text conversion
+            // Copy uses. And when the response looks like an analysis OF the text (a comparison
+            // table, several "what changed and why" headings) rather than a single replacement,
+            // say so up front: Insert applies the whole thing, table and all, in place of the
+            // selection, which is very rarely what "review this" or "check the grammar" wanted.
+            string plainContent = MarkdownClipboard.ToPlainText(content);
+            string preview = plainContent.Length > 3000 ? plainContent.Substring(0, 3000) + "\n...[preview truncated]" : plainContent;
+            string warning = ResponseContentCleaner.LooksLikeEditAnalysisReport(content)
+                ? "\u26a0 This response reads like an analysis of the text -- a comparison table and/or a list of changes and rationale -- rather than a single replacement. Continuing will insert all of it, table included, in place of your selection.\n\n"
+                : string.Empty;
+            return MessageBox.Show(string.Format("{0}{1} will {2}. Review the preview before continuing:\n\n{3}", warning, host, operation, preview),
                 "Review AI Change", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Text;
 
 namespace MSOfficeAIAssistant.Core
@@ -44,7 +44,11 @@ namespace MSOfficeAIAssistant.Core
                 hostContext = "\n\nYou are embedded inside Microsoft Word. The provided document context may include prompt-relevant excerpts, a live outline, and action items. " +
                     "When the user asks to write, edit, rewrite, summarize, translate, or review text, provide polished text directly without tutorial meta-commentary. " +
                     "Preserve factual meaning unless the user requests a substantive change. Use a Markdown table when a table is the clearest result. " +
-                    "If sources are attached, cite only supplied sources using [Source: filename, page/section]; do not invent citations.";
+                    "If sources are attached, cite only supplied sources using [Source: filename, page/section]; do not invent citations. " +
+                    "If the message includes [Selected Context] and asks to edit, rewrite, correct, proofread, fix, or polish that text, your entire response must be ONLY the finished replacement text -- " +
+                    "no side-by-side original-vs-corrected table, no bulleted list of changes or rationale, no multiple candidate versions, and no headings such as 'Key Improvements' or 'Final Recommendation'. " +
+                    "That response is inserted verbatim in place of the selection, so anything else you write lands in the document too. " +
+                    "Save that kind of analysis for when the user explicitly asks to review, critique, or explain the text rather than edit it.";
             }
             else if (string.Equals(hostType, "PowerPoint", StringComparison.OrdinalIgnoreCase))
             {
