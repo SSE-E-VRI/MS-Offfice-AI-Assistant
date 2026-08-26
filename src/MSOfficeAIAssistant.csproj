@@ -158,11 +158,18 @@
     <Compile Include="UI\SettingsWindow.xaml.cs">
       <DependentUpon>SettingsWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\ConversationHistoryWindow.xaml.cs">
+      <DependentUpon>ConversationHistoryWindow.xaml</DependentUpon>
+    </Compile>
+    <Compile Include="UI\ActionHistoryWindow.xaml.cs">
+      <DependentUpon>ActionHistoryWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="UI\ChatFloatingWindow.cs" />
     <Compile Include="UI\HelpWindow.cs" />
     <Compile Include="UI\OfficeDockedPane.cs" />
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
+    <Compile Include="UI\Converters\UtcToLocalTimeConverter.cs" />
     <Compile Include="UI\Cards\ResponseCardCategory.cs" />
     <Compile Include="UI\Cards\ResponseCardTemplateSelector.cs" />
     <Compile Include="API\StreamingParser.cs" />
@@ -223,6 +230,14 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="UI\SettingsWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\ConversationHistoryWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\ActionHistoryWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

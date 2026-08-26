@@ -106,6 +106,7 @@
     <Compile Include="ResponseCardCategoryTests.cs" />
     <Compile Include="AttachmentExtractorProvenanceTests.cs" />
     <Compile Include="QuickPromptRegistryTests.cs" />
+    <Compile Include="ConversationStoreSessionTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
