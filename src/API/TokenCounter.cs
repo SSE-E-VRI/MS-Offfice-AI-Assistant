@@ -24,22 +24,6 @@ namespace MSOfficeAIAssistant.API
             return Math.Max(charBased, wordBased);
         }
 
-        public static int CountMessageTokens(IEnumerable<ChatMessage> messages)
-        {
-            if (messages == null) return 0;
-
-            int total = 0;
-            foreach (var msg in messages)
-            {
-                total += 4; // overhead per message (role, headers)
-                if (!string.IsNullOrEmpty(msg.Content))
-                {
-                    total += CountTokens(msg.Content);
-                }
-            }
-            return total;
-        }
-
         public static List<ChatMessage> TruncateToFit(List<ChatMessage> messages, int maxTokensLimit, string systemPrompt = null)
         {
             if (messages == null || messages.Count == 0)

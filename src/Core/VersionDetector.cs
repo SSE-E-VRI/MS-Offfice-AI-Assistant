@@ -14,16 +14,6 @@ namespace MSOfficeAIAssistant.Core
         Office365 = 365
     }
 
-    public enum OfficeFeature
-    {
-        CustomTaskPanes,
-        RibbonExtensibility,
-        TrackChanges,
-        ModernContentControls,
-        CoAuthoring,
-        SvgIcons
-    }
-
     public static class VersionDetector
     {
         public static OfficeVersion DetectVersion(object app)
@@ -85,27 +75,6 @@ namespace MSOfficeAIAssistant.Core
             }
 
             return OfficeVersion.Unknown;
-        }
-
-        public static bool SupportsFeature(OfficeFeature feature, OfficeVersion version)
-        {
-            switch (feature)
-            {
-                case OfficeFeature.CustomTaskPanes:
-                case OfficeFeature.RibbonExtensibility:
-                case OfficeFeature.TrackChanges:
-                    return version >= OfficeVersion.Office2010;
-
-                case OfficeFeature.ModernContentControls:
-                    return version >= OfficeVersion.Office2013;
-
-                case OfficeFeature.SvgIcons:
-                case OfficeFeature.CoAuthoring:
-                    return version >= OfficeVersion.Office2019 || version == OfficeVersion.Office365;
-
-                default:
-                    return true;
-            }
         }
     }
 }

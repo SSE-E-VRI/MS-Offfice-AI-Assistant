@@ -133,7 +133,7 @@
 <h3>Providers and models</h3>
 <table>
 <tr><th>Provider</th><th>Default endpoint</th><th>Models offered in the UI</th></tr>
-<tr><td>Mistral AI</td><td>https://api.mistral.ai/v1</td><td>mistral-large-latest, mistral-small-latest, open-mistral-nemo, codestral-latest, pixtral-large-latest</td></tr>
+<tr><td>Mistral AI</td><td>https://api.mistral.ai/v1</td><td>mistral-large-latest, mistral-small-latest, open-mistral-nemo, codestral-latest, pixtral-large-latest (Vision), pixtral-12b-2409 (Vision)</td></tr>
 <tr><td>Groq (Ultra-Fast)</td><td>https://api.groq.com/openai/v1</td><td>openai/gpt-oss-20b, openai/gpt-oss-120b, qwen/qwen3.6-27b</td></tr>
 <tr><td>Google Gemini</td><td>https://generativelanguage.googleapis.com</td><td>gemini-3.6-flash (Discover button verifies models your key can use)</td></tr>
 <tr><td>Custom API (OpenAI-compatible / Ollama)</td><td>http://localhost:11434/v1 (default)</td><td>llama3, mistral, qwen2.5 — fully editable</td></tr>
@@ -144,9 +144,12 @@
   <li><strong>Streaming chat</strong> — type a prompt, or click a ribbon/quick button, and see the answer appear live in the panel.</li>
   <li><strong>Attachments</strong> — attach .docx, .xlsx, .pptx, .pdf, images (.png/.jpg/.jpeg/.webp/.gif), and text files (.txt/.csv/.json/.md). Image attachments are sent only to models that support vision; otherwise they are skipped with a note. Legacy .doc/.xls/.ppt/.rtf files are rejected.</li>
   <li><strong>Context scope</strong> — decide per prompt what is sent: <em>Selection</em>, <em>Current file</em>, <em>Selection + file</em>, or <em>Attachments only</em>.</li>
-  <li><strong>Word</strong> — draft, continue, summarize, rewrite, expand, shorten, outline, extract action items, review, and translate via chat. Markdown tables become native Word tables. <strong>Track edits</strong> inserts/rewrites responses as Word Track Changes, with Accept/Reject controls.</li>
+  <li><strong>Chat / Plan / Edit modes</strong> — a mode selector next to the model dropdown controls what the AI is allowed to do. <strong>Chat</strong> is Q&amp;A only and never touches the document. <strong>Plan</strong> turns a request into an ordered, editable plan card (reorder, skip, remove, approve step-by-step, run, rollback) that you review before anything executes. <strong>Edit</strong> lets approved actions apply directly, still gated by the same per-action approval and risk rules. The AI itself can never switch modes — only you can, in the panel.</li>
+  <li><strong>Word</strong> — draft, continue, summarize, rewrite, expand, shorten, outline, extract action items, review, and translate via chat or the ribbon <strong>Translate</strong> menu. Markdown tables become native Word tables. <strong>Track edits</strong> inserts/rewrites responses as Word Track Changes, with Accept/Reject controls.</li>
   <li><strong>Excel</strong> — range analysis, formulas, fill-down, table writes, Excel Table creation, conditional formatting, sorting, filtering, data validation, charts, PivotTables, named ranges, and duplicate removal — always as previewable cards with a <strong>Review &amp; Apply</strong> confirmation. The add-in never writes to a workbook without your explicit approval.</li>
   <li><strong>PowerPoint</strong> — build/update a deck from an outline, review the whole deck (untitled slides, duplicate titles, text-light slides), move slides, create/rename sections, set speaker notes, and insert a local image with accessible alt text.</li>
+  <li><strong>Domain packs and skills</strong> — pick <strong>general</strong> (official letters, minutes, inspection reports, RCA, dashboards) or <strong>railway</strong> (adds DRM briefings, failure/Pareto analysis, asset health, deficiency tracking, and railway terminology) in Settings. The active pack's skills surface as extra quick-prompt chips in the input area, chosen based on what's currently relevant.</li>
+  <li><strong>Source citations</strong> — extracted paragraph, cell, and slide references (e.g. <code>[¶12]</code>, <code>Sheet1!B7</code>, <code>[Slide #3: Title]</code>) in the assistant's response are clickable links that jump you straight to that location in the document.</li>
   <li><strong>DPAPI local storage</strong> — your API keys (<code>config.dat</code>), conversation history, and the approved-action log (<code>action-audit.dat</code>) are encrypted for the current Windows user with Windows DPAPI under <code>%LOCALAPPDATA%\MSOfficeAIAssistant</code>.</li>
 </ul>
 
@@ -154,7 +157,6 @@
 <ul>
   <li>No Microsoft Graph, SharePoint/OneDrive retrieval, or tenant/enterprise search.</li>
   <li>No cloud telemetry — the add-in does not phone home; it talks only to the provider you configure.</li>
-  <li>No dedicated <strong>Translate</strong> ribbon button in this build. Translation is done by asking the assistant in the chat input (see <a href="#s4">Word prompts</a>).</li>
   <li>No Outlook integration in the current ribbon/panel.</li>
 </ul>
 
@@ -166,6 +168,7 @@
   <li>Paste your <strong>API key</strong>. Use the eye icon to show/hide it while typing.</li>
   <li>Choose or type your <strong>AI model</strong>. For Gemini, click <strong>Discover</strong> to list models your key can use. For Custom, enter the endpoint URL and any custom HTTP headers (JSON).</li>
   <li>Optionally adjust <strong>Temperature</strong> (0.0 = deterministic, 1.0 = creative) and <strong>Max output tokens</strong> (256–8192).</li>
+  <li>Optionally choose a <strong>Domain Pack</strong> (Skill Pack) — <strong>general</strong> or <strong>railway</strong> — to change which quick-prompt skills are surfaced (see <a href="#s1">§1</a>).</li>
   <li>Click <strong>Test Connection</strong> to verify the key and model work.</li>
   <li>Click <strong>Save Settings</strong>.</li>
 </ol>
@@ -212,7 +215,7 @@ Extract decisions, action items, owners where explicitly stated, deadlines where
 Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow.
 </div>
 
-<div class="prompt"><span class="meta">Bilingual notice EN → Tamil / Hindi — chat input (no Translate ribbon button in this build), scope: Selection</span>
+<div class="prompt"><span class="meta">Bilingual notice EN → Tamil / Hindi — ribbon <strong>Translate</strong> menu (More group) or chat input, scope: Selection</span>
 Translate the following text into Tamil accurately and naturally. Output ONLY the clean translated text in Tamil, with no introductory remarks, conversation, or explanation.
 </div>
 
@@ -295,9 +298,10 @@ Click <strong>Insert image</strong>, choose a local file (.png/.jpg/.jpeg/.webp/
 <tr><td><strong>Actions</strong></td><td>btnActionItems · OnActionItems</td><td>FileOpen</td><td>Extracts decisions, action items, owners and deadlines only where explicitly stated, and risks; instructed not to invent people or dates.</td><td>Yes (or Current file)</td><td>Word, Excel, PowerPoint</td></tr>
 <tr><td><strong>Review</strong></td><td>btnReviewContent · OnReviewContent</td><td>FileNew</td><td>Reviews content for clarity, gaps, consistency, duplicated ideas, and next edits; for presentations also story flow and weak slides.</td><td>Yes (or Current file)</td><td>All; PowerPoint-oriented</td></tr>
 <tr><td><strong>Slides</strong></td><td>btnBuildDeck · OnBuildSlides</td><td>FileSave</td><td>Prompts for a concise, coherent slide deck: numbered slides with title, 3-5 bullets, Visual suggestion, and Speaker Notes.</td><td>Yes (or Current file)</td><td>PowerPoint-oriented</td></tr>
+<tr><td><strong>Translate</strong> (submenu)</td><td>mnuTranslate · OnTranslate</td><td>Language</td><td>Submenu of 9 languages — Tamil, Hindi, Telugu, Kannada, Malayalam, Bengali, Marathi, Gujarati, English. Picking one translates the current selection/context into that language.</td><td>Yes (or Current file)</td><td>Word, Excel, PowerPoint</td></tr>
 </table>
 
-<h3>Group "Help" (new in this release)</h3>
+<h3>Group "Help"</h3>
 <table>
 <tr><th>Label</th><th>id · onAction</th><th>Icon (imageMso)</th><th>What it does</th><th>Select text first?</th><th>Hosts</th></tr>
 <tr><td><strong>User Manual</strong></td><td>btnUserManual · OnOpenUserManual</td><td>Help</td><td>Opens this manual in a separate window inside Office. Works even before you configure an API key.</td><td>No</td><td>Word, Excel, PowerPoint</td></tr>
@@ -312,16 +316,17 @@ Click <strong>Insert image</strong>, choose a local file (.png/.jpg/.jpeg/.webp/
 <tr><td><strong>Accept</strong></td><td>Accepts tracked AI edits — in the selection, or all tracked edits when nothing is selected.</td><td>Shown only in Word</td></tr>
 <tr><td><strong>Reject</strong></td><td>Rejects tracked AI edits.</td><td>Shown only in Word</td></tr>
 <tr><td><strong>Undo</strong></td><td>Undoes the last Office change made by the assistant.</td><td>Uses the host's native undo stack</td></tr>
-<tr><td><strong>Log</strong></td><td>Opens the local, encrypted audit trail of your last 30 approved AI actions.</td><td>DPAPI-encrypted</td></tr>
+<tr><td><strong>Log</strong></td><td>Opens the local, encrypted audit trail of your approved AI actions (up to 250 most recent entries).</td><td>DPAPI-encrypted</td></tr>
 <tr><td><strong>🔄 (New Chat)</strong></td><td>Clears the current conversation (with confirmation).</td><td>—</td></tr>
 <tr><td><strong>⚙️ (Settings)</strong></td><td>Opens Settings &amp; API key (same as ribbon Configure).</td><td>—</td></tr>
-<tr><td><strong>? (Help)</strong></td><td>Opens this User Manual.</td><td>New in this release</td></tr>
+<tr><td><strong>? (Help)</strong></td><td>Opens this User Manual.</td><td>—</td></tr>
 </table>
 
 <h3>Model &amp; context toolbar</h3>
 <table>
 <tr><th>Control</th><th>What it does</th></tr>
 <tr><td><strong>Model</strong> dropdown</td><td>Picks the model for this conversation. Populated from the configured provider; you can type a custom model name.</td></tr>
+<tr><td><strong>Mode</strong> selector (Chat / Plan / Edit)</td><td><strong>Chat</strong> — Q&amp;A only, never mutates the document. <strong>Plan</strong> — the AI proposes an ordered, editable plan card instead of applying anything; reorder, skip, remove, or approve steps individually, then Run (with Rollback available after). <strong>Edit</strong> (default) — approved actions apply directly, still subject to per-action risk/approval rules. Only you can change the mode; the AI never switches it.</td></tr>
 <tr><td><strong>Context scope</strong> dropdown</td><td>Exactly what is sent with the next prompt: <strong>Selection</strong> (default), <strong>Current file</strong>, <strong>Selection + file</strong>, or <strong>Attachments only</strong>.</td></tr>
 <tr><td><strong>Track edits</strong> checkbox</td><td>Word only: insert/rewrite responses as Word Track Changes. Disabled in Excel/PowerPoint.</td></tr>
 </table>
@@ -331,15 +336,17 @@ Click <strong>Insert image</strong>, choose a local file (.png/.jpg/.jpeg/.webp/
 <tr><th>Control</th><th>What it does</th></tr>
 <tr><td><strong>Copy</strong></td><td>Copies the assistant's response to the clipboard.</td></tr>
 <tr><td><strong>Preview</strong></td><td>Shows the full response in a dialog before you insert it.</td></tr>
-<tr><td><strong>Insert</strong></td><td>After confirmation, inserts the response: Word — at cursor / replacing selection (honours Track edits); Excel — into the active cell/selection (tables detected); PowerPoint — creates/updates slides from the outline.</td></tr>
+<tr><td><strong>Insert</strong></td><td>After confirmation, inserts the response: Word — at cursor / replacing selection (honours Track edits); Excel — into the active cell/selection (tables detected); PowerPoint — creates/updates slides from the outline. Disabled/blocked in Chat mode.</td></tr>
 <tr><td><strong>Spreadsheet action cards</strong></td><td>Excel only. Each card shows the target cell/range, action type badge, description, and proposed formula/value. <strong>Review &amp; Apply</strong> applies one card; <strong>Review &amp; Apply All Spreadsheet Actions</strong> applies all pending ones. Both require your confirmation; non-undoable actions are flagged.</td></tr>
+<tr><td><strong>Plan cards</strong></td><td>Shown in Plan mode. Lists each proposed step with a status; reorder (▲/▼), skip, remove, or approve a step individually, then <strong>Run Plan</strong>. <strong>Rollback</strong> reverses applied steps of the plan where undoable.</td></tr>
+<tr><td><strong>Source citations</strong></td><td>Paragraph/cell/slide references embedded in a response (e.g. <code>[¶12]</code>, <code>Sheet1!B7</code>, <code>[Slide #3: Title]</code>) render as clickable links that jump to that exact location in the active document.</td></tr>
 </table>
 
 <h3>Input area</h3>
 <table>
 <tr><th>Control</th><th>What it does</th></tr>
 <tr><td>Prompt box</td><td>Type a prompt. Multi-line; <strong>Ctrl+Enter</strong> sends.</td></tr>
-<tr><td><strong>📎 Attach</strong></td><td>Attaches Word/Excel/PPT, PDF, images, or text files. Limits: max files per message, 20 MB per file, 30 MB total. Legacy binary formats (.doc/.xls/.ppt/.rtf) are rejected.</td></tr>
+<tr><td><strong>📎 Attach</strong></td><td>Attaches Word/Excel/PPT, PDF, images, or text files. Limits: 10 files per message, 20 MB per file, 30 MB total. Legacy binary formats (.doc/.xls/.ppt/.rtf) are rejected.</td></tr>
 <tr><td><strong>Summarize</strong> chip</td><td>Quick prompt on the selected text or document.</td></tr>
 <tr><td><strong>Rewrite</strong> chip</td><td>Quick prompt to rewrite selected text for clarity and tone.</td></tr>
 <tr><td><strong>Outline</strong> chip</td><td>Quick prompt to create a hierarchical outline.</td></tr>
@@ -347,6 +354,7 @@ Click <strong>Insert image</strong>, choose a local file (.png/.jpg/.jpeg/.webp/
 <tr><td><strong>Review</strong> chip</td><td>Quick prompt to review content (and presentation story flow/weak slides).</td></tr>
 <tr><td><strong>Build deck</strong> chip</td><td>PowerPoint only. Builds a structured deck outline from the content.</td></tr>
 <tr><td><strong>Insert image</strong> chip</td><td>PowerPoint only. Inserts a local image into the active slide with alt text (with confirmation).</td></tr>
+<tr><td>Skill-derived chips</td><td>Up to 3 extra chips drawn from the active domain pack's skills (see <a href="#s1">Domain packs and skills</a>), promoted based on the current host and context. Change the pack in Settings → Domain Pack.</td></tr>
 <tr><td><strong>Send</strong> / <strong>Stop</strong></td><td>Send starts the request; Stop cancels streaming ("AI Assistant is generating...").</td></tr>
 <tr><td>Vision warning banner</td><td>Appears when images are attached but the selected model does not support vision; images are then skipped.</td></tr>
 </table>
@@ -393,7 +401,7 @@ Create a briefing deck for the DRM/GM on &lt;subject&gt; from the supplied conte
 </div>
 
 <h3>9.6 Bilingual notices (English → Tamil / Hindi / other)</h3>
-<p><strong>Where:</strong> chat input — there is no Translate ribbon button in this build &nbsp;|&nbsp; <strong>Scope:</strong> Selection</p>
+<p><strong>Where:</strong> ribbon <strong>Translate</strong> menu (More group, 9 languages) or chat input &nbsp;|&nbsp; <strong>Scope:</strong> Selection</p>
 <div class="prompt"><span class="meta">Prompt — Tamil</span>
 Translate the following text into Tamil accurately and naturally. Preserve proper names, designations, station names, and all numbers exactly. Output ONLY the clean translation with no remarks.
 </div>
