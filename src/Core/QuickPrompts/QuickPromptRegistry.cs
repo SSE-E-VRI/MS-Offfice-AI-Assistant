@@ -99,5 +99,87 @@ namespace MSOfficeAIAssistant.Core.QuickPrompts
         {
             return prompts.Where(p => MatchesHost(p, hostType)).ToList();
         }
+
+        /// <summary>
+        /// Gets all ribbon command prompts consolidated from RibbonCallback hardcoded prompts.
+        /// Returns a list of QuickPrompt entries, one per simple (non-dynamic) ribbon method.
+        /// All entries have HostFilter = null (ribbon commands are not currently host-conditional).
+        /// </summary>
+        public static List<QuickPrompt> GetRibbonPrompts()
+        {
+            return new List<QuickPrompt>
+            {
+                new QuickPrompt
+                {
+                    Id = "Generate",
+                    Label = "Generate Draft",
+                    PromptText = "Generate a comprehensive draft based on the topic or outline provided.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "ContinueWriting",
+                    Label = "Continue Writing",
+                    PromptText = "Continue writing seamlessly from the current point in the text.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "Summarize",
+                    Label = "Summarize",
+                    PromptText = "Provide a concise executive summary highlighting key takeaways and action items.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "Rewrite",
+                    Label = "Rewrite",
+                    PromptText = "Rewrite the selected text for maximum clarity, professional flow, and polished vocabulary.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "Expand",
+                    Label = "Expand",
+                    PromptText = "Elaborate on the selected text with supporting details, explanations, and context.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "Shorten",
+                    Label = "Shorten",
+                    PromptText = "Condense the selected text into a tight, impactful version without losing core meaning.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "Outline",
+                    Label = "Outline",
+                    PromptText = "Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "ActionItems",
+                    Label = "Action Items",
+                    PromptText = "Extract decisions, action items, owners where explicitly stated, deadlines where explicitly stated, and risks. Do not invent people or dates.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "ReviewContent",
+                    Label = "Review Content",
+                    PromptText = "Review the supplied content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, assess story flow and weak slides.",
+                    HostFilter = null
+                },
+                new QuickPrompt
+                {
+                    Id = "BuildSlides",
+                    Label = "Build Slides",
+                    PromptText = "Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide.",
+                    HostFilter = null
+                }
+            };
+        }
     }
 }

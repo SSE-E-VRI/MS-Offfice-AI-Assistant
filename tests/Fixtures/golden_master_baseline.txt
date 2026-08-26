@@ -138,3 +138,12 @@ Title=Implementation Roadmap|Bullets=Phase 1: Survey and Civil works|Notes=Reite
 
 === AUDIT FORMAT SPECIFICATION ===
 Host=Excel|ActionType=formula|Target=K20|Summary=Calculate sum|Undoable=True|Prompt=Sum items|Source=Book1.xlsx|Model=Mistral Large|Result=Applied successfully
+
+=== DOMAIN PACK RULES COMPOSITION ===
+Base Prompt: You are an expert assistant.
+General Pack: You are an expert assistant.
+Railway Pack:
+You are an expert assistant.
+
+When the user's content relates to railway operations, infrastructure, or maintenance, use accurate railway operational vocabulary. For example, use 'Depot', 'Substation', 'OHE' (Overhead Equipment), 'TRD' (Traction Distribution), 'PM/CM' (Preventive/Corrective Maintenance), 'Breakdown', 'DRM' (Divisional Railway Manager), 'Sr.DEE' (Senior Divisional Electrical Engineer), 'SSE' (Senior Section Engineer), and 'JE' (Junior Engineer) where appropriate. Maintain the same professional register as the general pack. Do not invent railway-specific facts, terminology, or operational details that are not warranted by the actual content provided.
+Unrecognized Pack: You are an expert assistant.

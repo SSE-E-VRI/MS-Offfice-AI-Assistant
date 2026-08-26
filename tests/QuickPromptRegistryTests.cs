@@ -12,6 +12,8 @@ namespace MSOfficeAIAssistant.Tests
             TestGetPromptsHostFiltering();
             TestDeckEntryHasCorrectLabelAndPromptText();
             TestHostFilterLogicWithSyntheticEntry();
+            TestGetRibbonPromptsStructure();
+            TestGetRibbonPromptsSummarizeEntry();
         }
 
         /// <summary>
@@ -78,6 +80,50 @@ namespace MSOfficeAIAssistant.Tests
             var lowerMatches = synthPrompts.Where(p => QuickPromptRegistry.MatchesHost(p, "powerpoint")).ToList();
             Assert(lowerMatches.Count == 2, string.Format("Expected case-insensitive match to work, got {0}", lowerMatches.Count));
             Assert(lowerMatches.Any(p => p.Id == "Test2"), "Expected Test2 (PowerPoint filter) to match 'powerpoint' (lowercase)");
+        }
+
+        private static void TestGetRibbonPromptsStructure()
+        {
+            var ribbonPrompts = QuickPromptRegistry.GetRibbonPrompts();
+
+            // Should return exactly 10 ribbon prompts (one per simple ribbon method)
+            Assert(ribbonPrompts.Count == 10, string.Format("Expected 10 ribbon prompts, got {0}", ribbonPrompts.Count));
+
+            // Expected IDs (in order)
+            string[] expectedIds = new[]
+            {
+                "Generate", "ContinueWriting", "Summarize", "Rewrite", "Expand",
+                "Shorten", "Outline", "ActionItems", "ReviewContent", "BuildSlides"
+            };
+
+            for (int i = 0; i < expectedIds.Length; i++)
+            {
+                Assert(i < ribbonPrompts.Count && ribbonPrompts[i].Id == expectedIds[i],
+                    string.Format("Ribbon prompt {0} should have Id '{1}'", i, expectedIds[i]));
+            }
+
+            // All entries should have non-empty Id, Label, PromptText
+            foreach (var prompt in ribbonPrompts)
+            {
+                Assert(!string.IsNullOrWhiteSpace(prompt.Id), "Ribbon prompt must have non-empty Id");
+                Assert(!string.IsNullOrWhiteSpace(prompt.Label), "Ribbon prompt must have non-empty Label");
+                Assert(!string.IsNullOrWhiteSpace(prompt.PromptText), "Ribbon prompt must have non-empty PromptText");
+                Assert(prompt.HostFilter == null, "Ribbon prompts should not have host filters");
+            }
+        }
+
+        private static void TestGetRibbonPromptsSummarizeEntry()
+        {
+            // Spot-check: Verify the Summarize entry's exact PromptText matches the original hardcoded value
+            var ribbonPrompts = QuickPromptRegistry.GetRibbonPrompts();
+            var summarizeEntry = ribbonPrompts.Find(p => p.Id == "Summarize");
+
+            Assert(summarizeEntry != null, "Should find Summarize entry in ribbon prompts");
+            Assert(summarizeEntry.Label == "Summarize", "Summarize label should match");
+
+            string expectedPromptText = "Provide a concise executive summary highlighting key takeaways and action items.";
+            Assert(summarizeEntry.PromptText == expectedPromptText,
+                string.Format("Summarize PromptText mismatch. Expected: '{0}', Got: '{1}'", expectedPromptText, summarizeEntry.PromptText));
         }
 
         private static void Assert(bool condition, string message)

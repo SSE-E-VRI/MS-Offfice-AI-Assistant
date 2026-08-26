@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Forms;
 using MSOfficeAIAssistant.Core;
+using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.UI;
 
 namespace MSOfficeAIAssistant.Addin
@@ -45,7 +46,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnGenerate");
-                _taskPaneManager.ExecutePrompt("Generate a comprehensive draft based on the topic or outline provided.", "Generate Draft");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Generate");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -58,7 +64,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnContinueWriting");
-                _taskPaneManager.ExecutePrompt("Continue writing seamlessly from the current point in the text.", "Continue Writing");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "ContinueWriting");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -71,7 +82,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnSummarize");
-                _taskPaneManager.ExecutePrompt("Provide a concise executive summary highlighting key takeaways and action items.", "Summarize");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Summarize");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -84,7 +100,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnRewrite");
-                _taskPaneManager.ExecutePrompt("Rewrite the selected text for maximum clarity, professional flow, and polished vocabulary.", "Rewrite");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Rewrite");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -97,7 +118,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnExpand");
-                _taskPaneManager.ExecutePrompt("Elaborate on the selected text with supporting details, explanations, and context.", "Expand");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Expand");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -110,7 +136,12 @@ namespace MSOfficeAIAssistant.Addin
             try
             {
                 Logger.Info("Ribbon Callback: OnShorten");
-                _taskPaneManager.ExecutePrompt("Condense the selected text into a tight, impactful version without losing core meaning.", "Shorten");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Shorten");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -154,9 +185,13 @@ namespace MSOfficeAIAssistant.Addin
         {
             try
             {
-                _taskPaneManager.ExecutePrompt(
-                    "Create a clear, hierarchical outline of the supplied content. Preserve key facts and show the recommended narrative flow.",
-                    "Outline");
+                Logger.Info("Ribbon Callback: OnOutline");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "Outline");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -168,9 +203,13 @@ namespace MSOfficeAIAssistant.Addin
         {
             try
             {
-                _taskPaneManager.ExecutePrompt(
-                    "Extract decisions, action items, owners where explicitly stated, deadlines where explicitly stated, and risks. Do not invent people or dates.",
-                    "Action Items");
+                Logger.Info("Ribbon Callback: OnActionItems");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "ActionItems");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -182,9 +221,13 @@ namespace MSOfficeAIAssistant.Addin
         {
             try
             {
-                _taskPaneManager.ExecutePrompt(
-                    "Review the supplied content for clarity, gaps, consistency, duplicated ideas, and the most valuable next edits. For presentations, assess story flow and weak slides.",
-                    "Review Content");
+                Logger.Info("Ribbon Callback: OnReviewContent");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "ReviewContent");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
@@ -196,9 +239,13 @@ namespace MSOfficeAIAssistant.Addin
         {
             try
             {
-                _taskPaneManager.ExecutePrompt(
-                    "Create a concise, coherent slide deck from the supplied content. Return numbered slides with a title, 3-5 concise bullets, a Visual suggestion, and Speaker Notes for each slide.",
-                    "Build Slides");
+                Logger.Info("Ribbon Callback: OnBuildSlides");
+                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                var entry = prompts.Find(p => p.Id == "BuildSlides");
+                if (entry != null)
+                {
+                    _taskPaneManager.ExecutePrompt(entry.PromptText, entry.Label);
+                }
             }
             catch (Exception ex)
             {
