@@ -129,5 +129,38 @@ namespace MSOfficeAIAssistant.Core
 
             return sb.ToString().TrimEnd();
         }
+
+        /// <summary>
+        /// Appends domain-pack-specific rules to a system prompt.
+        /// For "railway" domain: adds railway operational vocabulary guidance.
+        /// For "general" or unrecognized: appends nothing (preserves general baseline).
+        /// Never throws; handles null systemPrompt gracefully.
+        /// </summary>
+        public static string AppendDomainPackRules(string systemPrompt, string domainPack)
+        {
+            string basePrompt = systemPrompt ?? string.Empty;
+
+            if (string.Equals(domainPack, "railway", StringComparison.OrdinalIgnoreCase))
+            {
+                string railwayRules = "When the user's content relates to railway operations, infrastructure, or maintenance, " +
+                    "use accurate railway operational vocabulary. For example, use 'Depot', 'Substation', 'OHE' (Overhead Equipment), " +
+                    "'TRD' (Traction Distribution), 'PM/CM' (Preventive/Corrective Maintenance), 'Breakdown', 'DRM' (Divisional Railway Manager), " +
+                    "'Sr.DEE' (Senior Divisional Electrical Engineer), 'SSE' (Senior Section Engineer), and 'JE' (Junior Engineer) where appropriate. " +
+                    "Maintain the same professional register as the general pack. Do not invent railway-specific facts, terminology, or operational details " +
+                    "that are not warranted by the actual content provided.";
+
+                if (string.IsNullOrEmpty(basePrompt))
+                {
+                    return railwayRules;
+                }
+                else
+                {
+                    return basePrompt + "\n\n" + railwayRules;
+                }
+            }
+
+            // For "general", null, empty, or any unrecognized domain pack: return base unchanged
+            return basePrompt;
+        }
     }
 }

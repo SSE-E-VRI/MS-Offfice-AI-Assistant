@@ -17,7 +17,7 @@ namespace MSOfficeAIAssistant.Tests
         // Canonical SHA-256 hash of all baseline outputs (system prompts, context compositions,
         // XML parsed action DTOs, slide outline parsing, and audit record shape).
         // Any mutation, reordering, whitespace change, or regression in Phase 0.1+ will fail this hash.
-        public const string ExpectedGoldenMasterSha256 = "88e58388c7fd5277b234ae87aa92354b556fc7e66adff9e68ee8d220c7cdcc49";
+        public const string ExpectedGoldenMasterSha256 = "821e8769e83ffe728d9ace283e0222a433868272a200819ba957bbea4f7ca054";
 
         public static void RunAll()
         {
@@ -26,6 +26,7 @@ namespace MSOfficeAIAssistant.Tests
             TestPromptAssemblerContextPermutations();
             TestPromptAssemblerAttachmentCitations();
             TestPromptAssemblerBriefingDeckPrompt();
+            TestPromptAssemblerDomainPackRules();
             TestExcelActionParserFullCatalog();
             TestExcelActionParserSafetyBoundaries();
             TestPowerPointActionParserFullCatalog();
@@ -179,7 +180,15 @@ namespace MSOfficeAIAssistant.Tests
 
             // 7. Audit Store Baseline Format
             sb.Append("=== AUDIT FORMAT SPECIFICATION ===\n");
-            sb.Append("Host=Excel|ActionType=formula|Target=K20|Summary=Calculate sum|Undoable=True|Prompt=Sum items|Source=Book1.xlsx|Model=Mistral Large|Result=Applied successfully\n");
+            sb.Append("Host=Excel|ActionType=formula|Target=K20|Summary=Calculate sum|Undoable=True|Prompt=Sum items|Source=Book1.xlsx|Model=Mistral Large|Result=Applied successfully\n\n");
+
+            // 8. Domain Pack Rules Composition
+            sb.Append("=== DOMAIN PACK RULES COMPOSITION ===\n");
+            string baseSamplePrompt = "You are an expert assistant.";
+            sb.Append("Base Prompt: ").Append(baseSamplePrompt).Append("\n");
+            sb.Append("General Pack: ").Append(PromptAssembler.AppendDomainPackRules(baseSamplePrompt, "general")).Append("\n");
+            sb.Append("Railway Pack:\n").Append(PromptAssembler.AppendDomainPackRules(baseSamplePrompt, "railway")).Append("\n");
+            sb.Append("Unrecognized Pack: ").Append(PromptAssembler.AppendDomainPackRules(baseSamplePrompt, "unknown")).Append("\n");
 
             return sb.ToString();
         }
@@ -275,6 +284,47 @@ namespace MSOfficeAIAssistant.Tests
             Assert(prompt.Contains("[Source Document Excerpts]:"), "Briefing deck prompt should embed document excerpt");
             Assert(prompt.Contains("Speaker Notes:"), "Briefing deck prompt should mandate speaker notes");
             Assert(prompt.Contains("Visual suggestion:"), "Briefing deck prompt should mandate visual suggestions");
+        }
+
+        private static void TestPromptAssemblerDomainPackRules()
+        {
+            string basePrompt = "You are an expert assistant.";
+
+            // 1. Railway domain pack should include railway vocabulary guidance
+            string railwayResult = PromptAssembler.AppendDomainPackRules(basePrompt, "railway");
+            Assert(railwayResult.StartsWith(basePrompt), "Railway result should start with base prompt");
+            Assert(railwayResult.Contains("railway"), "Railway result should contain 'railway'");
+            Assert(railwayResult.Contains("Depot"), "Railway result should mention 'Depot'");
+            Assert(railwayResult.Contains("Substation"), "Railway result should mention 'Substation'");
+            Assert(railwayResult.Contains("OHE"), "Railway result should mention 'OHE'");
+            Assert(railwayResult.Length > basePrompt.Length, "Railway result should be longer than base");
+
+            // 2. General domain pack should not add railway-specific rules
+            string generalResult = PromptAssembler.AppendDomainPackRules(basePrompt, "general");
+            Assert(generalResult == basePrompt, "General pack should return base prompt unchanged");
+            Assert(!generalResult.Contains("railway operational vocabulary"), "General result should not mention railway rules");
+
+            // 3. Unrecognized domain pack should return base unchanged
+            string unrecoResult = PromptAssembler.AppendDomainPackRules(basePrompt, "unknown");
+            Assert(unrecoResult == basePrompt, "Unrecognized pack should return base prompt unchanged");
+
+            // 4. Null domain pack should return base unchanged
+            string nullResult = PromptAssembler.AppendDomainPackRules(basePrompt, null);
+            Assert(nullResult == basePrompt, "Null domain pack should return base prompt unchanged");
+
+            // 5. Empty domain pack should return base unchanged
+            string emptyResult = PromptAssembler.AppendDomainPackRules(basePrompt, "");
+            Assert(emptyResult == basePrompt, "Empty domain pack should return base prompt unchanged");
+
+            // 6. Case-insensitivity for "railway"
+            string railwayUpperResult = PromptAssembler.AppendDomainPackRules(basePrompt, "RAILWAY");
+            Assert(railwayUpperResult.Length > basePrompt.Length, "Uppercase RAILWAY should trigger railway rules");
+            Assert(railwayUpperResult.Contains("Depot"), "Uppercase RAILWAY should include railway vocabulary");
+
+            // 7. Null base prompt should be treated as empty
+            string nullBaseResult = PromptAssembler.AppendDomainPackRules(null, "railway");
+            Assert(nullBaseResult.StartsWith("When the user's content relates to railway"), "Null base prompt should append railway rules");
+            Assert(!nullBaseResult.StartsWith("\n"), "Null base should not start with newline");
         }
 
         private static void TestExcelActionParserFullCatalog()

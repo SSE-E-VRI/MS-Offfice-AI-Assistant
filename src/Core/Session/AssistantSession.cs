@@ -142,6 +142,7 @@ namespace MSOfficeAIAssistant.Core.Session
             }
 
             string effectiveSystemPrompt = PromptAssembler.BuildHostAwareSystemPrompt(config.SystemPrompt, _hostType);
+            effectiveSystemPrompt = PromptAssembler.AppendDomainPackRules(effectiveSystemPrompt, config.DomainPack);
             var boundedMessages = TokenCounter.TruncateToFit(historyForApi, 24000, effectiveSystemPrompt);
 
             var aiRequest = new AIRequest
