@@ -41,6 +41,11 @@ namespace MSOfficeAIAssistant.UI.Cards
         public DataTemplate SummaryTemplate { get; set; }
 
         /// <summary>
+        /// Template for plan responses (multi-step execution preview).
+        /// </summary>
+        public DataTemplate PlanTemplate { get; set; }
+
+        /// <summary>
         /// Selects the appropriate template for the given item (expected to be a ChatMessage).
         /// Falls back to TextTemplate if the classified category's template is not assigned.
         /// Never returns null.
@@ -57,6 +62,8 @@ namespace MSOfficeAIAssistant.UI.Cards
 
             switch (category)
             {
+                case ResponseCardCategory.Plan:
+                    return PlanTemplate ?? TextTemplate ?? new DataTemplate();
                 case ResponseCardCategory.ActionPreview:
                     return ActionPreviewTemplate ?? TextTemplate ?? new DataTemplate();
                 case ResponseCardCategory.Warning:

@@ -17,6 +17,7 @@ using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Attachments;
 using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.Actions;
+using MSOfficeAIAssistant.Core.Planning;
 using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.Core.Session;
 using MSOfficeAIAssistant.Core.Skills;
@@ -1561,6 +1562,369 @@ namespace MSOfficeAIAssistant.UI
                 }));
             }
             catch { }
+        }
+
+        // Plan Card Handlers
+        private void BtnPlanRun_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                ChatMessage msg = btn.Tag as ChatMessage;
+                if (msg == null || msg.Plan == null) return;
+
+                Plan plan = msg.Plan;
+                if (plan.Steps == null || plan.Steps.Count == 0)
+                {
+                    MessageBox.Show("Plan has no steps to execute.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Check for multi-host scenarios (not yet supported in chat integration)
+                List<string> hosts = new List<string>();
+                foreach (var step in plan.Steps)
+                {
+                    if (!string.IsNullOrEmpty(step.TargetHost) && !hosts.Contains(step.TargetHost))
+                    {
+                        hosts.Add(step.TargetHost);
+                    }
+                }
+                if (hosts.Count > 1)
+                {
+                    MessageBox.Show("Multi-host plans are not yet supported in chat integration. All steps must target the same host.", "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                string hostForPlan = hosts.Count > 0 ? hosts[0] : _hostType;
+                object controller = GetControllerForHost(hostForPlan);
+                if (controller == null)
+                {
+                    MessageBox.Show(string.Format("No active {0} host found.", hostForPlan), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Validate the plan
+                List<string> errors = Planner.Validate(plan);
+                if (errors != null && errors.Count > 0)
+                {
+                    MessageBox.Show("Plan validation failed: " + string.Join("; ", errors.ToArray()), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                SetStatus(AssistantStatus.Applying);
+                PlanExecutor executor = new PlanExecutor(plan, controller);
+                List<PlanExecutionProgress> progressUpdates = new List<PlanExecutionProgress>();
+
+                executor.ExecuteAll(new Action<PlanExecutionProgress>(p => progressUpdates.Add(p)));
+
+                // Map executor state to assistant status and show result
+                string result = string.Empty;
+                switch (executor.State)
+                {
+                    case PlanExecutionState.Completed:
+                        SetStatus(AssistantStatus.Done);
+                        result = "Plan completed successfully.";
+                        break;
+                    case PlanExecutionState.AwaitingApproval:
+                        SetStatus(AssistantStatus.AwaitingApproval);
+                        if (progressUpdates.Count > 0)
+                        {
+                            PlanExecutionProgress last = progressUpdates[progressUpdates.Count - 1];
+                            result = string.Format("Plan paused at step {0}: Awaiting approval.", last.CurrentStepOrder);
+                        }
+                        else
+                        {
+                            result = "Plan paused: Awaiting approval.";
+                        }
+                        break;
+                    case PlanExecutionState.Failed:
+                        SetStatus(AssistantStatus.Failed);
+                        if (progressUpdates.Count > 0)
+                        {
+                            PlanExecutionProgress last = progressUpdates[progressUpdates.Count - 1];
+                            result = string.Format("Plan failed at step {0}: {1}", last.CurrentStepOrder, last.LastMessage);
+                        }
+                        else
+                        {
+                            result = "Plan execution failed.";
+                        }
+                        break;
+                    default:
+                        SetStatus(AssistantStatus.Done);
+                        result = "Plan execution stopped.";
+                        break;
+                }
+
+                MessageBox.Show(result, "Plan Execution", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("BtnPlanRun_Click failed", ex);
+                MessageBox.Show(string.Format("Plan execution error: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnPlanRollback_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                ChatMessage msg = btn.Tag as ChatMessage;
+                if (msg == null || msg.Plan == null) return;
+
+                Plan plan = msg.Plan;
+
+                // Get the target host for rollback (same logic as Run)
+                List<string> hosts = new List<string>();
+                foreach (var step in plan.Steps)
+                {
+                    if (!string.IsNullOrEmpty(step.TargetHost) && !hosts.Contains(step.TargetHost))
+                    {
+                        hosts.Add(step.TargetHost);
+                    }
+                }
+                string hostForPlan = hosts.Count > 0 ? hosts[0] : _hostType;
+                object controller = GetControllerForHost(hostForPlan);
+                if (controller == null)
+                {
+                    MessageBox.Show(string.Format("No active {0} host found.", hostForPlan), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                PlanExecutor executor = new PlanExecutor(plan, controller);
+                HostOperationResult result = executor.RollbackAll();
+
+                if (result.Success)
+                {
+                    SetStatus(AssistantStatus.Done);
+                    MessageBox.Show("Rollback completed successfully.", "Plan Rollback", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                else
+                {
+                    SetStatus(AssistantStatus.Failed);
+                    MessageBox.Show(string.Format("Rollback failed: {0}", result.ErrorMessage), "Plan Rollback", MessageBoxButton.OK, MessageBoxImage.Warning);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("BtnPlanRollback_Click failed", ex);
+                MessageBox.Show(string.Format("Rollback error: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnPlanStepMoveUp_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                PlanStep step = btn.Tag as PlanStep;
+                if (step == null) return;
+
+                // Find the parent plan through the visual tree or data context
+                // Since button is inside an ItemsControl item, we need to find its parent context
+                // The simplest approach: look for ChatMessage in the messages list that has this plan
+                if (_messages != null)
+                {
+                    foreach (var msg in _messages)
+                    {
+                        if (msg.Plan != null && msg.Plan.Steps.Contains(step))
+                        {
+                            msg.Plan.MoveStepUp(step.StepId);
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("BtnPlanStepMoveUp_Click failed: {0}", ex.Message));
+            }
+        }
+
+        private void BtnPlanStepMoveDown_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                PlanStep step = btn.Tag as PlanStep;
+                if (step == null) return;
+
+                if (_messages != null)
+                {
+                    foreach (var msg in _messages)
+                    {
+                        if (msg.Plan != null && msg.Plan.Steps.Contains(step))
+                        {
+                            msg.Plan.MoveStepDown(step.StepId);
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("BtnPlanStepMoveDown_Click failed: {0}", ex.Message));
+            }
+        }
+
+        private void BtnPlanStepSkip_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                PlanStep step = btn.Tag as PlanStep;
+                if (step == null) return;
+
+                step.Status = PlanStepStatus.Skipped;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("BtnPlanStepSkip_Click failed: {0}", ex.Message));
+            }
+        }
+
+        private void BtnPlanStepRemove_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                PlanStep step = btn.Tag as PlanStep;
+                if (step == null) return;
+
+                if (MessageBox.Show("Remove this step from the plan?", "AI Assistant", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
+                {
+                    return;
+                }
+
+                if (_messages != null)
+                {
+                    foreach (var msg in _messages)
+                    {
+                        if (msg.Plan != null && msg.Plan.Steps.Contains(step))
+                        {
+                            msg.Plan.RemoveStep(step.StepId);
+                            return;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("BtnPlanStepRemove_Click failed: {0}", ex.Message));
+            }
+        }
+
+        private void BtnPlanStepApprove_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Button btn = sender as Button;
+                if (btn == null) return;
+
+                PlanStep step = btn.Tag as PlanStep;
+                if (step == null) return;
+
+                // Find the parent plan
+                Plan parentPlan = null;
+                if (_messages != null)
+                {
+                    foreach (var msg in _messages)
+                    {
+                        if (msg.Plan != null && msg.Plan.Steps.Contains(step))
+                        {
+                            parentPlan = msg.Plan;
+                            break;
+                        }
+                    }
+                }
+
+                if (parentPlan == null) return;
+
+                // Mark step as Approved
+                step.Status = PlanStepStatus.Approved;
+
+                // Get the target host and controller
+                List<string> hosts = new List<string>();
+                foreach (var s in parentPlan.Steps)
+                {
+                    if (!string.IsNullOrEmpty(s.TargetHost) && !hosts.Contains(s.TargetHost))
+                    {
+                        hosts.Add(s.TargetHost);
+                    }
+                }
+                string hostForPlan = hosts.Count > 0 ? hosts[0] : _hostType;
+                object controller = GetControllerForHost(hostForPlan);
+
+                if (controller == null)
+                {
+                    MessageBox.Show(string.Format("No active {0} host found.", hostForPlan), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+
+                // Continue execution from this step
+                SetStatus(AssistantStatus.Applying);
+                PlanExecutor executor = new PlanExecutor(parentPlan, controller);
+                List<PlanExecutionProgress> progressUpdates = new List<PlanExecutionProgress>();
+
+                executor.ContinueFromStep(step.Order, new Action<PlanExecutionProgress>(p => progressUpdates.Add(p)));
+
+                // Show result
+                string result = string.Empty;
+                switch (executor.State)
+                {
+                    case PlanExecutionState.Completed:
+                        SetStatus(AssistantStatus.Done);
+                        result = "Plan completed successfully.";
+                        break;
+                    case PlanExecutionState.AwaitingApproval:
+                        SetStatus(AssistantStatus.AwaitingApproval);
+                        if (progressUpdates.Count > 0)
+                        {
+                            PlanExecutionProgress last = progressUpdates[progressUpdates.Count - 1];
+                            result = string.Format("Plan paused at step {0}: Awaiting approval.", last.CurrentStepOrder);
+                        }
+                        else
+                        {
+                            result = "Plan paused: Awaiting approval.";
+                        }
+                        break;
+                    case PlanExecutionState.Failed:
+                        SetStatus(AssistantStatus.Failed);
+                        if (progressUpdates.Count > 0)
+                        {
+                            PlanExecutionProgress last = progressUpdates[progressUpdates.Count - 1];
+                            result = string.Format("Plan failed at step {0}: {1}", last.CurrentStepOrder, last.LastMessage);
+                        }
+                        else
+                        {
+                            result = "Plan execution failed.";
+                        }
+                        break;
+                    default:
+                        SetStatus(AssistantStatus.Done);
+                        result = "Plan execution stopped.";
+                        break;
+                }
+
+                MessageBox.Show(result, "Plan Execution", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("BtnPlanStepApprove_Click failed", ex);
+                MessageBox.Show(string.Format("Step approval error: {0}", ex.Message), "AI Assistant", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
     }
 }

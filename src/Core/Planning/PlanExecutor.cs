@@ -213,9 +213,9 @@ namespace MSOfficeAIAssistant.Core.Planning
 
             foreach (var step in _plan.Steps)
             {
-                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack)
+                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack || step.Status == PlanStepStatus.Skipped)
                 {
-                    continue; // Skip already-applied steps
+                    continue; // Skip already-applied/rolled-back/skipped steps
                 }
 
                 var result = ExecuteStep(step.Order);
@@ -267,9 +267,9 @@ namespace MSOfficeAIAssistant.Core.Planning
 
                 found = true;
 
-                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack)
+                if (step.Status == PlanStepStatus.Applied || step.Status == PlanStepStatus.RolledBack || step.Status == PlanStepStatus.Skipped)
                 {
-                    continue; // Skip already-applied steps
+                    continue; // Skip already-applied/rolled-back/skipped steps
                 }
 
                 var result = ExecuteStep(step.Order);
