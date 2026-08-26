@@ -107,6 +107,7 @@
     <Compile Include="AttachmentExtractorProvenanceTests.cs" />
     <Compile Include="QuickPromptRegistryTests.cs" />
     <Compile Include="ConversationStoreSessionTests.cs" />
+    <Compile Include="AssistantStatusTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
