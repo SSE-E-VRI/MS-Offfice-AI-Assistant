@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using Newtonsoft.Json;
+using MSOfficeAIAssistant.Core.Planning;
 
 namespace MSOfficeAIAssistant.API.Models
 {
@@ -131,6 +132,46 @@ namespace MSOfficeAIAssistant.API.Models
         {
             OnPropertyChanged("OfficeActions");
             OnPropertyChanged("HasOfficeActions");
+        }
+
+        private Plan _plan;
+
+        /// <summary>
+        /// Live, in-memory Plan object for Plan-mode message processing.
+        /// Not serialized to conversation history (marked JsonIgnore).
+        /// </summary>
+        [JsonIgnore]
+        public Plan Plan
+        {
+            get { return _plan; }
+            set
+            {
+                if (_plan != value)
+                {
+                    _plan = value;
+                    OnPropertyChanged("Plan");
+                    OnPropertyChanged("HasPlan");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Computed: true if this message has a Plan.
+        /// </summary>
+        [JsonIgnore]
+        public bool HasPlan
+        {
+            get { return Plan != null; }
+        }
+
+        /// <summary>
+        /// Notifies observers that Plan or HasPlan has changed.
+        /// Mirrors NotifyOfficeActionsChanged pattern.
+        /// </summary>
+        public void NotifyPlanChanged()
+        {
+            OnPropertyChanged("Plan");
+            OnPropertyChanged("HasPlan");
         }
 
         [JsonProperty("actions", NullValueHandling = NullValueHandling.Ignore)]

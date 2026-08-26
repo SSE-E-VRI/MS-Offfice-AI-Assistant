@@ -103,6 +103,7 @@
     <Compile Include="CrossHostPlanCoordinatorTests.cs" />
     <Compile Include="XamlLoadTests.cs" />
     <Compile Include="AssistantSessionModeTests.cs" />
+    <Compile Include="AssistantSessionPlanModeTests.cs" />
     <Compile Include="ResponseCardCategoryTests.cs" />
     <Compile Include="EvidenceLevelTests.cs" />
     <Compile Include="AttachmentExtractorProvenanceTests.cs" />

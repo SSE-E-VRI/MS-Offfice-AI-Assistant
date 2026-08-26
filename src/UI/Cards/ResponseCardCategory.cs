@@ -11,6 +11,7 @@ namespace MSOfficeAIAssistant.UI.Cards
     {
         Text,
         ActionPreview,
+        Plan,
         Warning,
         Finding,
         Recommendation,
@@ -25,8 +26,9 @@ namespace MSOfficeAIAssistant.UI.Cards
     {
         /// <summary>
         /// Classifies a ChatMessage into one of the response card categories.
-        /// Priority order: ActionPreview (if HasOfficeActions), then Warning/Finding/Recommendation/Summary
-        /// content-prefix markers (in that order, case-insensitive, after trimming), else Text.
+        /// Priority order: Plan (if HasPlan), then ActionPreview (if HasOfficeActions),
+        /// then Warning/Finding/Recommendation/Summary content-prefix markers (in that order,
+        /// case-insensitive, after trimming), else Text.
         /// </summary>
         public static ResponseCardCategory Classify(ChatMessage message)
         {
@@ -36,13 +38,19 @@ namespace MSOfficeAIAssistant.UI.Cards
                 return ResponseCardCategory.Text;
             }
 
-            // Priority 1: ActionPreview (exact today's behavior)
+            // Priority 1: Plan (checked first, defensively before ActionPreview)
+            if (message.HasPlan)
+            {
+                return ResponseCardCategory.Plan;
+            }
+
+            // Priority 2: ActionPreview (exact today's behavior)
             if (message.HasOfficeActions)
             {
                 return ResponseCardCategory.ActionPreview;
             }
 
-            // Priority 2-5: Content-prefix markers (Warning → Finding → Recommendation → Summary)
+            // Priority 3-6: Content-prefix markers (Warning → Finding → Recommendation → Summary)
             string content = message.Content;
             if (string.IsNullOrEmpty(content))
             {
