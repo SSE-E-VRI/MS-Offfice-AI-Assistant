@@ -203,6 +203,7 @@
     <Compile Include="Core\QuickPrompts\QuickPromptRegistry.cs" />
     <Compile Include="Core\Skills\Skill.cs" />
     <Compile Include="Core\Skills\SkillRegistry.cs" />
+    <Compile Include="Core\Skills\SkillPicker.cs" />
     <Compile Include="Core\Actions\OfficeAction.cs" />
     <Compile Include="Core\Actions\ActionExtractor.cs" />
     <Compile Include="Core\Actions\ToolDefinition.cs" />
