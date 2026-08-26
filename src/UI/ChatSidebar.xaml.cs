@@ -1114,8 +1114,31 @@ namespace MSOfficeAIAssistant.UI
             MessageBox.Show(msg.Content, "AI Response Preview", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
+        /// <summary>
+        /// Chat-mode safety gate for mutation paths that don't go through an OfficeAction
+        /// (AssistantSession.IsActionAllowed only runs inside ExecuteOfficeAction — the Insert
+        /// button and Accept/Reject Revisions apply raw AI-suggested content directly and were
+        /// found to bypass the gate entirely, a real safety bug fixed alongside this helper).
+        /// Undo is deliberately NOT gated here — it's a restorative action reverting a prior
+        /// edit, not "apply AI content," and blocking it would trap a user who switched to Chat
+        /// mode after making an Edit-mode change.
+        /// </summary>
+        private bool BlockIfChatMode(string whatWouldHappen)
+        {
+            if (_session != null && _session.Mode == SessionMode.Chat)
+            {
+                MessageBox.Show(
+                    string.Format("Chat mode is read-only. Switch to Plan or Edit mode to {0}.", whatWouldHappen),
+                    "Action Blocked by Chat Mode", MessageBoxButton.OK, MessageBoxImage.Information);
+                return true;
+            }
+            return false;
+        }
+
         private void BtnInsertMessage_Click(object sender, RoutedEventArgs e)
         {
+            if (BlockIfChatMode("insert this content")) return;
+
             var msg = GetMessageFromSender(sender);
             if (msg == null || string.IsNullOrEmpty(msg.Content)) return;
             string content = msg.Content;
@@ -1304,6 +1327,8 @@ namespace MSOfficeAIAssistant.UI
 
         private void ApplyRevisionDecision(bool accept)
         {
+            if (BlockIfChatMode(accept ? "accept tracked revisions" : "reject tracked revisions")) return;
+
             if (_wordCtrl == null) return;
             int pending = _wordCtrl.GetPendingRevisionCount();
             if (pending <= 0)
@@ -2025,8 +2050,15 @@ namespace MSOfficeAIAssistant.UI
                 return;
             }
 
-            // Pattern 5: PowerPoint slide (Slide N of M)
+            // Pattern 5, 6, 7: PowerPoint slide, in any of the three real formats this app emits
+            // (GetContextReadout's "Slide N of M", GetSlideTextInternal's "[Slide #N: Title]",
+            // and .pptx attachment extraction's "--- Slide N ---" — must stay in sync with
+            // MarkdownHelper.AddPlainTextWithCitations and EvidenceLevel.ContainsCitationPattern).
             Match powerpointMatch = Regex.Match(citation, @"^Slide\s+(\d+)\s+of\s+\d+$");
+            if (!powerpointMatch.Success)
+                powerpointMatch = Regex.Match(citation, @"^\[Slide\s+#(\d+):[^\]]*\]$");
+            if (!powerpointMatch.Success)
+                powerpointMatch = Regex.Match(citation, @"^---\s*Slide\s+(\d+)\s*---$");
             if (powerpointMatch.Success)
             {
                 int slideNumber = int.Parse(powerpointMatch.Groups[1].Value);

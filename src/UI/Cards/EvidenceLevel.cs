@@ -168,8 +168,20 @@ namespace MSOfficeAIAssistant.UI.Cards
                 return true;
             }
 
-            // Pattern 5: PowerPoint slide reference, e.g. Slide 3 of 12
+            // Pattern 5: PowerPoint slide reference (context-readout format), e.g. Slide 3 of 12
             if (Regex.IsMatch(content, @"Slide\s+\d+\s+of\s+\d+"))
+            {
+                return true;
+            }
+
+            // Pattern 6: PowerPoint slide tag (GetSlideTextInternal format), e.g. [Slide #3: Overview]
+            if (Regex.IsMatch(content, @"\[Slide\s+#\d+:[^\]]*\]"))
+            {
+                return true;
+            }
+
+            // Pattern 7: PowerPoint slide tag (attachment-extraction format), e.g. --- Slide 3 ---
+            if (Regex.IsMatch(content, @"---\s*Slide\s+\d+\s*---"))
             {
                 return true;
             }

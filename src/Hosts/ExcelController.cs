@@ -1120,16 +1120,26 @@ namespace MSOfficeAIAssistant.Hosts
                 {
                     if (!SpreadsheetActionParser.IsSafeTarget(targetCellAddress))
                         throw new InvalidOperationException(string.Format("Target address '{0}' is unsafe or outside Excel boundaries.", targetCellAddress));
-                    try { targetRange = app.ActiveSheet.Range(targetCellAddress); } catch { }
-                }
 
-                if (targetRange == null)
-                {
-                    try { targetRange = app.Selection; } catch { }
+                    // An explicit, validated target address must resolve or the whole call fails —
+                    // silently falling back to Selection/A1 here would write to a *different* cell
+                    // than the one requested with no indication anything went differently than asked.
+                    targetRange = app.ActiveSheet.Range(targetCellAddress);
+                    if (targetRange == null)
+                    {
+                        Logger.Warn(string.Format("ExcelController.InsertText: target address '{0}' resolved to null.", targetCellAddress));
+                        return false;
+                    }
                 }
-                if (targetRange == null)
+                else
                 {
-                    try { targetRange = app.ActiveSheet.Range("A1"); } catch { }
+                    // No explicit target was given — defaulting to the current selection (or A1)
+                    // is a legitimate fallback only when the caller never specified where to write.
+                    try { targetRange = app.Selection; } catch { }
+                    if (targetRange == null)
+                    {
+                        try { targetRange = app.ActiveSheet.Range("A1"); } catch { }
+                    }
                 }
 
                 if (targetRange == null) return false;
