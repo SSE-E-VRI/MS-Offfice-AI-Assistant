@@ -69,6 +69,10 @@
       <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Markdig">
+      <HintPath>..\packages\Markdig.0.22.0\lib\net452\Markdig.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -116,9 +120,11 @@
     <Compile Include="ResponseContentCleanerTests.cs" />
     <Compile Include="MarkdownClipboardTests.cs" />
     <Compile Include="AuditDisplayConverterTests.cs" />
+    <Compile Include="WordMarkdownRendererTests.cs" />
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="app.config" />
     <None Include="Fixtures\golden_master_baseline.txt" />
   </ItemGroup>
 
