@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace MSOfficeAIAssistant.Tests
@@ -50,7 +50,11 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("SkillRegistryTests", SkillRegistryTests.RunAll),
                 Tuple.Create<string, Action>("SkillPickerTests", SkillPickerTests.RunAll),
                 Tuple.Create<string, Action>("ConversationStoreSessionTests", ConversationStoreSessionTests.RunAll),
-                Tuple.Create<string, Action>("AssistantStatusTests", AssistantStatusTests.RunAll)
+                Tuple.Create<string, Action>("AssistantStatusTests", AssistantStatusTests.RunAll),
+                Tuple.Create<string, Action>("ResponseContentCleanerTests", ResponseContentCleanerTests.RunAll),
+                Tuple.Create<string, Action>("MarkdownClipboardTests", MarkdownClipboardTests.RunAll),
+                Tuple.Create<string, Action>("AuditDisplayConverterTests", AuditDisplayConverterTests.RunAll),
+                Tuple.Create<string, Action>("WordMarkdownRendererTests", WordMarkdownRendererTests.RunAll)
             };
 
             foreach (var suite in suites)

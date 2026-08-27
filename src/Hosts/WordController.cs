@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
@@ -19,6 +19,16 @@ namespace MSOfficeAIAssistant.Hosts
         // Store as raw object; wrap lazily only when needed.
         private readonly object _rawAppObj;
         private Word.Application _wordApp;
+
+        // Bookmarks used to pin a Selection-scope chat exchange to the exact range the user
+        // had selected, so Insert can replace that text later even if the live selection has
+        // since moved (the user scrolled, clicked elsewhere, or is just slow to click Insert).
+        // Tracked here so a long session doesn't quietly accumulate one invisible bookmark per
+        // question the user never inserted.
+        private readonly List<string> _sourceSelectionBookmarks = new List<string>();
+        private int _sourceSelectionBookmarkCounter;
+        private const int MaxTrackedSourceBookmarks = 30;
+        private const string SourceBookmarkPrefix = "AIAsstSel";
 
         public string HostType
         {
@@ -166,6 +176,104 @@ namespace MSOfficeAIAssistant.Hosts
         /// Inserts text with Word revision tracking enabled.  A non-collapsed selection is
         /// preserved and therefore replaced, which makes this suitable for AI rewrites.
         /// </summary>
+        /// <summary>
+        /// Pins the current selection with a hidden Word bookmark so a later Insert can replace
+        /// exactly this text, even if the user has since clicked or scrolled elsewhere in the
+        /// document while the response was streaming in. Returns null when there is nothing to
+        /// pin (no real selection, or the app/document is not accessible) -- callers should treat
+        /// null as "fall back to whatever is live-selected when Insert is actually clicked",
+        /// which was the previous, only, behavior.
+        /// </summary>
+        public string CreateSelectionBookmark()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null || app.Selection == null) return null;
+                if (app.Selection.Type == Word.Enums.WdSelectionType.wdSelectionIP) return null;
+
+                string name = SourceBookmarkPrefix + (++_sourceSelectionBookmarkCounter).ToString(CultureInfo.InvariantCulture);
+                app.ActiveDocument.Bookmarks.Add(name, app.Selection.Range);
+                _sourceSelectionBookmarks.Add(name);
+                TrimTrackedSourceBookmarks(app);
+                return name;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.CreateSelectionBookmark failed: {0}", ex.Message));
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Selects the range a prior CreateSelectionBookmark call pinned, so the next tracked or
+        /// plain insert replaces that exact text instead of whatever happens to be selected now.
+        /// Returns false -- leaving the current selection untouched -- if the bookmark is gone,
+        /// which happens once the pinned text itself has been edited or deleted; callers should
+        /// fall back to the live selection in that case, same as when no bookmark was ever pinned.
+        /// </summary>
+        public bool TrySelectSourceBookmark(string bookmarkName)
+        {
+            if (string.IsNullOrEmpty(bookmarkName)) return false;
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null || app.ActiveDocument.Bookmarks == null) return false;
+                if (!app.ActiveDocument.Bookmarks.Exists(bookmarkName)) return false;
+
+                app.ActiveDocument.Bookmarks[bookmarkName].Range.Select();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.TrySelectSourceBookmark failed: {0}", ex.Message));
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Best-effort cleanup once a pinned selection has been consumed by Insert (or abandoned,
+        /// e.g. the user asked a follow-up instead). Safe to call even if the bookmark is already
+        /// gone -- inserting text over a bookmarked range often removes it implicitly.
+        /// </summary>
+        public void ForgetSourceBookmark(string bookmarkName)
+        {
+            if (string.IsNullOrEmpty(bookmarkName)) return;
+            try
+            {
+                var app = GetApp();
+                if (app != null && app.ActiveDocument != null && app.ActiveDocument.Bookmarks != null
+                    && app.ActiveDocument.Bookmarks.Exists(bookmarkName))
+                {
+                    app.ActiveDocument.Bookmarks[bookmarkName].Delete();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.ForgetSourceBookmark failed: {0}", ex.Message));
+            }
+            _sourceSelectionBookmarks.Remove(bookmarkName);
+        }
+
+        /// <summary>Caps how many pinned-but-never-inserted bookmarks a long session can leave behind.</summary>
+        private void TrimTrackedSourceBookmarks(Word.Application app)
+        {
+            while (_sourceSelectionBookmarks.Count > MaxTrackedSourceBookmarks)
+            {
+                string oldest = _sourceSelectionBookmarks[0];
+                _sourceSelectionBookmarks.RemoveAt(0);
+                try
+                {
+                    if (app.ActiveDocument.Bookmarks.Exists(oldest))
+                        app.ActiveDocument.Bookmarks[oldest].Delete();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Warn(string.Format("WordController.TrimTrackedSourceBookmarks failed: {0}", ex.Message));
+                }
+            }
+        }
+
         public bool ReplaceSelectionWithTrackChanges(string markdown)
         {
             return RenderWithTrackChanges(markdown, true);
@@ -719,6 +827,31 @@ namespace MSOfficeAIAssistant.Hosts
             return string.Empty;
         }
 
+        private static bool TryGetTrackFormatting(Word.Application app)
+        {
+            try
+            {
+                if (app != null && app.ActiveDocument != null) return app.ActiveDocument.TrackFormatting;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.TryGetTrackFormatting failed: {0}", ex.Message));
+            }
+            return true;
+        }
+
+        private static void TrySetTrackFormatting(Word.Application app, bool value)
+        {
+            try
+            {
+                if (app != null && app.ActiveDocument != null) app.ActiveDocument.TrackFormatting = value;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.TrySetTrackFormatting failed: {0}", ex.Message));
+            }
+        }
+
         private bool RenderWithTrackChanges(string markdown, bool replaceSelection)
         {
             if (markdown == null) markdown = string.Empty;
@@ -729,10 +862,15 @@ namespace MSOfficeAIAssistant.Hosts
                 if (app == null || app.ActiveDocument == null || app.Selection == null) return false;
 
                 bool wasTrackRevisions = app.ActiveDocument.TrackRevisions;
+                // Formatting revisions are suppressed while the renderer runs: it sets font,
+                // size and style on every emitted range, and Word would log each of those as a
+                // separate "Formatted" revision, burying the single insertion the user cares about.
+                bool wasTrackFormatting = TryGetTrackFormatting(app);
                 bool undoRecordStarted = TryStartUndoRecord(app, "AI Assistant tracked edit");
                 try
                 {
                     app.ActiveDocument.TrackRevisions = true;
+                    TrySetTrackFormatting(app, false);
                     if (!replaceSelection) CollapseSelectionToEnd(app);
 
                     if (string.IsNullOrWhiteSpace(markdown))
@@ -750,6 +888,7 @@ namespace MSOfficeAIAssistant.Hosts
                 finally
                 {
                     app.ActiveDocument.TrackRevisions = wasTrackRevisions;
+                    TrySetTrackFormatting(app, wasTrackFormatting);
                     EndUndoRecord(app, undoRecordStarted);
                 }
             }

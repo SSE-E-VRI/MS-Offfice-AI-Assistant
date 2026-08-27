@@ -139,7 +139,10 @@ namespace MSOfficeAIAssistant.Hosts
             var table = block as Table;
             if (table != null)
             {
-                RenderTable(app, range, table, docFont, docSize);
+                // A table Word refuses to create must not take the data down with it --
+                // fall back to tab-separated rows rather than silently dropping the content.
+                if (!RenderTable(app, range, table, docFont, docSize))
+                    RenderTableAsText(range, table, docFont, docSize);
                 return;
             }
 
@@ -233,51 +236,237 @@ namespace MSOfficeAIAssistant.Hosts
 
         private static void RenderList(Word.Application app, Word.Range range, ListBlock list, string docFont, float docSize)
         {
-            foreach (var item in list)
+            // Numbering is applied once the whole list tree is written, not per item as it is
+            // rendered. ApplyNumberDefault() on each freshly inserted paragraph makes Word start a
+            // brand new single-item list every time, so each point restarted at "1.", and the
+            // RemoveNumbers that ended the walk stripped the numbering off whichever list the
+            // trailing paragraph still belonged to -- taking that item's number with it.
+            var items = new List<ListItemPlacement>();
+            RenderListItems(app, range, list, docFont, docSize, 1, items);
+            ApplyListFormatting(app, items);
+        }
+
+        /// <summary>
+        /// One rendered list item, held until the whole list tree is written so numbering can be
+        /// applied in a single coordinated pass.
+        /// </summary>
+        private sealed class ListItemPlacement
+        {
+            public Word.Range Range;
+            public int Level;
+            public bool Ordered;
+        }
+
+        private static void RenderListItems(Word.Application app, Word.Range range, ListBlock list,
+            string docFont, float docSize, int level, List<ListItemPlacement> items)
+        {
+            foreach (var child in PlanListBlocks(list))
             {
-                var listItem = item as ListItemBlock;
-                if (listItem != null)
+                var para = child as ParagraphBlock;
+                if (para != null)
                 {
-                    foreach (var child in listItem)
+                    int itemStart = range.Start;
+
+                    try
                     {
-                        var para = child as ParagraphBlock;
-                        if (para != null)
-                        {
-                            try
-                            {
-                                if (list.IsOrdered)
-                                    range.ListFormat.ApplyNumberDefault();
-                                else
-                                    range.ListFormat.ApplyBulletDefault();
-
-                                range.ParagraphFormat.SpaceBefore = 0.0f;
-                                range.ParagraphFormat.SpaceAfter = 2.0f;
-                            }
-                            catch { }
-
-                            if (para.Inline != null)
-                            {
-                                RenderInlines(range, para.Inline, docFont, docSize, false, false, false, docFont, docSize);
-                            }
-
-                            range.InsertParagraphAfter();
-                            range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
-                        }
-                        else
-                        {
-                            var nestedList = child as ListBlock;
-                            if (nestedList != null)
-                            {
-                                RenderList(app, range, nestedList, docFont, docSize);
-                            }
-                        }
+                        range.ParagraphFormat.SpaceBefore = 0.0f;
+                        range.ParagraphFormat.SpaceAfter = 2.0f;
                     }
+                    catch { }
+
+                    if (para.Inline != null)
+                    {
+                        RenderInlines(range, para.Inline, docFont, docSize, false, false, false, docFont, docSize);
+                    }
+
+                    CollectItemRange(app, items, itemStart, range.End, level, list.IsOrdered);
+
+                    range.InsertParagraphAfter();
+                    range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+                    continue;
                 }
+
+                var nested = child as ListBlock;
+                if (nested != null)
+                {
+                    // Nested lists join the same numbering pass rather than going through
+                    // RenderBlock. A separate pass would leave Word unable to tell where the outer
+                    // list resumes, so the outer item after a nested list continued the inner
+                    // list's sequence instead of its own.
+                    ClearListFormat(range);
+                    RenderListItems(app, range, nested, docFont, docSize, level + 1, items);
+                    continue;
+                }
+
+                // Everything else a list item holds -- a table, a fenced code block, a quote -- is
+                // rendered as a block in its own right. These used to fall through an if/else that
+                // only knew about paragraphs and nested lists, so a table under a numbered point
+                // was silently discarded. Numbering has to come off the insertion point first, or
+                // Word carries the list format into the block.
+                ClearListFormat(range);
+                RenderBlock(app, range, child, docFont, docSize);
             }
+
+            ClearListFormat(range);
+        }
+
+        // Outline gallery template 2 numbers "1." at the top level -- matching both a plain
+        // one-level list and what the chat pane's preview shows -- and "1.1." below it, and Word
+        // restarts and resumes each level on its own. Template 1 ("1)" / "a)") would change the
+        // look of every existing flat list, which is the overwhelmingly common case.
+        private const int OutlineNumberTemplateIndex = 2;
+        private const int MaxWordListLevel = 9;
+        private const float ListLevelIndentPoints = 18.0f;
+
+        /// <summary>
+        /// Records the span a list item's text occupies so numbering can be applied to it once the
+        /// whole tree is written. A failure here costs the item its number, never its text.
+        /// </summary>
+        private static void CollectItemRange(Word.Application app, List<ListItemPlacement> items,
+            int start, int end, int level, bool ordered)
+        {
+            try
+            {
+                if (app == null || app.ActiveDocument == null || end <= start) return;
+
+                var placement = new ListItemPlacement();
+                placement.Range = app.ActiveDocument.Range(start, end);
+                placement.Level = level;
+                placement.Ordered = ordered;
+                items.Add(placement);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not capture list item range for numbering: {0}", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Numbers or bullets a whole list tree in one pass. Each item is applied at its own outline
+        /// level and told whether it continues the list it belongs to, which is what keeps a list
+        /// running 1., 2., 3. across items -- including across an item that contains a table or a
+        /// nested list, whose paragraphs sit between the item ranges and must stay out of the
+        /// numbering.
+        /// </summary>
+        private static void ApplyListFormatting(Word.Application app, List<ListItemPlacement> items)
+        {
+            if (app == null || items == null || items.Count == 0) return;
 
             try
             {
+                Word.ListTemplate numbered = null;
+                Word.ListTemplate bulleted = null;
+
+                // Only the first item of each template starts a new list; every later item
+                // continues it, and its outline level alone decides where it sits. Word restarts
+                // and resumes each level on its own from there. Marking the first item of a NESTED
+                // list as a fresh start instead put that item back at level 1.
+                bool numberedStarted = false;
+                bool bulletedStarted = false;
+
+                foreach (var item in items)
+                {
+                    Word.ListTemplate template;
+                    bool continuesList;
+                    if (item.Ordered)
+                    {
+                        if (numbered == null)
+                            numbered = app.ListGalleries[Word.Enums.WdListGalleryType.wdOutlineNumberGallery]
+                                .ListTemplates[OutlineNumberTemplateIndex];
+                        template = numbered;
+                        continuesList = numberedStarted;
+                    }
+                    else
+                    {
+                        if (bulleted == null)
+                            bulleted = app.ListGalleries[Word.Enums.WdListGalleryType.wdBulletGallery]
+                                .ListTemplates[1];
+                        template = bulleted;
+                        continuesList = bulletedStarted;
+                    }
+                    if (template == null) continue;
+
+                    int level = Math.Min(Math.Max(item.Level, 1), MaxWordListLevel);
+                    try
+                    {
+                        item.Range.ListFormat.ApplyListTemplateWithLevel(
+                            template,
+                            continuesList,
+                            Word.Enums.WdListApplyTo.wdListApplyToSelection,
+                            Word.Enums.WdDefaultListBehavior.wdWord10ListBehavior,
+                            level);
+
+                        if (item.Ordered) numberedStarted = true;
+                        else bulletedStarted = true;
+
+                        // Starting a list is always a level-1 act as far as Word is concerned, so
+                        // the first item of a template that happens to be nested (an ordered list
+                        // opening underneath a bullet, say) comes back at the top level. Put it
+                        // back where it belongs.
+                        try
+                        {
+                            if (item.Range.ListFormat.ListLevelNumber != level)
+                                item.Range.ListFormat.ListLevelNumber = level;
+                        }
+                        catch { }
+
+                        // The bullet gallery is single-level, so nesting has to be shown by indent.
+                        // Set it absolutely -- adding to whatever Word left on the paragraph
+                        // compounded the inherited indent of the item before it.
+                        if (!item.Ordered)
+                            item.Range.ParagraphFormat.LeftIndent = ListLevelIndentPoints * (level + 1);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(string.Format("Could not apply list formatting to an item: {0}", ex.Message));
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not apply list formatting: {0}", ex.Message));
+            }
+        }
+
+        /// <summary>
+        /// Every block a list's items contain, in document order. Paragraphs become the numbered
+        /// or bulleted lines; anything else is rendered as a standalone block beneath its item.
+        /// Rendering needs a live Word instance, so this traversal is separated out to keep the
+        /// "a list item never swallows its contents" guarantee testable on its own.
+        /// </summary>
+        internal static List<Block> PlanListBlocks(ListBlock list)
+        {
+            var planned = new List<Block>();
+            if (list == null) return planned;
+
+            foreach (var item in list)
+            {
+                var listItem = item as ListItemBlock;
+                if (listItem == null) continue;
+
+                foreach (var child in listItem)
+                {
+                    planned.Add(child);
+                }
+            }
+            return planned;
+        }
+
+        /// <summary>
+        /// Takes list numbering/bullets and the list indent off the insertion point, so a block
+        /// started here is not absorbed into the surrounding list's formatting.
+        /// </summary>
+        private static void ClearListFormat(Word.Range range)
+        {
+            try
+            {
                 range.ListFormat.RemoveNumbers(Word.Enums.WdNumberType.wdNumberParagraph);
+            }
+            catch { }
+            try
+            {
+                range.ParagraphFormat.LeftIndent = 0.0f;
+                range.ParagraphFormat.FirstLineIndent = 0.0f;
             }
             catch { }
         }
@@ -300,6 +489,10 @@ namespace MSOfficeAIAssistant.Hosts
 
             var wordDoc = app.ActiveDocument;
             if (wordDoc == null) return false;
+
+            // The insertion point may still carry the numbering/indent of a list the table is
+            // nested inside; Word would build a numbered, indented table from it.
+            ClearListFormat(range);
 
             Word.Table wordTable = null;
             try
@@ -345,6 +538,7 @@ namespace MSOfficeAIAssistant.Hosts
                             cellRange.Font.Name = docFont;
                             cellRange.Font.Size = docSize;
                             cellRange.Font.Bold = isHeader ? 1 : 0;
+                            ApplyColumnAlignment(cellRange, table, c);
 
                             foreach (var cellBlock in cell)
                             {
@@ -362,12 +556,115 @@ namespace MSOfficeAIAssistant.Hosts
 
             try
             {
+                // Tables.Add inserts the table ahead of the paragraph the range sat in, so that
+                // paragraph normally survives just past the table's end and is where the next
+                // block belongs. Only add one when it did not -- unconditionally inserting left a
+                // blank paragraph under every table.
                 range.SetRange(wordTable.Range.End, wordTable.Range.End);
-                range.InsertParagraphAfter();
-                range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+                if (IsInsideTable(range))
+                {
+                    range.InsertParagraphAfter();
+                    range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+                }
+                // The trailing paragraph inherits the table's formatting; reset it so following
+                // text is not bold or indented.
+                try
+                {
+                    range.Font.Bold = 0;
+                    range.ParagraphFormat.LeftIndent = 0.0f;
+                    range.ParagraphFormat.SpaceBefore = 0.0f;
+                }
+                catch { }
             }
             catch { }
             return true;
+        }
+
+        /// <summary>
+        /// Mirrors the markdown delimiter row's alignment (:---, :---:, ---:) onto the Word cell.
+        /// Markdig appends a trailing column definition beyond the real columns, so an index that
+        /// runs past the table's actual width is ignored rather than trusted.
+        /// </summary>
+        private static void ApplyColumnAlignment(Word.Range cellRange, Table table, int columnIndex)
+        {
+            try
+            {
+                if (table.ColumnDefinitions == null || columnIndex < 0 || columnIndex >= table.ColumnDefinitions.Count)
+                    return;
+
+                var alignment = table.ColumnDefinitions[columnIndex].Alignment;
+                if (!alignment.HasValue) return;
+
+                switch (alignment.Value)
+                {
+                    case TableColumnAlign.Center:
+                        cellRange.ParagraphFormat.Alignment = Word.Enums.WdParagraphAlignment.wdAlignParagraphCenter;
+                        break;
+                    case TableColumnAlign.Right:
+                        cellRange.ParagraphFormat.Alignment = Word.Enums.WdParagraphAlignment.wdAlignParagraphRight;
+                        break;
+                    default:
+                        cellRange.ParagraphFormat.Alignment = Word.Enums.WdParagraphAlignment.wdAlignParagraphLeft;
+                        break;
+                }
+            }
+            catch { }
+        }
+
+        private static bool IsInsideTable(Word.Range range)
+        {
+            try
+            {
+                object inTable = range.Information(Word.Enums.WdInformation.wdWithInTable);
+                return inTable != null && Convert.ToBoolean(inTable);
+            }
+            catch
+            {
+                // Cannot tell -- assume we are still in the table so a paragraph is added and the
+                // next block never lands inside a cell.
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// Last-resort rendering for a table Word would not create: one paragraph per row with
+        /// tab-separated cells. Ugly, but the data reaches the document.
+        /// </summary>
+        private static void RenderTableAsText(Word.Range range, Table table, string docFont, float docSize)
+        {
+            foreach (var child in table)
+            {
+                var row = child as TableRow;
+                if (row == null) continue;
+
+                for (int c = 0; c < row.Count; c++)
+                {
+                    if (c > 0)
+                    {
+                        try
+                        {
+                            range.Text = "\t";
+                            range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+                        }
+                        catch { }
+                    }
+
+                    var cell = row[c] as TableCell;
+                    if (cell == null) continue;
+
+                    foreach (var cellBlock in cell)
+                    {
+                        var cellPara = cellBlock as ParagraphBlock;
+                        if (cellPara != null && cellPara.Inline != null)
+                        {
+                            RenderInlines(range, cellPara.Inline, docFont, docSize, row.IsHeader, false, false, docFont, docSize);
+                        }
+                    }
+                }
+
+                range.InsertParagraphAfter();
+                range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
+            }
         }
 
         private static void RenderCodeBlock(Word.Application app, Word.Range range, CodeBlock codeBlock, float docSize)
@@ -492,7 +789,11 @@ namespace MSOfficeAIAssistant.Hosts
                 var lineBreak = inline as LineBreakInline;
                 if (lineBreak != null)
                 {
-                    range.Text = "\n";
+                    // Chr(11), Word's manual line break -- NOT "\n", which Word turns into a
+                    // paragraph mark. Inside a list item that split the item in two and the
+                    // continuation line picked up a number of its own, so a single point came
+                    // out as "1. Background:" / "2. The Electrical Division is unable to...".
+                    range.Text = "\v";
                     range.Collapse(Word.Enums.WdCollapseDirection.wdCollapseEnd);
                     continue;
                 }

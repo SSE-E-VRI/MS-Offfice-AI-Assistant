@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
@@ -26,7 +26,16 @@ namespace MSOfficeAIAssistant.Tests
         // immediately above the value so it can't drift far from what it's guarding.
         // Hash last changed: see `git log -L 20,20:tests/GoldenMasterBaselineTests.cs` for the true
         // history — do not trust a "last changed" date hand-copied here, it will go stale.
-        public const string ExpectedGoldenMasterSha256 = "821e8769e83ffe728d9ace283e0222a433868272a200819ba957bbea4f7ca054";
+        // Bump reason: PromptAssembler.BuildHostAwareSystemPrompt's Word branch gained a new
+        // paragraph instructing the model that an edit/rewrite/grammar-check response on selected
+        // text must be ONLY the replacement text -- no comparison table, no "Key Improvements" /
+        // "Final Recommendation" analysis, no alternate drafts. (Root cause of a real bug: asking
+        // to grammar-check a selection could get back a multi-section critique, and Insert applied
+        // the whole thing -- table included -- as the replacement.) This is the only baseline
+        // section that changed; verified purely additive by reconstructing the pre-change fixture
+        // text (stripping the new paragraph back out) and confirming ITS hash still equals the
+        // previous constant before recomputing this one.
+        public const string ExpectedGoldenMasterSha256 = "8c4c9b4a012ff55f3ad93b38a9bcc2e8adfae1562c553aff079a09ec60aade8d";
 
         public static void RunAll()
         {
