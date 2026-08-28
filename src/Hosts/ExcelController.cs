@@ -26,6 +26,24 @@ namespace MSOfficeAIAssistant.Hosts
             return GetActiveWorkbookName();
         }
 
+        public string GetActiveWorkbookPath()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app != null && app.ActiveWorkbook != null)
+                {
+                    string path = null;
+                    try { path = Convert.ToString(app.ActiveWorkbook.FullName); } catch { }
+                    if (!string.IsNullOrWhiteSpace(path)) return path;
+                    try { path = Convert.ToString(app.ActiveWorkbook.Path); } catch { }
+                    return path ?? string.Empty;
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+
         public string GetSelectedText()
         {
             return GetSelectedRangeValues();

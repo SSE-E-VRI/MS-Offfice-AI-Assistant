@@ -27,6 +27,24 @@ namespace MSOfficeAIAssistant.Hosts
             return GetActivePresentationName();
         }
 
+        public string GetActivePresentationPath()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app != null && app.ActivePresentation != null)
+                {
+                    string path = null;
+                    try { path = Convert.ToString(app.ActivePresentation.FullName); } catch { }
+                    if (!string.IsNullOrWhiteSpace(path)) return path;
+                    try { path = Convert.ToString(app.ActivePresentation.Path); } catch { }
+                    return path ?? string.Empty;
+                }
+            }
+            catch { }
+            return string.Empty;
+        }
+
         public string GetSelectedText()
         {
             try

@@ -560,6 +560,418 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        public HostOperationResult ExecuteFindReplace(string findText, string replaceText)
+        {
+            if (string.IsNullOrWhiteSpace(findText))
+                return HostOperationResult.Failed("Find text cannot be empty.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic range = doc.Content;
+                dynamic find = range.Find;
+                find.ClearFormatting();
+                try { find.Replacement.ClearFormatting(); } catch { }
+                find.Text = findText;
+                try { find.Replacement.Text = replaceText ?? string.Empty; } catch { }
+                find.Forward = true;
+                find.Wrap = 1; // wdFindContinue
+                find.Format = false;
+                find.MatchCase = false;
+                find.MatchWholeWord = false;
+                find.MatchWildcards = false;
+                bool found = find.Execute(Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, 2); // wdReplaceAll
+                if (found)
+                    return HostOperationResult.Ok(string.Format("Replaced '{0}' with '{1}'.", findText, replaceText ?? string.Empty));
+                else
+                    return HostOperationResult.Ok(string.Format("Text '{0}' not found; no changes made.", findText));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteFindReplace failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteFindReplace");
+            }
+        }
+
+        public HostOperationResult ExecuteApplyStyle(int paragraphIndex, string styleName)
+        {
+            if (string.IsNullOrWhiteSpace(styleName))
+                return HostOperationResult.Failed("Style name cannot be empty.");
+            if (paragraphIndex < 1)
+                return HostOperationResult.Failed("Paragraph index must be at least 1.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0;
+                try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                if (paragraphIndex > count)
+                    return HostOperationResult.Failed(string.Format("Paragraph {0} does not exist (document has {1} paragraphs).", paragraphIndex, count));
+
+                dynamic para = doc.Paragraphs[paragraphIndex];
+                string trimmedStyle = styleName.Trim();
+                try
+                {
+                    // Try via Styles collection first for exact match
+                    dynamic styleObj = doc.Styles[trimmedStyle];
+                    if (styleObj != null) para.Range.Style = styleObj;
+                    else para.Range.Style = trimmedStyle;
+                }
+                catch
+                {
+                    para.Range.Style = trimmedStyle;
+                }
+                return HostOperationResult.Ok(string.Format("Applied style '{0}' to paragraph {1}.", trimmedStyle, paragraphIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteApplyStyle failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteApplyStyle");
+            }
+        }
+
+        public HostOperationResult ExecuteApplyStyleByText(string targetText, string styleName)
+        {
+            if (string.IsNullOrWhiteSpace(styleName))
+                return HostOperationResult.Failed("Style name cannot be empty.");
+            if (string.IsNullOrWhiteSpace(targetText))
+                return ExecuteApplyStyle(1, styleName);
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0;
+                try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                int foundIndex = -1;
+                string lowerTarget = targetText.Trim().ToLowerInvariant();
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        string paraText = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                        if (paraText.ToLowerInvariant().IndexOf(lowerTarget, StringComparison.Ordinal) >= 0)
+                        {
+                            foundIndex = i;
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+                if (foundIndex < 0)
+                    return HostOperationResult.Failed(string.Format("Target text '{0}' not found in document.", targetText));
+
+                return ExecuteApplyStyle(foundIndex, styleName);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteApplyStyleByText failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteApplyStyleByText");
+            }
+        }
+
+        public HostOperationResult ExecuteSetCase(string target, string caseType)
+        {
+            if (string.IsNullOrWhiteSpace(caseType))
+                return HostOperationResult.Failed("Case type is required (title, sentence, upper, lower).");
+            string normalized = caseType.Trim().ToLowerInvariant();
+            bool isTitle = normalized == "title" || normalized == "title_case" || normalized == "titlecase";
+            bool isSentence = normalized == "sentence" || normalized == "sentence_case";
+            bool isUpper = normalized == "upper" || normalized == "upper_case" || normalized == "uppercase";
+            bool isLower = normalized == "lower" || normalized == "lower_case" || normalized == "lowercase";
+            if (!isTitle && !isSentence && !isUpper && !isLower)
+                return HostOperationResult.Failed("Case type must be one of: title, sentence, upper, lower.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                List<int> targetParagraphs = new List<int>();
+
+                if (!string.IsNullOrWhiteSpace(target))
+                {
+                    string lowerTarget = target.Trim().ToLowerInvariant();
+                    int count = 0;
+                    try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                    for (int i = 1; i <= count; i++)
+                    {
+                        try
+                        {
+                            string paraText = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                            if (paraText.ToLowerInvariant().IndexOf(lowerTarget, StringComparison.Ordinal) >= 0)
+                            {
+                                targetParagraphs.Add(i);
+                                break; // only first matching paragraph for targeted mode
+                            }
+                        }
+                        catch { }
+                    }
+                    if (targetParagraphs.Count == 0)
+                        return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", target));
+                }
+                else
+                {
+                    // No target -> apply to selection if non-empty, else whole document
+                    try
+                    {
+                        if (_rawAppObj != null)
+                        {
+                            dynamic selApp = _rawAppObj;
+                            dynamic sel = selApp.Selection;
+                            if (sel != null && Convert.ToInt32(sel.Type) != 1)
+                            {
+                                dynamic selRange = sel.Range;
+                                if (selRange != null)
+                                {
+                                    string selText = Convert.ToString(selRange.Text) ?? string.Empty;
+                                    if (!string.IsNullOrWhiteSpace(selText))
+                                    {
+                                        string converted = ConvertCase(selText, isTitle, isSentence, isUpper, isLower);
+                                        selRange.Text = converted;
+                                        return HostOperationResult.Ok(string.Format("Changed case to {0} for selection.", normalized));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+
+                    // Fall back to whole document
+                    int count = 0;
+                    try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                    for (int i = 1; i <= count; i++) targetParagraphs.Add(i);
+                }
+
+                // Apply to collected paragraph indices (for targeted case, single element)
+                foreach (int idx in targetParagraphs)
+                {
+                    try
+                    {
+                        dynamic para = doc.Paragraphs[idx];
+                        string original = Convert.ToString(para.Range.Text) ?? string.Empty;
+                        // Preserve trailing paragraph mark \r
+                        bool hasMark = original.EndsWith("\r");
+                        string core = hasMark ? original.Substring(0, original.Length - 1) : original;
+                        string converted = ConvertCase(core, isTitle, isSentence, isUpper, isLower);
+                        if (hasMark) converted = converted + "\r";
+                        para.Range.Text = converted;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(string.Format("ExecuteSetCase paragraph {0} failed: {1}", idx, ex.Message));
+                    }
+                }
+
+                if (targetParagraphs.Count == 1)
+                    return HostOperationResult.Ok(string.Format("Changed paragraph {0} to {1} case.", targetParagraphs[0], normalized));
+                else
+                    return HostOperationResult.Ok(string.Format("Changed {0} paragraphs to {1} case.", targetParagraphs.Count, normalized));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteSetCase failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteSetCase");
+            }
+        }
+
+        private static string ConvertCase(string text, bool isTitle, bool isSentence, bool isUpper, bool isLower)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+            if (isUpper) return text.ToUpperInvariant();
+            if (isLower) return text.ToLowerInvariant();
+            if (isTitle)
+            {
+                System.Globalization.TextInfo ti = System.Globalization.CultureInfo.CurrentCulture.TextInfo;
+                return ti.ToTitleCase(text.ToLowerInvariant());
+            }
+            if (isSentence)
+            {
+                // Sentence case: first letter upper, rest lower per sentence
+                string lower = text.ToLowerInvariant();
+                System.Text.StringBuilder sb = new System.Text.StringBuilder(lower.Length);
+                bool capNext = true;
+                for (int i = 0; i < lower.Length; i++)
+                {
+                    char c = lower[i];
+                    if (capNext && char.IsLetter(c))
+                    {
+                        sb.Append(char.ToUpperInvariant(c));
+                        capNext = false;
+                    }
+                    else
+                    {
+                        sb.Append(c);
+                    }
+                    if (c == '.' || c == '!' || c == '?') capNext = true;
+                }
+                return sb.ToString();
+            }
+            return text;
+        }
+
+        public HostOperationResult ExecuteReorganizeParagraphs(string orderCsv)
+        {
+            if (string.IsNullOrWhiteSpace(orderCsv))
+                return HostOperationResult.Failed("Order is required (e.g., 3,1,2).");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0;
+                try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                if (count < 2)
+                    return HostOperationResult.Failed("Document has fewer than 2 paragraphs to reorder.");
+
+                string[] parts = orderCsv.Split(new char[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                List<int> order = new List<int>();
+                foreach (string p in parts)
+                {
+                    int v;
+                    if (!int.TryParse(p.Trim(), out v)) return HostOperationResult.Failed(string.Format("Invalid order index '{0}'.", p));
+                    if (v < 1 || v > count) return HostOperationResult.Failed(string.Format("Order index {0} out of range 1..{1}.", v, count));
+                    if (order.Contains(v)) return HostOperationResult.Failed(string.Format("Duplicate order index {0}.", v));
+                    order.Add(v);
+                }
+                if (order.Count < 2)
+                    return HostOperationResult.Failed("Order must contain at least 2 indices.");
+                if (order.Count > count)
+                    return HostOperationResult.Failed(string.Format("Order count {0} exceeds paragraph count {1}.", order.Count, count));
+
+                // Capture original paragraph texts
+                List<string> original = new List<string>();
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        string t = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                        original.Add(t);
+                    }
+                    catch { original.Add(string.Empty); }
+                }
+
+                // Build new order: specified indices first, then remaining in original order
+                List<string> reordered = new List<string>();
+                HashSet<int> used = new HashSet<int>();
+                foreach (int idx in order)
+                {
+                    reordered.Add(original[idx - 1]);
+                    used.Add(idx);
+                }
+                // Append untouched paragraphs in original order if partial reorder
+                if (order.Count < count)
+                {
+                    for (int i = 1; i <= count; i++)
+                    {
+                        if (!used.Contains(i)) reordered.Add(original[i - 1]);
+                    }
+                }
+
+                // Apply back
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic para = doc.Paragraphs[i];
+                        para.Range.Text = reordered[i - 1];
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(string.Format("Reorganize paragraph {0} failed: {1}", i, ex.Message));
+                    }
+                }
+
+                return HostOperationResult.Ok(string.Format("Reordered {0} paragraphs.", count));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteReorganizeParagraphs failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteReorganizeParagraphs");
+            }
+        }
+
+        public HostOperationResult ExecuteNormalizeWhitespace()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0;
+                try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                if (count == 0) return HostOperationResult.Ok("Document is empty.");
+
+                int changed = 0;
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic para = doc.Paragraphs[i];
+                        string original = Convert.ToString(para.Range.Text) ?? string.Empty;
+                        bool hasMark = original.EndsWith("\r");
+                        string core = hasMark ? original.Substring(0, original.Length - 1) : original;
+                        string normalized = System.Text.RegularExpressions.Regex.Replace(core, @"[ \t]{2,}", " ");
+                        normalized = normalized.Trim();
+                        normalized = System.Text.RegularExpressions.Regex.Replace(normalized, @"\s+$", string.Empty);
+                        if (normalized != core)
+                        {
+                            if (hasMark) normalized = normalized + "\r";
+                            para.Range.Text = normalized;
+                            changed++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Warn(string.Format("Normalize paragraph {0} failed: {1}", i, ex.Message));
+                    }
+                }
+
+                // Remove consecutive blank paragraphs via Find
+                try
+                {
+                    dynamic range = doc.Content;
+                    dynamic find = range.Find;
+                    find.ClearFormatting();
+                    try { find.Replacement.ClearFormatting(); } catch { }
+                    find.Text = "^p^p";
+                    find.Replacement.Text = "^p";
+                    find.Forward = true;
+                    find.Wrap = 1;
+                    find.Format = false;
+                    // Execute twice to collapse triple blanks
+                    find.Execute(Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, 2);
+                    find.Execute(Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, 2);
+                }
+                catch { }
+
+                return HostOperationResult.Ok(string.Format("Normalized whitespace in {0} paragraphs.", changed));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteNormalizeWhitespace failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteNormalizeWhitespace");
+            }
+        }
+
         /// <summary>
         /// Uses Word's normal one-step undo stack.  This is deliberately a single, explicit
         /// undo rather than a broad rollback; it may undo the last document edit regardless of
@@ -616,6 +1028,24 @@ namespace MSOfficeAIAssistant.Hosts
             }
             catch { }
             return "WordDocument";
+        }
+
+        public string GetActiveDocumentPath()
+        {
+            try
+            {
+                var app = GetApp();
+                if (app != null && app.ActiveDocument != null)
+                {
+                    string path = null;
+                    try { path = Convert.ToString(app.ActiveDocument.FullName); } catch { }
+                    if (!string.IsNullOrWhiteSpace(path)) return path;
+                    try { path = Convert.ToString(app.ActiveDocument.Path); } catch { }
+                    return path ?? string.Empty;
+                }
+            }
+            catch { }
+            return string.Empty;
         }
 
         public string GetContextReadout()

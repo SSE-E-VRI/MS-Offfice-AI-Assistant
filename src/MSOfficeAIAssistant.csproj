@@ -164,12 +164,18 @@
     <Compile Include="UI\ActionHistoryWindow.xaml.cs">
       <DependentUpon>ActionHistoryWindow.xaml</DependentUpon>
     </Compile>
+    <Compile Include="UI\DocumentCompareWindow.xaml.cs">
+      <DependentUpon>DocumentCompareWindow.xaml</DependentUpon>
+    </Compile>
     <Compile Include="UI\ChatFloatingWindow.cs" />
     <Compile Include="UI\HelpWindow.cs" />
     <Compile Include="UI\ResponsePreviewWindow.cs" />
+    <Compile Include="UI\RewriteVariantsWindow.cs" />
     <Compile Include="UI\OfficeDockedPane.cs" />
+    <Compile Include="UI\Helpers\MentionPicker.cs" />
     <Compile Include="UI\Helpers\MarkdownClipboard.cs" />
     <Compile Include="UI\Helpers\MarkdownHelper.cs" />
+    <Compile Include="UI\Helpers\RewriteVariantParser.cs" />
     <Compile Include="UI\Converters\AuditDisplayConverters.cs" />
     <Compile Include="UI\Converters\MarkdownConverter.cs" />
     <Compile Include="UI\Converters\UtcToLocalTimeConverter.cs" />
@@ -192,6 +198,8 @@
     <Compile Include="Providers\ChatOrchestrator.cs" />
     <Compile Include="Providers\ProviderFactory.cs" />
     <Compile Include="Attachments\AttachmentExtractor.cs" />
+    <Compile Include="Core\MentionResolver.cs" />
+    <Compile Include="Core\DiffEngine.cs" />
     <Compile Include="Core\ConfigManager.cs" />
     <Compile Include="Core\ConversationStore.cs" />
     <Compile Include="Core\AppPaths.cs" />
@@ -225,6 +233,7 @@
     <Compile Include="Core\Session\AssistantSession.cs" />
     <Compile Include="Core\Session\WorkSession.cs" />
     <Compile Include="Core\Session\WorkSessionStore.cs" />
+    <Compile Include="Hosts\WordSearchService.cs" />
     <Compile Include="Hosts\HostOperationResult.cs" />
     <Compile Include="Hosts\IOfficeHostController.cs" />
     <Compile Include="Hosts\WordController.cs" />
@@ -248,6 +257,10 @@
       <SubType>Designer</SubType>
     </Page>
     <Page Include="UI\ActionHistoryWindow.xaml">
+      <Generator>MSBuild:Compile</Generator>
+      <SubType>Designer</SubType>
+    </Page>
+    <Page Include="UI\DocumentCompareWindow.xaml">
       <Generator>MSBuild:Compile</Generator>
       <SubType>Designer</SubType>
     </Page>

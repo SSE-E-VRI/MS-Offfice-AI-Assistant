@@ -41,6 +41,18 @@
                     <Button Content="Insert" Background="{StaticResource PrimaryStrongBrush}" Foreground="{StaticResource SurfaceBrush}" FontSize="11" FontWeight="SemiBold"
                             Padding="8,3" BorderBrush="{StaticResource PrimaryBorderBrush}" BorderThickness="1"
                             Click="BtnInsertMessage_Click" ToolTip="Insert after confirmation; Word honors Track edits" Margin="6,0,0,0"/>
+                    <Button Content="Variants" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Visibility="{Binding HasVariants, Converter={StaticResource BoolToVisConverter}}"
+                            Click="BtnCompareVariants_Click" ToolTip="Compare the 3 rewrite alternatives and pick one"/>
+                    <Button Content="Regenerate" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Visibility="{Binding CanRegenerate, Converter={StaticResource BoolToVisConverter}}"
+                            Click="BtnRegenerateMessage_Click" ToolTip="Ask again with the current selection/context"/>
+                    <Button Content="Discard" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}" FontSize="11" FontWeight="SemiBold"
+                            Padding="8,3" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Margin="6,0,0,0"
+                            Visibility="{Binding CanRegenerate, Converter={StaticResource BoolToVisConverter}}"
+                            Click="BtnDiscardMessage_Click" ToolTip="Leave the document unchanged"/>
                 </StackPanel>
             </StackPanel>
         </DataTemplate>
@@ -357,6 +369,9 @@
                 <Button x:Name="BtnActionHistory" Content="Log" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="View the local audit trail of approved AI actions" Click="BtnActionHistory_Click" Margin="0,0,4,4" FontSize="11"
                         AutomationProperties.Name="Action history log"/>
+                <Button x:Name="BtnCompareDocs" Content="⇔" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
+                        ToolTip="Compare two documents (local diff)" Click="BtnCompareDocs_Click" Margin="0,0,4,4" FontSize="12"
+                        AutomationProperties.Name="Document comparison"/>
                 <Button x:Name="BtnNewChat" Content="&#x1F504;" Background="Transparent" Foreground="{StaticResource BorderStrongBrush}"
                         ToolTip="New Chat / Clear History" Click="BtnNewChat_Click" Margin="0,0,4,4" FontSize="14"
                         AutomationProperties.Name="Start new chat and clear history"/>
@@ -536,9 +551,12 @@
                 <TextBox x:Name="TxtInput" Grid.Row="2" MinHeight="64" MaxHeight="130" AcceptsReturn="True" 
                          TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Padding="8" BorderBrush="{StaticResource BorderStrongBrush}"
                          BorderThickness="1" FontSize="13" Focusable="True" IsTabStop="True" KeyDown="TxtInput_KeyDown"
+                         PreviewKeyDown="TxtInput_PreviewKeyDown"
+                         TextChanged="TxtInput_TextChanged"
+                         SelectionChanged="TxtInput_SelectionChanged"
                          PreviewMouseDown="TxtInput_PreviewMouseDown"
                          GotKeyboardFocus="TxtInput_GotKeyboardFocus" LostKeyboardFocus="TxtInput_LostKeyboardFocus"
-                         ToolTip="Type your prompt here... (Ctrl+Enter to send)">
+                         ToolTip="Type your prompt here... (Ctrl+Enter to send) (@ to mention local files)">
                     <TextBox.ContextMenu>
                         <ContextMenu Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" Padding="2">
                             <MenuItem Command="ApplicationCommands.Cut" Header="Cut" InputGestureText="Ctrl+X"/>
@@ -549,6 +567,26 @@
                         </ContextMenu>
                     </TextBox.ContextMenu>
                 </TextBox>
+
+                <!-- Mention Popup -->
+                <Popup x:Name="MentionPopup" Grid.Row="2" PlacementTarget="{Binding ElementName=TxtInput}" Placement="Top" AllowsTransparency="True"
+                       StaysOpen="False" PopupAnimation="Fade" IsOpen="False" Focusable="False">
+                    <Border Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderStrongBrush}" BorderThickness="1" CornerRadius="6"
+                            MaxHeight="180" MinWidth="240" MaxWidth="320">
+                        <ListBox x:Name="MentionListBox" Background="Transparent" BorderThickness="0" Padding="4" FontSize="11"
+                                 PreviewMouseLeftButtonUp="MentionListBox_PreviewMouseLeftButtonUp"
+                                 KeyDown="MentionListBox_KeyDown">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Orientation="Horizontal" Margin="2">
+                                        <TextBlock Text="📄" FontSize="11" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="{Binding}" FontSize="11" Foreground="{StaticResource InkBrush}" TextTrimming="CharacterEllipsis" MaxWidth="280" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Border>
+                </Popup>
 
                 <!-- 3. Quick Action Buttons + Attach + Send -->
                 <!-- Vertical stack, not a single Grid row: a WrapPanel placed inside a Grid column
@@ -565,6 +603,9 @@
                         <Button x:Name="BtnAttach" Content="📎 Attach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
                                 FontSize="11" Padding="6,4" Margin="0,0,4,4" Click="BtnAttach_Click" ToolTip="Attach Word, Excel, PPT, PDF, Text, or Images"
                                 AutomationProperties.Name="Attach files to message"/>
+                        <Button x:Name="BtnCoaching" Content="Coach" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkSecondaryBrush}"
+                                FontSize="11" Padding="6,4" Margin="0,0,4,4" Click="BtnCoaching_Click" ToolTip="Review selected text for clarity and gaps (read-only, no insertion)"
+                                AutomationProperties.Name="Coaching review"/>
                         <ItemsControl x:Name="QuickPromptsItemsControl">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>

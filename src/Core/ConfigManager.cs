@@ -74,6 +74,8 @@ namespace MSOfficeAIAssistant.Core
         /// </summary>
         public bool StripConversationalWrapper { get; set; }
         public string DomainPack { get; set; }
+        public bool AutoSummary { get; set; }
+        public int TargetWordCount { get; set; }
         public bool LoadFailed { get; private set; }
 
         // Backward-compatibility accessors
@@ -110,6 +112,8 @@ namespace MSOfficeAIAssistant.Core
             AutoInsertResponse = false;
             StripConversationalWrapper = true;
             DomainPack = "general";
+            AutoSummary = false;
+            TargetWordCount = 0;
 
             _configDirectory = AppPaths.DataDirectory;
             _configFilePath = Path.Combine(_configDirectory, "config.dat");
@@ -154,7 +158,9 @@ namespace MSOfficeAIAssistant.Core
                         SystemPrompt = this.SystemPrompt,
                         AutoInsertResponse = this.AutoInsertResponse,
                         StripConversationalWrapper = this.StripConversationalWrapper,
-                        DomainPack = this.DomainPack
+                        DomainPack = this.DomainPack,
+                        AutoSummary = this.AutoSummary,
+                        TargetWordCount = this.TargetWordCount
                     };
 
                     string json = JsonConvert.SerializeObject(dto, Formatting.Indented);
@@ -235,6 +241,8 @@ namespace MSOfficeAIAssistant.Core
                             ? dto.StripConversationalWrapper.Value
                             : true;
                         this.DomainPack = !string.IsNullOrWhiteSpace(dto.DomainPack) ? dto.DomainPack : "general";
+                        this.AutoSummary = dto.AutoSummary;
+                        this.TargetWordCount = dto.TargetWordCount > 0 ? dto.TargetWordCount : 0;
 
                         Logger.Info("Configuration successfully loaded and decrypted.");
                     }
@@ -301,6 +309,8 @@ namespace MSOfficeAIAssistant.Core
             public bool AutoInsertResponse { get; set; }
             public bool? StripConversationalWrapper { get; set; }
             public string DomainPack { get; set; }
+            public bool AutoSummary { get; set; }
+            public int TargetWordCount { get; set; }
         }
     }
 }

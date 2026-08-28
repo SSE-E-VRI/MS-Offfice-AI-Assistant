@@ -1,0 +1,66 @@
+<Window x:Class="MSOfficeAIAssistant.UI.DocumentCompareWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Document Comparison" Height="520" Width="680"
+        WindowStartupLocation="CenterScreen" Background="{DynamicResource SurfaceSubtleBrush}" FontFamily="Segoe UI" FontSize="13">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Theme/Tokens.xaml"/>
+                <ResourceDictionary Source="Theme/Controls.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Window.Resources>
+    <Grid Margin="14">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Compare two documents (local .docx/.pdf/.txt)" FontWeight="Bold" FontSize="14" Foreground="{StaticResource InkBrush}" Margin="0,0,0,10"/>
+
+        <Grid Grid.Row="1" Margin="0,0,0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock Text="Document A" FontWeight="SemiBold" Grid.Row="0" Grid.Column="0" Margin="0,0,0,4"/>
+            <TextBox x:Name="TxtFileA" Grid.Row="1" Grid.Column="0" Margin="0,0,6,0" Padding="6" IsReadOnly="True"/>
+            <Button Grid.Row="1" Grid.Column="1" Content="Browse A" Width="80" Click="BtnBrowseA_Click" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkBrush}"/>
+        </Grid>
+
+        <Grid Grid.Row="2" Margin="0,0,0,10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock Text="Document B" FontWeight="SemiBold" Grid.Row="0" Grid.Column="0" Margin="0,0,0,4"/>
+            <TextBox x:Name="TxtFileB" Grid.Row="1" Grid.Column="0" Margin="0,0,6,0" Padding="6" IsReadOnly="True"/>
+            <Button Grid.Row="1" Grid.Column="1" Content="Browse B" Width="80" Click="BtnBrowseB_Click" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkBrush}"/>
+        </Grid>
+
+        <Border Grid.Row="3" Background="{StaticResource SurfaceBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="6" Padding="6">
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <TextBox x:Name="TxtDiff" IsReadOnly="True" TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Hidden"
+                         FontFamily="Consolas" FontSize="11" Background="Transparent" BorderThickness="0"/>
+            </ScrollViewer>
+        </Border>
+
+        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+            <Button Content="Compare" Width="90" Margin="0,0,8,0" Click="BtnCompare_Click" Background="{StaticResource PrimaryBrush}" Foreground="{StaticResource SurfaceBrush}" FontWeight="SemiBold"/>
+            <Button Content="Copy" Width="70" Margin="0,0,8,0" Click="BtnCopy_Click" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkBrush}"/>
+            <Button Content="Close" Width="70" Click="BtnClose_Click" Background="{StaticResource SurfaceAltBrush}" Foreground="{StaticResource InkBrush}"/>
+        </StackPanel>
+    </Grid>
+</Window>

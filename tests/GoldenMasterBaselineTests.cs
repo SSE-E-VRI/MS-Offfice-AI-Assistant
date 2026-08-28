@@ -27,15 +27,14 @@ namespace MSOfficeAIAssistant.Tests
         // Hash last changed: see `git log -L 20,20:tests/GoldenMasterBaselineTests.cs` for the true
         // history — do not trust a "last changed" date hand-copied here, it will go stale.
         // Bump reason: PromptAssembler.BuildHostAwareSystemPrompt's Word branch gained a new
-        // paragraph instructing the model that an edit/rewrite/grammar-check response on selected
-        // text must be ONLY the replacement text -- no comparison table, no "Key Improvements" /
-        // "Final Recommendation" analysis, no alternate drafts. (Root cause of a real bug: asking
-        // to grammar-check a selection could get back a multi-section critique, and Insert applied
-        // the whole thing -- table included -- as the replacement.) This is the only baseline
-        // section that changed; verified purely additive by reconstructing the pre-change fixture
-        // text (stripping the new paragraph back out) and confirming ITS hash still equals the
-        // previous constant before recomputing this one.
-        public const string ExpectedGoldenMasterSha256 = "8c4c9b4a012ff55f3ad93b38a9bcc2e8adfae1562c553aff079a09ec60aade8d";
+        // paragraph listing the Word structured actions (find_replace, apply_style, set_case,
+        // reorganize_paragraphs, normalize_whitespace) via ToolRegistry.FormatActionTypesList,
+        // purely additive to the existing grammar-check instruction. Previous bump (Word
+        // edit must be ONLY replacement text) remains in the baseline. Verified additive by
+        // stripping the new paragraph and confirming the previous hash still matches.
+        // Second bump in this chain: also includes Slice 1 @-mention infrastructure (no prompt
+        // change) — the hash change here is solely the Word prompt addition, additive.
+        public const string ExpectedGoldenMasterSha256 = "bd85d9989a289a8359480e47b680783143e8faf4186ced8dc231c4e5de78a164";
 
         public static void RunAll()
         {

@@ -48,7 +48,10 @@ namespace MSOfficeAIAssistant.Core
                     "If the message includes [Selected Context] and asks to edit, rewrite, correct, proofread, fix, or polish that text, your entire response must be ONLY the finished replacement text -- " +
                     "no side-by-side original-vs-corrected table, no bulleted list of changes or rationale, no multiple candidate versions, and no headings such as 'Key Improvements' or 'Final Recommendation'. " +
                     "That response is inserted verbatim in place of the selection, so anything else you write lands in the document too. " +
-                    "Save that kind of analysis for when the user explicitly asks to review, critique, or explain the text rather than edit it.";
+                    "Save that kind of analysis for when the user explicitly asks to review, critique, or explain the text rather than edit it." +
+                    "\n\nWhen a structured document edit is requested, you may emit an optional <office_actions> JSON block for Word operations. " +
+                    string.Format("Supported Word actions are: {0}. ", ToolRegistry.FormatActionTypesList("Word")) +
+                    "Use them for find/replace, style, case, paragraph reorder, or whitespace normalization instead of instructing the user to do it manually.";
             }
             else if (string.Equals(hostType, "PowerPoint", StringComparison.OrdinalIgnoreCase))
             {
@@ -94,6 +97,12 @@ namespace MSOfficeAIAssistant.Core
             string baseContent = userContent ?? string.Empty;
             return string.Format("{0}\n\n{1}\nWhen you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.",
                 baseContent, textAttachmentContext);
+        }
+
+        public static string AppendWordCountInstruction(string prompt, int targetWordCount)
+        {
+            if (string.IsNullOrWhiteSpace(prompt) || targetWordCount <= 0) return prompt ?? string.Empty;
+            return string.Format("{0}\n\n[Target length: approximately {1} words. Aim for within 15% of this count.]", prompt.TrimEnd(), targetWordCount);
         }
 
         /// <summary>

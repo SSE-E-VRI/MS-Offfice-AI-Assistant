@@ -132,7 +132,7 @@
                 </Border>
 
                 <!-- Card 2: Generation Behavior -->
-                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14">
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14" Margin="0,0,0,12">
                     <StackPanel>
                         <TextBlock Text="Model Parameters &amp; Behavior" FontWeight="Bold" FontSize="14" Foreground="{StaticResource InkBrush}" Margin="0,0,0,8"/>
 
@@ -164,6 +164,16 @@
                         <TextBlock Text="System Instructions" FontWeight="SemiBold" Margin="0,0,0,4"/>
                         <TextBox x:Name="TxtSystemPrompt" Height="56" TextWrapping="Wrap" AcceptsReturn="True" 
                                  VerticalScrollBarVisibility="Auto" Margin="0,0,0,6"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- Card 3: Word Preferences (Slice 3) -->
+                <Border Background="{StaticResource SurfaceBrush}" CornerRadius="8" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="14">
+                    <StackPanel>
+                        <TextBlock Text="Word Preferences" FontWeight="Bold" FontSize="14" Foreground="{StaticResource InkBrush}" Margin="0,0,0,8"/>
+                        <CheckBox x:Name="ChkAutoSummary" Content="Auto-summarize document on open (Word)" Margin="0,0,0,8" ToolTip="When enabled, opening a Word document automatically requests a 5-bullet summary. Opt-in only."/>
+                        <TextBlock Text="Target Word Count (0 = no limit)" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                        <TextBox x:Name="TxtTargetWordCount" Margin="0,0,0,6" ToolTip="When set, generation prompts request approximately this many words (15% tolerance)."/>
                     </StackPanel>
                 </Border>
             </StackPanel>

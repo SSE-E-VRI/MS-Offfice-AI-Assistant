@@ -40,6 +40,7 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("CrossHostPlanCoordinatorTests", CrossHostPlanCoordinatorTests.RunAll),
                 Tuple.Create<string, Action>("MarkdownHelperTests", MarkdownHelperTests.RunAll),
                 Tuple.Create<string, Action>("MarkdownHelperCitationTests", MarkdownHelperCitationTests.RunAll),
+                Tuple.Create<string, Action>("RewriteVariantParserTests", RewriteVariantParserTests.RunAll),
                 Tuple.Create<string, Action>("XamlLoadTests", XamlLoadTests.RunAll),
                 Tuple.Create<string, Action>("AssistantSessionModeTests", AssistantSessionModeTests.RunAll),
                 Tuple.Create<string, Action>("AssistantSessionPlanModeTests", AssistantSessionPlanModeTests.RunAll),
@@ -54,7 +55,9 @@ namespace MSOfficeAIAssistant.Tests
                 Tuple.Create<string, Action>("ResponseContentCleanerTests", ResponseContentCleanerTests.RunAll),
                 Tuple.Create<string, Action>("MarkdownClipboardTests", MarkdownClipboardTests.RunAll),
                 Tuple.Create<string, Action>("AuditDisplayConverterTests", AuditDisplayConverterTests.RunAll),
-                Tuple.Create<string, Action>("WordMarkdownRendererTests", WordMarkdownRendererTests.RunAll)
+                Tuple.Create<string, Action>("WordMarkdownRendererTests", WordMarkdownRendererTests.RunAll),
+                Tuple.Create<string, Action>("MentionResolverTests", MentionResolverTests.RunAll),
+                Tuple.Create<string, Action>("WordFormattingActionTests", WordFormattingActionTests.RunAll)
             };
 
             foreach (var suite in suites)

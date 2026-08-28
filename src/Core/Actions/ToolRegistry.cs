@@ -199,7 +199,7 @@ namespace MSOfficeAIAssistant.Core
             }
             if (string.Equals(host, "Word", StringComparison.OrdinalIgnoreCase))
             {
-                return "add_comment, insert_table";
+                return "add_comment, insert_table, find_replace, apply_style, set_case, reorganize_paragraphs, and normalize_whitespace";
             }
             return string.Empty;
         }
@@ -424,6 +424,54 @@ namespace MSOfficeAIAssistant.Core
                 .WithAlias("table")
                 .WithAlias("word_insert_table")
                 .WithHandler((ctrl, act) => ((WordController)ctrl).ExecuteInsertTable(act.GetParameterInt("rows") > 0 ? act.GetParameterInt("rows") : 2, act.GetParameterInt("cols") > 0 ? act.GetParameterInt("cols") : 2)));
+
+            Register(new ToolDefinition("word.find_replace", "Word", "Finds and replaces text throughout the Word document.", 2, true, true)
+                .WithParameter("find", "string", "Text to find", true)
+                .WithParameter("replace", "string", "Replacement text", true)
+                .WithParameter("match_case", "boolean", "Match case")
+                .WithAlias("find_replace")
+                .WithAlias("replace")
+                .WithAlias("word_find_replace")
+                .WithHandler((ctrl, act) => ((WordController)ctrl).ExecuteFindReplace(act.GetParameterString("find") ?? act.GetParameterString("target_text") ?? string.Empty, act.GetParameterString("replace") ?? act.ContentDisplay)));
+
+            Register(new ToolDefinition("word.apply_style", "Word", "Applies a Word style (e.g., Heading 1, Normal, Title) to a paragraph.", 1, true, true)
+                .WithParameter("target", "string", "Paragraph index (1-based) or target text to locate", false)
+                .WithParameter("style", "string", "Style name to apply (e.g., Heading 1)", true)
+                .WithParameter("paragraph", "integer", "Paragraph index (1-based)")
+                .WithAlias("apply_style")
+                .WithAlias("style")
+                .WithAlias("word_apply_style")
+                .WithHandler((ctrl, act) => {
+                    int para = act.GetParameterInt("paragraph");
+                    if (para <= 0) para = act.GetParameterInt("target");
+                    string style = act.GetParameterString("style") ?? act.ContentDisplay;
+                    string targetText = act.GetParameterString("target_text") ?? act.GetParameterString("target");
+                    if (para > 0) return ((WordController)ctrl).ExecuteApplyStyle(para, style);
+                    if (!string.IsNullOrWhiteSpace(targetText)) return ((WordController)ctrl).ExecuteApplyStyleByText(targetText, style);
+                    return ((WordController)ctrl).ExecuteApplyStyle(1, style);
+                }));
+
+            Register(new ToolDefinition("word.set_case", "Word", "Changes the case of text (Title Case, Sentence case, UPPER, lower).", 1, true, true)
+                .WithParameter("target", "string", "Target text or range")
+                // Not marked required: the handler below defaults a missing case_type to "sentence",
+                // so PreVerify must not reject an action that omits it.
+                .WithParameter("case_type", "string", "Case type: title, sentence, upper, lower", false)
+                .WithAlias("set_case")
+                .WithAlias("word_set_case")
+                .WithHandler((ctrl, act) => ((WordController)ctrl).ExecuteSetCase(act.GetParameterString("target") ?? string.Empty, act.GetParameterString("case_type") ?? act.GetParameterString("case") ?? "sentence")));
+
+            Register(new ToolDefinition("word.reorganize_paragraphs", "Word", "Reorders paragraphs by the supplied order indices.", 2, true, true)
+                .WithParameter("order", "string", "Comma-separated paragraph indices in new order (e.g., 3,1,2)", true)
+                .WithAlias("reorganize_paragraphs")
+                .WithAlias("reorder")
+                .WithAlias("word_reorganize_paragraphs")
+                .WithHandler((ctrl, act) => ((WordController)ctrl).ExecuteReorganizeParagraphs(act.GetParameterString("order") ?? act.ContentDisplay)));
+
+            Register(new ToolDefinition("word.normalize_whitespace", "Word", "Normalizes whitespace: trims, collapses multiple spaces, removes duplicate blank paragraphs.", 1, true, true)
+                .WithAlias("normalize_whitespace")
+                .WithAlias("normalize")
+                .WithAlias("word_normalize_whitespace")
+                .WithHandler((ctrl, act) => ((WordController)ctrl).ExecuteNormalizeWhitespace()));
         }
     }
 }
