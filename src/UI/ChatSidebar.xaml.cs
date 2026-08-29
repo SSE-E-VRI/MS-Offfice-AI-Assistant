@@ -67,6 +67,10 @@ namespace MSOfficeAIAssistant.UI
         private PowerPointController _pptCtrl;
         private bool _hostInitialized;
 
+        // @ mention picker state
+        private string _currentMentionQuery;
+        private int _currentMentionStartPos = -1;
+
         public ChatSidebar()
         {
             InitializeComponent();
@@ -238,6 +242,28 @@ namespace MSOfficeAIAssistant.UI
 
                 UpdateHostSpecificControls();
                 LoadConversationHistory();
+
+                // Auto-summary banner (Slice 3, opt-in, default OFF)
+                try
+                {
+                    if (ConfigManager.Instance.AutoSummary && _wordCtrl != null)
+                    {
+                        Dispatcher.BeginInvoke(new Action(delegate
+                        {
+                            try
+                            {
+                                var prompts = QuickPromptRegistry.GetRibbonPrompts();
+                                var entry = prompts.Find(p => p.Id == "Summarize");
+                                if (entry != null)
+                                {
+                                    ExecuteExternalPrompt(entry.PromptText, entry.Label);
+                                }
+                            }
+                            catch (Exception ex2) { Logger.Warn(string.Format("AutoSummary failed: {0}", ex2.Message)); }
+                        }), DispatcherPriority.Background);
+                    }
+                }
+                catch { }
             }
             catch (Exception ex)
             {
@@ -353,10 +379,20 @@ namespace MSOfficeAIAssistant.UI
 
         public async void ExecuteExternalPrompt(string prompt, string promptTitle)
         {
-            await ExecuteExternalPromptAsync(prompt, promptTitle, GetPromptContextScope());
+            await ExecuteExternalPromptAsync(prompt, promptTitle, GetPromptContextScope(), false);
         }
 
-        private async Task ExecuteExternalPromptAsync(string prompt, string promptTitle, PromptContextScope scope)
+        /// <summary>
+        /// Overload for callers with an opinion on context scope and/or whether office_actions
+        /// should be stripped from the response regardless of the current session mode (e.g.
+        /// Coaching, which must stay read-only even if the session is in Edit or Plan mode).
+        /// </summary>
+        public async void ExecuteExternalPrompt(string prompt, string promptTitle, PromptContextScope scope, bool suppressOfficeActions)
+        {
+            await ExecuteExternalPromptAsync(prompt, promptTitle, scope, suppressOfficeActions);
+        }
+
+        private async Task ExecuteExternalPromptAsync(string prompt, string promptTitle, PromptContextScope scope, bool suppressOfficeActions)
         {
             if (string.IsNullOrWhiteSpace(prompt)) return;
 
@@ -396,7 +432,14 @@ namespace MSOfficeAIAssistant.UI
                 fullPrompt = string.Format("{0}\n\n[Current File Context]:\n{1}", fullPrompt, documentContext);
             }
 
-            await SendMessageAsync(fullPrompt, displayTitle, sourceBookmark);
+            int extTargetWords = 0;
+            try { extTargetWords = ConfigManager.Instance.TargetWordCount; } catch { }
+            if (extTargetWords > 0)
+            {
+                fullPrompt = PromptAssembler.AppendWordCountInstruction(fullPrompt, extTargetWords);
+            }
+
+            await SendMessageAsync(fullPrompt, displayTitle, sourceBookmark, prompt, promptTitle, suppressOfficeActions);
         }
 
         private string GetSelectedTextOnly()
@@ -452,7 +495,8 @@ namespace MSOfficeAIAssistant.UI
             await SendMessageAsync(fullPrompt, null, sourceBookmark);
         }
 
-        private async Task SendMessageAsync(string promptToSend, string customDisplayTitle, string sourceSelectionBookmark = null)
+        private async Task SendMessageAsync(string promptToSend, string customDisplayTitle, string sourceSelectionBookmark = null,
+            string regenerateSourcePrompt = null, string regenerateSourceTitle = null, bool suppressOfficeActions = false)
         {
             var config = ConfigManager.Instance;
             if (string.IsNullOrWhiteSpace(config.ApiKey) && config.ActiveProvider != AIProviderType.Custom)
@@ -473,7 +517,13 @@ namespace MSOfficeAIAssistant.UI
             _messages.Add(userMsg);
             ScrollToBottom();
 
-            var assistantMsg = new ChatMessage("assistant", "") { IsStreaming = true, SourceSelectionBookmark = sourceSelectionBookmark };
+            var assistantMsg = new ChatMessage("assistant", "")
+            {
+                IsStreaming = true,
+                SourceSelectionBookmark = sourceSelectionBookmark,
+                RegenerateSourcePrompt = regenerateSourcePrompt,
+                RegenerateSourceTitle = regenerateSourceTitle
+            };
             _messages.Add(assistantMsg);
             ScrollToBottom();
 
@@ -522,6 +572,23 @@ namespace MSOfficeAIAssistant.UI
                 Dispatcher.Invoke(new Action(() =>
                 {
                     _session.ProcessAssistantResponse(fullAssistantText, assistantMsg);
+
+                    if (suppressOfficeActions)
+                    {
+                        // Read-only callers (e.g. Coaching) must stay read-only regardless of the
+                        // session's current Edit/Plan/Chat mode -- strip any extracted actions here
+                        // rather than relying on the model to have honored the prompt instruction.
+                        if (assistantMsg.OfficeActions != null && assistantMsg.OfficeActions.Count > 0)
+                        {
+                            assistantMsg.OfficeActions.Clear();
+                            assistantMsg.NotifyOfficeActionsChanged();
+                        }
+                        if (assistantMsg.Plan != null)
+                        {
+                            assistantMsg.Plan = null;
+                            assistantMsg.NotifyPlanChanged();
+                        }
+                    }
 
                     ScrollToBottom();
                     _session.SaveHistory();
@@ -664,6 +731,25 @@ namespace MSOfficeAIAssistant.UI
             }
         }
 
+        private void BtnCoaching_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                string selected = GetSelectedTextOnly();
+                string prompt = MSOfficeAIAssistant.Hosts.WordSearchService.BuildCoachingPrompt(selected);
+                // Use SelectionAndFile scope if no selection, to give context; else Selection
+                PromptContextScope scope = !string.IsNullOrWhiteSpace(selected) ? PromptContextScope.Selection : PromptContextScope.CurrentFile;
+                // Coaching is read-only by design (WordSearchService.BuildCoachingPrompt tells the
+                // model not to propose changes) -- suppressOfficeActions enforces that regardless of
+                // the model's compliance or the session's current Edit/Plan/Chat mode.
+                ExecuteExternalPrompt(prompt, "Coaching Review", scope, true);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("BtnCoaching_Click failed: {0}", ex.Message));
+            }
+        }
+
         private void UpdateAttachmentState()
         {
             AttachmentsItemsControl.Visibility = _pendingAttachments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -702,7 +788,14 @@ namespace MSOfficeAIAssistant.UI
         {
             string selected = PromptAssembler.IncludesSelection(scope) ? GetSelectedTextOnly() : null;
             string currentFileContext = PromptAssembler.IncludesCurrentFile(scope) ? GetCurrentFileContext(prompt) : null;
-            return PromptAssembler.ComposePromptWithContext(prompt, scope, selected, currentFileContext);
+            string composed = PromptAssembler.ComposePromptWithContext(prompt, scope, selected, currentFileContext);
+            int targetWords = 0;
+            try { targetWords = ConfigManager.Instance.TargetWordCount; } catch { }
+            if (targetWords > 0)
+            {
+                composed = PromptAssembler.AppendWordCountInstruction(composed, targetWords);
+            }
+            return composed;
         }
 
         private string GetCurrentFileContext(string prompt)
@@ -824,6 +917,19 @@ namespace MSOfficeAIAssistant.UI
             {
                 Logger.Warn(string.Format("Could not show action history: {0}", ex.Message));
                 MessageBox.Show("The local AI action log could not be opened.", "AI Action Log", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private void BtnCompareDocs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                DocumentCompareWindow.ShowFor();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("Could not open document comparison: {0}", ex.Message));
+                MessageBox.Show("Document comparison could not be opened.", "Compare", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -1180,17 +1286,31 @@ namespace MSOfficeAIAssistant.UI
 
         private void BtnInsertMessage_Click(object sender, RoutedEventArgs e)
         {
-            if (BlockIfChatMode("insert this content")) return;
-
             var msg = GetMessageFromSender(sender);
-            if (msg == null || string.IsNullOrEmpty(msg.Content)) return;
+            InsertMessageContent(msg, null);
+        }
+
+        /// <summary>
+        /// Shared insert path for both the normal Insert button (overrideContent null, uses
+        /// msg.Content) and RewriteVariantsWindow's Insert (overrideContent is the chosen
+        /// variant) -- both need the same track-changes/audit/bookmark handling, not a
+        /// re-implementation of it. Gated here rather than at each call site so a modeless
+        /// caller like the variants carousel -- whose Insert can fire well after the button was
+        /// clicked, if the session switched to Chat mode in the meantime -- can't bypass it.
+        /// </summary>
+        private void InsertMessageContent(ChatMessage msg, string overrideContent)
+        {
+            if (BlockIfChatMode("insert this content")) return;
+            if (msg == null) return;
+            string rawContent = overrideContent ?? msg.Content;
+            if (string.IsNullOrEmpty(rawContent)) return;
             // Only the document body is inserted: the model's "Here's a polished draft:" lead-in
             // and its trailing "Notes for Customization" block belong in the chat pane, and were
             // otherwise landing inside finished letters. Copy/Preview still show the raw response,
             // and ConfirmInsert previews the cleaned text so what is shown is what gets applied.
             string content = (ConfigManager.Instance != null && !ConfigManager.Instance.StripConversationalWrapper)
-                ? msg.Content
-                : ResponseContentCleaner.ExtractInsertableContent(msg.Content);
+                ? rawContent
+                : ResponseContentCleaner.ExtractInsertableContent(rawContent);
             if (string.IsNullOrWhiteSpace(content)) return;
             try
             {
@@ -1320,6 +1440,60 @@ namespace MSOfficeAIAssistant.UI
             }
         }
 
+        /// <summary>
+        /// "Compare Variants" on a "3 Variants" response (RibbonCallback.OnRewriteVariants) --
+        /// opens the carousel; Insert/Regenerate/Discard there route back through the same
+        /// paths BtnInsertMessage_Click and BtnRegenerateMessage_Click already use.
+        /// </summary>
+        private void BtnCompareVariants_Click(object sender, RoutedEventArgs e)
+        {
+            if (BlockIfChatMode("compare rewrite variants")) return;
+
+            var msg = GetMessageFromSender(sender);
+            if (msg == null) return;
+            var variants = RewriteVariantParser.Split(msg.Content);
+            if (variants.Count == 0) return;
+
+            RewriteVariantsWindow.ShowFor(
+                variants,
+                chosen => InsertMessageContent(msg, chosen),
+                () => RegenerateMessage(msg),
+                () => DiscardMessage(msg));
+        }
+
+        private void BtnRegenerateMessage_Click(object sender, RoutedEventArgs e)
+        {
+            if (BlockIfChatMode("regenerate this response")) return;
+            RegenerateMessage(GetMessageFromSender(sender));
+        }
+
+        private void BtnDiscardMessage_Click(object sender, RoutedEventArgs e)
+        {
+            DiscardMessage(GetMessageFromSender(sender));
+        }
+
+        private void RegenerateMessage(ChatMessage msg)
+        {
+            if (msg == null || string.IsNullOrEmpty(msg.RegenerateSourcePrompt)) return;
+            // Release the bookmark this response was pinned to before superseding it -- otherwise
+            // it lingers, untracked by anything, until WordController's 30-entry cap trims it.
+            DiscardMessage(msg);
+            // Re-enters through the same public entry point RibbonCallback uses, so it re-reads
+            // the current selection/document context rather than resending the stale prompt text
+            // this response was originally built from.
+            ExecuteExternalPrompt(msg.RegenerateSourcePrompt, msg.RegenerateSourceTitle);
+        }
+
+        private void DiscardMessage(ChatMessage msg)
+        {
+            if (msg == null) return;
+            if (_wordCtrl != null && !string.IsNullOrEmpty(msg.SourceSelectionBookmark))
+            {
+                _wordCtrl.ForgetSourceBookmark(msg.SourceSelectionBookmark);
+                msg.SourceSelectionBookmark = null;
+            }
+        }
+
         private bool ConfirmInsert(string content)
         {
             string host = _hostController != null ? _hostController.HostType : "Office";
@@ -1383,7 +1557,22 @@ namespace MSOfficeAIAssistant.UI
             string warning = ResponseContentCleaner.LooksLikeEditAnalysisReport(content)
                 ? "\u26a0 This response reads like an analysis of the text -- a comparison table and/or a list of changes and rationale -- rather than a single replacement. Continuing will insert all of it, table included, in place of your selection.\n\n"
                 : string.Empty;
-            return MessageBox.Show(string.Format("{0}{1} will {2}. Review the preview before continuing:\n\n{3}", warning, host, operation, preview),
+            // Word-count targeting check (Slice 3)
+            int targetWords = 0;
+            try { targetWords = ConfigManager.Instance.TargetWordCount; } catch { }
+            string wcWarning = string.Empty;
+            if (targetWords > 0)
+            {
+                int actualWords = MSOfficeAIAssistant.API.TokenCounter.CountWords(content);
+                int diff = Math.Abs(actualWords - targetWords);
+                double pct = targetWords > 0 ? (double)diff / targetWords : 0;
+                if (pct > 0.15)
+                {
+                    wcWarning = string.Format("\u26a0 Target was ~{0} words, actual is {1} words ({2:+0;-0;0}% off).\n\n", targetWords, actualWords, (actualWords - targetWords) * 100.0 / targetWords);
+                }
+            }
+            string combinedWarning = wcWarning + warning;
+            return MessageBox.Show(string.Format("{0}{1} will {2}. Review the preview before continuing:\n\n{3}", combinedWarning, host, operation, preview),
                 "Review AI Change", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
         }
 
@@ -1513,7 +1702,7 @@ namespace MSOfficeAIAssistant.UI
                 {
                     scope = PromptContextScope.SelectionAndFile;
                 }
-                await ExecuteExternalPromptAsync(prompt, title, scope);
+                await ExecuteExternalPromptAsync(prompt, title, scope, false);
             }
         }
 
@@ -1564,6 +1753,241 @@ namespace MSOfficeAIAssistant.UI
             {
                 e.Handled = true;
                 BtnSend_Click(sender, e);
+            }
+        }
+
+        private void TxtInput_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            UpdateMentionPopup();
+        }
+
+        private void TxtInput_SelectionChanged(object sender, RoutedEventArgs e)
+        {
+            UpdateMentionPopup();
+        }
+
+        private void TxtInput_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (MentionPopup != null && MentionPopup.IsOpen)
+            {
+                if (e.Key == Key.Down)
+                {
+                    if (MentionListBox != null && MentionListBox.Items.Count > 0)
+                    {
+                        if (MentionListBox.SelectedIndex < 0) MentionListBox.SelectedIndex = 0;
+                        else if (MentionListBox.SelectedIndex < MentionListBox.Items.Count - 1) MentionListBox.SelectedIndex++;
+                        MentionListBox.ScrollIntoView(MentionListBox.SelectedItem);
+                    }
+                    e.Handled = true;
+                    return;
+                }
+                if (e.Key == Key.Up)
+                {
+                    if (MentionListBox != null && MentionListBox.Items.Count > 0)
+                    {
+                        if (MentionListBox.SelectedIndex < 0) MentionListBox.SelectedIndex = MentionListBox.Items.Count - 1;
+                        else if (MentionListBox.SelectedIndex > 0) MentionListBox.SelectedIndex--;
+                        MentionListBox.ScrollIntoView(MentionListBox.SelectedItem);
+                    }
+                    e.Handled = true;
+                    return;
+                }
+                if (e.Key == Key.Enter || e.Key == Key.Tab)
+                {
+                    if (MentionListBox != null && MentionListBox.SelectedItem != null)
+                    {
+                        string selected = MentionListBox.SelectedItem as string;
+                        if (!string.IsNullOrEmpty(selected)) InsertMentionSelection(selected);
+                        e.Handled = true;
+                        return;
+                    }
+                    else if (MentionListBox != null && MentionListBox.Items.Count > 0)
+                    {
+                        string first = MentionListBox.Items[0] as string;
+                        if (!string.IsNullOrEmpty(first)) InsertMentionSelection(first);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+                if (e.Key == Key.Escape)
+                {
+                    HideMentionPopup();
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        private void MentionListBox_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (MentionListBox != null && MentionListBox.SelectedItem != null)
+            {
+                string selected = MentionListBox.SelectedItem as string;
+                if (!string.IsNullOrEmpty(selected)) InsertMentionSelection(selected);
+            }
+        }
+
+        private void MentionListBox_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter || e.Key == Key.Tab)
+            {
+                if (MentionListBox != null && MentionListBox.SelectedItem != null)
+                {
+                    string selected = MentionListBox.SelectedItem as string;
+                    if (!string.IsNullOrEmpty(selected)) InsertMentionSelection(selected);
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Escape)
+            {
+                HideMentionPopup();
+                e.Handled = true;
+                if (TxtInput != null)
+                {
+                    TxtInput.Focus();
+                }
+            }
+        }
+
+        private void UpdateMentionPopup()
+        {
+            try
+            {
+                if (TxtInput == null || MentionPopup == null || MentionListBox == null) return;
+                string text = TxtInput.Text ?? string.Empty;
+                int caret = TxtInput.CaretIndex;
+                string query;
+                if (!MentionResolver.TryExtractQuery(text, caret, out query))
+                {
+                    HideMentionPopup();
+                    return;
+                }
+                _currentMentionQuery = query;
+                // Find start pos of @ for later insertion
+                _currentMentionStartPos = text.LastIndexOf('@', caret - 1);
+                string docPath = null;
+                try
+                {
+                    if (_wordCtrl != null)
+                    {
+                        // Try to resolve current Word document full path via COM (best effort)
+                        docPath = _wordCtrl.GetActiveDocumentPath();
+                    }
+                    else if (_excelCtrl != null) docPath = _excelCtrl.GetActiveWorkbookPath();
+                    else if (_pptCtrl != null) docPath = _pptCtrl.GetActivePresentationPath();
+                }
+                catch { }
+                List<string> candidates = MSOfficeAIAssistant.UI.Helpers.MentionPicker.CollectCandidates(query, docPath);
+                if (candidates == null || candidates.Count == 0)
+                {
+                    HideMentionPopup();
+                    return;
+                }
+                MentionListBox.ItemsSource = candidates;
+                MentionListBox.SelectedIndex = 0;
+                MentionPopup.IsOpen = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("UpdateMentionPopup failed: {0}", ex.Message));
+                HideMentionPopup();
+            }
+        }
+
+        private void HideMentionPopup()
+        {
+            try
+            {
+                if (MentionPopup != null) MentionPopup.IsOpen = false;
+                _currentMentionStartPos = -1;
+                _currentMentionQuery = null;
+            }
+            catch { }
+        }
+
+        private void InsertMentionSelection(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath)) return;
+                HideMentionPopup();
+                // Add as attachment (reuses existing validation and chip UI)
+                TryAddAttachmentFile(filePath);
+                // Remove the @query text from TxtInput
+                if (TxtInput != null && _currentMentionStartPos >= 0)
+                {
+                    int caret = TxtInput.CaretIndex;
+                    int start = _currentMentionStartPos;
+                    int length = caret - start;
+                    if (start >= 0 && length > 0 && start + length <= TxtInput.Text.Length)
+                    {
+                        TxtInput.Text = TxtInput.Text.Remove(start, length);
+                        TxtInput.CaretIndex = start;
+                    }
+                }
+                _currentMentionStartPos = -1;
+                _currentMentionQuery = null;
+                FocusPromptInput();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("InsertMentionSelection failed: {0}", ex.Message));
+            }
+        }
+
+        private bool TryAddAttachmentFile(string filePath)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(filePath)) return false;
+                var fi = new FileInfo(filePath);
+                if (!fi.Exists) return false;
+                if (_pendingAttachments.Count >= AttachmentExtractor.MaxFileCount)
+                {
+                    MessageBox.Show(string.Format("You cannot attach more than {0} files per message.", AttachmentExtractor.MaxFileCount),
+                        "AI Assistant - Attachment Limit", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                string ext = fi.Extension.ToLowerInvariant();
+                if (ext == ".doc" || ext == ".xls" || ext == ".ppt" || ext == ".rtf")
+                {
+                    MessageBox.Show(string.Format("Legacy binary format '{0}' is not supported.\nPlease save as modern Open XML (.docx, .xlsx, .pptx) or export to PDF.", fi.Name),
+                        "AI Assistant - Unsupported Format", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                if (fi.Length > AttachmentExtractor.MaxPerFileSizeBytes)
+                {
+                    MessageBox.Show(string.Format("File '{0}' exceeds the maximum allowed single file size of 20 MB.", fi.Name),
+                        "AI Assistant - File Too Large", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                long currentTotal = _pendingAttachments.Sum(a => a.FileSizeBytes);
+                if (currentTotal + fi.Length > AttachmentExtractor.MaxTotalSizeBytes)
+                {
+                    MessageBox.Show("Total attachments exceed the aggregate 30 MB size limit.",
+                        "AI Assistant - Attachment Limit", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return false;
+                }
+                bool isImg = ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".webp" || ext == ".gif" || ext == ".bmp";
+                // Avoid duplicate
+                foreach (AttachmentItemViewModel existing in _pendingAttachments)
+                {
+                    if (string.Equals(existing.FilePath, fi.FullName, StringComparison.OrdinalIgnoreCase)) return false;
+                }
+                _pendingAttachments.Add(new AttachmentItemViewModel
+                {
+                    FilePath = fi.FullName,
+                    FileName = fi.Name,
+                    FileSizeBytes = fi.Length,
+                    IsImage = isImg
+                });
+                UpdateAttachmentState();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("TryAddAttachmentFile failed: {0}", ex.Message));
+                return false;
             }
         }
 

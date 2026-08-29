@@ -25,6 +25,21 @@ namespace MSOfficeAIAssistant.Core
         private int _section;
         private string _name;
         private string _notes;
+        private string _layout;
+        private string _shapeType;
+        private string _imagePath;
+        private string _text;
+        private string _altText;
+        private string _title;
+        private string _chartType;
+        private string _data;
+        private string _fontName;
+        private string _fontSize;
+        private string _bold;
+        private string _italic;
+        private string _color;
+        private int _rows;
+        private int _cols;
         private PowerPointActionStatus _status = PowerPointActionStatus.Pending;
         private string _resultText;
         private string _errorMessage;
@@ -70,6 +85,101 @@ namespace MSOfficeAIAssistant.Core
             get { return _notes; }
             set { _notes = value; OnPropertyChanged("Notes"); OnPropertyChanged("Description"); OnPropertyChanged("ContentDisplay"); }
         }
+
+        public string Layout
+        {
+            get { return _layout; }
+            set { _layout = value; OnPropertyChanged("Layout"); OnPropertyChanged("Description"); }
+        }
+
+        public string ShapeType
+        {
+            get { return _shapeType; }
+            set { _shapeType = value; OnPropertyChanged("ShapeType"); OnPropertyChanged("Description"); }
+        }
+
+        public string ImagePath
+        {
+            get { return _imagePath; }
+            set { _imagePath = value; OnPropertyChanged("ImagePath"); OnPropertyChanged("Description"); }
+        }
+
+        public string Text
+        {
+            get { return _text; }
+            set { _text = value; OnPropertyChanged("Text"); OnPropertyChanged("Description"); OnPropertyChanged("ContentDisplay"); }
+        }
+
+        public string AltText
+        {
+            get { return _altText; }
+            set { _altText = value; OnPropertyChanged("AltText"); }
+        }
+
+        public string Title
+        {
+            get { return _title; }
+            set { _title = value; OnPropertyChanged("Title"); OnPropertyChanged("Description"); }
+        }
+
+        public string ChartType
+        {
+            get { return _chartType; }
+            set { _chartType = value; OnPropertyChanged("ChartType"); OnPropertyChanged("Description"); }
+        }
+
+        public string Data
+        {
+            get { return _data; }
+            set { _data = value; OnPropertyChanged("Data"); }
+        }
+
+        public string FontName
+        {
+            get { return _fontName; }
+            set { _fontName = value; OnPropertyChanged("FontName"); }
+        }
+
+        public string FontSize
+        {
+            get { return _fontSize; }
+            set { _fontSize = value; OnPropertyChanged("FontSize"); }
+        }
+
+        public string Bold
+        {
+            get { return _bold; }
+            set { _bold = value; OnPropertyChanged("Bold"); }
+        }
+
+        public string Italic
+        {
+            get { return _italic; }
+            set { _italic = value; OnPropertyChanged("Italic"); }
+        }
+
+        public string Color
+        {
+            get { return _color; }
+            set { _color = value; OnPropertyChanged("Color"); }
+        }
+
+        public int Rows
+        {
+            get { return _rows; }
+            set { _rows = value; OnPropertyChanged("Rows"); }
+        }
+
+        public int Cols
+        {
+            get { return _cols; }
+            set { _cols = value; OnPropertyChanged("Cols"); }
+        }
+
+        /// <summary>
+        /// Generic catch-all for any extra attributes not mapped above (forward compat).
+        /// </summary>
+        public Dictionary<string, string> ExtraAttributes { get; set; }
 
         public PowerPointActionStatus Status
         {
@@ -126,6 +236,20 @@ namespace MSOfficeAIAssistant.Core
                 if (string.Equals(_type, "create_section", StringComparison.OrdinalIgnoreCase)) return "section+";
                 if (string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase)) return "section";
                 if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase)) return "notes";
+                if (string.Equals(_type, "create_slide", StringComparison.OrdinalIgnoreCase)) return "slide+";
+                if (string.Equals(_type, "insert_image", StringComparison.OrdinalIgnoreCase)) return "img";
+                if (string.Equals(_type, "delete_slide", StringComparison.OrdinalIgnoreCase)) return "del";
+                if (string.Equals(_type, "duplicate_slide", StringComparison.OrdinalIgnoreCase)) return "dup";
+                if (string.Equals(_type, "hide_slide", StringComparison.OrdinalIgnoreCase)) return "hide";
+                if (string.Equals(_type, "unhide_slide", StringComparison.OrdinalIgnoreCase)) return "show";
+                if (string.Equals(_type, "apply_layout", StringComparison.OrdinalIgnoreCase)) return "layout";
+                if (string.Equals(_type, "set_shape_text", StringComparison.OrdinalIgnoreCase)) return "text";
+                if (string.Equals(_type, "replace_text", StringComparison.OrdinalIgnoreCase)) return "replace";
+                if (string.Equals(_type, "add_table", StringComparison.OrdinalIgnoreCase)) return "tbl";
+                if (string.Equals(_type, "add_chart", StringComparison.OrdinalIgnoreCase)) return "chart";
+                if (string.Equals(_type, "add_shape", StringComparison.OrdinalIgnoreCase)) return "shape";
+                if (string.Equals(_type, "set_font", StringComparison.OrdinalIgnoreCase)) return "font";
+                if (string.Equals(_type, "fit_content", StringComparison.OrdinalIgnoreCase)) return "fit";
                 return "action";
             }
         }
@@ -141,6 +265,28 @@ namespace MSOfficeAIAssistant.Core
                 if (string.Equals(_type, "rename_section", StringComparison.OrdinalIgnoreCase))
                     return string.Format("Section {0}", _section);
                 if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                if (string.Equals(_type, "create_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "insert_image", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "delete_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "duplicate_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "hide_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "unhide_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide > 0 ? _slide : _target);
+                if (string.Equals(_type, "apply_layout", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                if (string.Equals(_type, "set_shape_text", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                if (string.Equals(_type, "add_table", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                if (string.Equals(_type, "add_chart", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Slide {0}", _slide);
+                if (string.Equals(_type, "add_shape", StringComparison.OrdinalIgnoreCase))
                     return string.Format("Slide {0}", _slide);
                 return "Slide";
             }
@@ -158,6 +304,34 @@ namespace MSOfficeAIAssistant.Core
                     return string.Format("Rename section {0} to '{1}'", _section, _name);
                 if (string.Equals(_type, "set_notes", StringComparison.OrdinalIgnoreCase))
                     return string.Format("Set speaker notes on slide {0}", _slide);
+                if (string.Equals(_type, "create_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Create slide '{0}'", _name ?? "(untitled)");
+                if (string.Equals(_type, "insert_image", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Insert image on slide {0}", _slide);
+                if (string.Equals(_type, "delete_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Delete slide {0}", _slide);
+                if (string.Equals(_type, "duplicate_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Duplicate slide {0}", _slide);
+                if (string.Equals(_type, "hide_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Hide slide {0}", _slide);
+                if (string.Equals(_type, "unhide_slide", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Unhide slide {0}", _slide);
+                if (string.Equals(_type, "apply_layout", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Apply layout to slide {0}", _slide);
+                if (string.Equals(_type, "set_shape_text", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Set shape text on slide {0}", _slide);
+                if (string.Equals(_type, "replace_text", StringComparison.OrdinalIgnoreCase))
+                    return "Replace selected text";
+                if (string.Equals(_type, "add_table", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Add table to slide {0}", _slide);
+                if (string.Equals(_type, "add_chart", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Add chart to slide {0}", _slide);
+                if (string.Equals(_type, "add_shape", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Add shape to slide {0}", _slide);
+                if (string.Equals(_type, "set_font", StringComparison.OrdinalIgnoreCase))
+                    return "Set font formatting";
+                if (string.Equals(_type, "fit_content", StringComparison.OrdinalIgnoreCase))
+                    return string.Format("Fit content on slide {0}", _slide);
                 return "PowerPoint action";
             }
         }
@@ -262,11 +436,52 @@ namespace MSOfficeAIAssistant.Core
                         int source = ParsePositiveInt(reader.GetAttribute("source"));
                         int target = ParsePositiveInt(reader.GetAttribute("target"));
                         int slide = ParsePositiveInt(reader.GetAttribute("slide"));
+                        if (slide == 0) slide = ParsePositiveInt(reader.GetAttribute("index"));
                         int section = ParsePositiveInt(reader.GetAttribute("section"));
                         string name = reader.GetAttribute("name") ?? string.Empty;
-                        string notes = reader.GetAttribute("notes") ?? string.Empty;
+                        string notes = reader.GetAttribute("notes") ?? reader.GetAttribute("speaker_notes") ?? string.Empty;
+                        string layout = reader.GetAttribute("layout") ?? reader.GetAttribute("layout_name") ?? string.Empty;
+                        string shapeType = reader.GetAttribute("shape_type") ?? reader.GetAttribute("shape") ?? reader.GetAttribute("shapeType") ?? string.Empty;
+                        string imagePath = reader.GetAttribute("image_path") ?? reader.GetAttribute("image") ?? reader.GetAttribute("path") ?? reader.GetAttribute("file") ?? string.Empty;
+                        string text = reader.GetAttribute("text") ?? reader.GetAttribute("content") ?? string.Empty;
+                        string title = reader.GetAttribute("title") ?? string.Empty;
+                        string chartType = reader.GetAttribute("chart_type") ?? reader.GetAttribute("chartType") ?? reader.GetAttribute("chart") ?? string.Empty;
+                        string altText = reader.GetAttribute("alt_text") ?? reader.GetAttribute("alt") ?? string.Empty;
+                        string data = reader.GetAttribute("data") ?? string.Empty;
+                        int rows = ParsePositiveInt(reader.GetAttribute("rows"));
+                        int cols = ParsePositiveInt(reader.GetAttribute("cols"));
+                        if (rows == 0) rows = ParsePositiveInt(reader.GetAttribute("row"));
+                        if (cols == 0) cols = ParsePositiveInt(reader.GetAttribute("col"));
+                        string fontName = reader.GetAttribute("font_name") ?? reader.GetAttribute("font") ?? string.Empty;
+                        string fontSize = reader.GetAttribute("font_size") ?? reader.GetAttribute("size") ?? string.Empty;
+                        string bold = reader.GetAttribute("bold") ?? string.Empty;
+                        string italic = reader.GetAttribute("italic") ?? string.Empty;
+                        string color = reader.GetAttribute("color") ?? string.Empty;
 
-                        actions.Add(new PowerPointAction
+                        var extra = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        string[] extraKeys = new[] { "headers", "values", "table", "points", "bullets", "outline", "operation", "target_text" };
+                        foreach (var k in extraKeys)
+                        {
+                            string v = reader.GetAttribute(k);
+                            if (!string.IsNullOrWhiteSpace(v)) extra[k] = v;
+                        }
+
+                        // inner element text as fallback for data/text/notes where attribute was empty
+                        bool isEmpty = reader.IsEmptyElement;
+                        string innerText = string.Empty;
+                        if (!isEmpty)
+                        {
+                            try { innerText = reader.ReadElementContentAsString(); } catch { innerText = string.Empty; }
+                            innerText = (innerText ?? string.Empty).Trim();
+                            if (string.IsNullOrWhiteSpace(text) && !string.IsNullOrWhiteSpace(innerText) && (type == "set_shape_text" || type == "replace_text" || type == "set_notes" || type == "create_slide" || type == "add_shape"))
+                                text = innerText;
+                            if (string.IsNullOrWhiteSpace(data) && !string.IsNullOrWhiteSpace(innerText) && (type == "add_table" || type == "add_shape" || type == "add_chart"))
+                                data = innerText;
+                            if (string.IsNullOrWhiteSpace(notes) && !string.IsNullOrWhiteSpace(innerText) && type == "set_notes")
+                                notes = innerText;
+                        }
+
+                        var action = new PowerPointAction
                         {
                             Type = type,
                             Source = source,
@@ -274,8 +489,30 @@ namespace MSOfficeAIAssistant.Core
                             Slide = slide,
                             Section = section,
                             Name = name,
-                            Notes = notes
-                        });
+                            Notes = notes,
+                            Layout = layout,
+                            ShapeType = shapeType,
+                            ImagePath = imagePath,
+                            Text = text,
+                            Title = title,
+                            ChartType = chartType,
+                            AltText = altText,
+                            Data = data,
+                            Rows = rows,
+                            Cols = cols,
+                            FontName = fontName,
+                            FontSize = fontSize,
+                            Bold = bold,
+                            Italic = italic,
+                            Color = color,
+                            ExtraAttributes = extra
+                        };
+                        actions.Add(action);
+                        if (!isEmpty)
+                        {
+                            // ReadElementContentAsString already advanced past end element
+                            continue;
+                        }
                     }
                 }
             }

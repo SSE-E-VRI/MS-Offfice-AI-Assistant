@@ -22,7 +22,7 @@ namespace MSOfficeAIAssistant.Tests
         {
             var skills = SkillRegistry.LoadPack("general");
             Assert(skills != null, "LoadPack should never return null");
-            Assert(skills.Count == 9, "general pack should have exactly 9 skills");
+            Assert(skills.Count == 11, "general pack should have exactly 11 skills");
 
             bool foundOfficialLetter = false;
             foreach (var skill in skills)
@@ -38,7 +38,7 @@ namespace MSOfficeAIAssistant.Tests
         {
             var skills = SkillRegistry.LoadPack("railway");
             Assert(skills != null, "LoadPack should never return null");
-            Assert(skills.Count == 13, "railway pack should have exactly 13 skills");
+            Assert(skills.Count == 15, "railway pack should have exactly 15 skills");
 
             bool foundOfficialLetter = false;
             bool foundDrmBriefing = false;
@@ -76,7 +76,7 @@ namespace MSOfficeAIAssistant.Tests
         {
             var allSkills = SkillRegistry.GetAllPacks();
             Assert(allSkills != null, "GetAllPacks should never return null");
-            Assert(allSkills.Count == 22, "GetAllPacks should return 22 skills total (9 general + 13 railway)");
+            Assert(allSkills.Count == 26, "GetAllPacks should return 26 skills total (11 general + 15 railway)");
 
             int generalCount = 0;
             int railwayCount = 0;
@@ -85,8 +85,8 @@ namespace MSOfficeAIAssistant.Tests
                 if (skill.DomainPack == "general") generalCount++;
                 if (skill.DomainPack == "railway") railwayCount++;
             }
-            Assert(generalCount == 9, "GetAllPacks should include exactly 9 general skills");
-            Assert(railwayCount == 13, "GetAllPacks should include exactly 13 railway skills");
+            Assert(generalCount == 11, "GetAllPacks should include exactly 11 general skills");
+            Assert(railwayCount == 15, "GetAllPacks should include exactly 15 railway skills");
         }
 
         private static void TestSkillRoundTrip()

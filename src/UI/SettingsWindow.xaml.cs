@@ -97,6 +97,9 @@ namespace MSOfficeAIAssistant.UI
                     }
                 }
 
+                if (ChkAutoSummary != null) ChkAutoSummary.IsChecked = config.AutoSummary;
+                if (TxtTargetWordCount != null) TxtTargetWordCount.Text = config.TargetWordCount > 0 ? config.TargetWordCount.ToString() : string.Empty;
+
                 PopulateProviderFields(_selectedProviderType);
             }
             finally
@@ -443,6 +446,23 @@ namespace MSOfficeAIAssistant.UI
                 if (selectedItem != null && selectedItem.Tag is string)
                 {
                     config.DomainPack = selectedItem.Tag as string;
+                }
+            }
+
+            if (ChkAutoSummary != null && ChkAutoSummary.IsChecked.HasValue)
+            {
+                config.AutoSummary = ChkAutoSummary.IsChecked.Value;
+            }
+            if (TxtTargetWordCount != null)
+            {
+                int parsed = 0;
+                if (int.TryParse(TxtTargetWordCount.Text.Trim(), out parsed) && parsed > 0 && parsed <= 10000)
+                {
+                    config.TargetWordCount = parsed;
+                }
+                else
+                {
+                    config.TargetWordCount = 0;
                 }
             }
 

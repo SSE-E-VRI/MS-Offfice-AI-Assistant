@@ -237,6 +237,19 @@ namespace MSOfficeAIAssistant.Core.Actions
                     case "create_section":
                     case "rename_section": return "sec";
                     case "set_notes": return "note";
+                    case "delete_slide": return "del";
+                    case "duplicate_slide": return "dup";
+                    case "hide_slide": return "hide";
+                    case "unhide_slide": return "show";
+                    case "apply_layout": return "layout";
+                    case "set_shape_text": return "text";
+                    case "replace_text": return "replace";
+                    case "add_table": return "tbl";
+                    case "add_chart": return "chart";
+                    case "add_shape": return "shape";
+                    case "set_font": return "font";
+                    case "fit_content": return "fit";
+                    case "insert_image": return "img";
                     default: return "act";
                 }
             }
@@ -381,31 +394,72 @@ namespace MSOfficeAIAssistant.Core.Actions
         {
             SpreadsheetActionType? type = null;
             string op = (Operation ?? string.Empty).ToLowerInvariant();
-            if (op.Contains("formula")) type = SpreadsheetActionType.Formula;
+            if (op.Contains("write_formula") || (op.Contains("formula") && !op.Contains("conditional"))) type = SpreadsheetActionType.Formula;
             else if (op.Contains("fill_down") || op.Contains("filldown")) type = SpreadsheetActionType.FillDown;
             else if (op.Contains("create_table") || op.Contains("createtable")) type = SpreadsheetActionType.CreateTable;
-            else if (op.Contains("table")) type = SpreadsheetActionType.Table;
+            else if (op.Contains("table") && !op.Contains("pivot")) type = SpreadsheetActionType.Table;
             else if (op.Contains("conditional_format") || op.Contains("conditionalformat")) type = SpreadsheetActionType.ConditionalFormat;
-            else if (op.Contains("sort")) type = SpreadsheetActionType.Sort;
+            else if (op.Contains("sort") && !op.Contains("worksheet")) type = SpreadsheetActionType.Sort;
             else if (op.Contains("filter")) type = SpreadsheetActionType.Filter;
             else if (op.Contains("data_validation") || op.Contains("datavalidation")) type = SpreadsheetActionType.DataValidation;
-            else if (op.Contains("chart")) type = SpreadsheetActionType.Chart;
+            else if (op.Contains("create_chart") || (op.Contains("chart") && !op.Contains("analysis"))) type = SpreadsheetActionType.Chart;
             else if (op.Contains("pivot")) type = SpreadsheetActionType.PivotTable;
             else if (op.Contains("named_range") || op.Contains("namedrange")) type = SpreadsheetActionType.NamedRange;
             else if (op.Contains("remove_duplicates") || op.Contains("removeduplicates")) type = SpreadsheetActionType.RemoveDuplicates;
-            else if (op.Contains("value")) type = SpreadsheetActionType.Value;
+            else if (op.Contains("find_replace")) type = SpreadsheetActionType.FindReplace;
+            else if (op.Contains("set_case") || op.Contains("setcase")) type = SpreadsheetActionType.SetCase;
+            else if (op.Contains("trim_range") || op == "excel.trim") type = SpreadsheetActionType.TrimRange;
+            else if (op.Contains("normalize_whitespace") || op.Contains("normalize")) type = SpreadsheetActionType.NormalizeWhitespace;
+            else if (op.Contains("text_to_columns") || op.Contains("split_column")) type = SpreadsheetActionType.TextToColumns;
+            else if (op.Contains("write_python") || op.Contains("python")) type = SpreadsheetActionType.WritePython;
+            else if (op.Contains("apply_theme") || op.Contains("theme")) type = SpreadsheetActionType.ApplyTheme;
+            else if (op.Contains("analyze_range") || op.Contains("analyze")) type = SpreadsheetActionType.AnalyzeRange;
+            else if (op.Contains("get_formula_details") || op.Contains("explain_formula")) type = SpreadsheetActionType.GetFormulaDetails;
+            else if (op.Contains("add_analysis_column")) type = SpreadsheetActionType.AddAnalysisColumn;
+            else if (op.Contains("import_worksheet") || op.Contains("import")) type = SpreadsheetActionType.ImportWorksheet;
+            else if (op.Contains("create_shape") && !op.Contains("update")) type = SpreadsheetActionType.CreateShape;
+            else if (op.Contains("update_shape")) type = SpreadsheetActionType.UpdateShape;
+            else if (op.Contains("set_workbook_rule") || op.Contains("set_rule")) type = SpreadsheetActionType.SetWorkbookRule;
+            else if (op.Contains("get_workbook_rules") || op.Contains("get_rules")) type = SpreadsheetActionType.GetWorkbookRules;
+            else if (op.Contains("clear_workbook_rules") || op.Contains("clear_rules")) type = SpreadsheetActionType.ClearWorkbookRules;
+            else if (op.Contains("add_worksheet") || op.Contains("add_sheet")) type = SpreadsheetActionType.AddAnalysisColumn; // fallback mapping will be overridden below
+            else if (op.Contains("value") || op.Contains("write_value")) type = SpreadsheetActionType.Value;
+
+            // Handle worksheet lifecycle that doesn't map to legacy enum - map to ImportWorksheet or closest; but better map to dedicated type if exists
+            // For add_worksheet etc., we fallback to a generic but ensure not null for newer types: use TryParse via ToolRegistry
+            if (!type.HasValue)
+            {
+                // Attempt to map any remaining excel.* to a known enum via explicit list
+                if (op == "excel.add_worksheet" || op == "excel.rename_worksheet" || op == "excel.delete_worksheet" || op == "excel.duplicate_worksheet"
+                    || op == "excel.set_tab_color" || op == "excel.insert_rows" || op == "excel.delete_rows" || op == "excel.insert_columns"
+                    || op == "excel.delete_columns" || op == "excel.hide_rows" || op == "excel.unhide_rows" || op == "excel.hide_columns"
+                    || op == "excel.unhide_columns" || op == "excel.merge_cells" || op == "excel.format_cells" || op == "excel.autofit_columns"
+                    || op == "excel.freeze_panes" || op == "excel.add_summary_row" || op == "excel.clear_highlights")
+                {
+                    // These operations don't have legacy SpreadsheetActionType equivalents; map to a placeholder that round-trips via FromSpreadsheetAction
+                    // Use Value as generic carrier but preserve original operation in Description
+                    type = SpreadsheetActionType.Value;
+                }
+            }
 
             if (!type.HasValue) return null;
 
-            string content = GetParameterString("value") ?? GetParameterString("content") ?? GetParameterString("formula") ?? string.Empty;
+            string content = GetParameterString("value") ?? GetParameterString("content") ?? GetParameterString("formula") ?? GetParameterString("rule") ?? GetParameterString("code") ?? GetParameterString("palette") ?? GetParameterString("name") ?? string.Empty;
+            // For richer actions, serialize all params if content is still empty
+            if (string.IsNullOrWhiteSpace(content) && Parameters != null && Parameters.Count > 0)
+            {
+                try { content = Newtonsoft.Json.JsonConvert.SerializeObject(Parameters); } catch { content = string.Empty; }
+            }
             string target = Target != null ? (Target.Range ?? Target.ToString()) : "A1";
+            if (string.IsNullOrWhiteSpace(target) && Target != null && !string.IsNullOrWhiteSpace(Target.Sheet)) target = Target.Sheet;
+            if (string.IsNullOrWhiteSpace(target)) target = "A1";
 
             return new SpreadsheetAction
             {
                 Type = type.Value,
                 Target = target,
                 Content = content,
-                Description = PreviewDescription,
+                Description = PreviewDescription + (type == SpreadsheetActionType.Value && op != "excel.write_value" ? " [compat:" + Operation + "]" : string.Empty),
                 Status = ToSpreadsheetActionStatus(Status),
                 ErrorMessage = ErrorMessage,
                 ResultText = ResultText
@@ -433,6 +487,22 @@ namespace MSOfficeAIAssistant.Core.Actions
                 case SpreadsheetActionType.PivotTable: opName = "excel.create_pivot_table"; break;
                 case SpreadsheetActionType.NamedRange: opName = "excel.named_range"; break;
                 case SpreadsheetActionType.RemoveDuplicates: opName = "excel.remove_duplicates"; break;
+                case SpreadsheetActionType.FindReplace: opName = "excel.find_replace"; break;
+                case SpreadsheetActionType.SetCase: opName = "excel.set_case"; break;
+                case SpreadsheetActionType.TrimRange: opName = "excel.trim_range"; break;
+                case SpreadsheetActionType.NormalizeWhitespace: opName = "excel.normalize_whitespace"; break;
+                case SpreadsheetActionType.TextToColumns: opName = "excel.text_to_columns"; break;
+                case SpreadsheetActionType.WritePython: opName = "excel.write_python"; break;
+                case SpreadsheetActionType.ApplyTheme: opName = "excel.apply_theme"; break;
+                case SpreadsheetActionType.AnalyzeRange: opName = "excel.analyze_range"; break;
+                case SpreadsheetActionType.GetFormulaDetails: opName = "excel.get_formula_details"; break;
+                case SpreadsheetActionType.AddAnalysisColumn: opName = "excel.add_analysis_column"; break;
+                case SpreadsheetActionType.ImportWorksheet: opName = "excel.import_worksheet"; break;
+                case SpreadsheetActionType.CreateShape: opName = "excel.create_shape"; break;
+                case SpreadsheetActionType.UpdateShape: opName = "excel.update_shape"; break;
+                case SpreadsheetActionType.SetWorkbookRule: opName = "excel.set_workbook_rule"; break;
+                case SpreadsheetActionType.GetWorkbookRules: opName = "excel.get_workbook_rules"; break;
+                case SpreadsheetActionType.ClearWorkbookRules: opName = "excel.clear_workbook_rules"; break;
                 default: opName = "excel." + sa.Type.ToString().ToLowerInvariant(); break;
             }
 
@@ -500,10 +570,24 @@ namespace MSOfficeAIAssistant.Core.Actions
             else if (op.Contains("rename_section")) type = "rename_section";
             else if (op.Contains("set_notes")) type = "set_notes";
             else if (op.Contains("move_slide")) type = "move_slide";
+            else if (op.Contains("create_slide")) type = "create_slide";
+            else if (op.Contains("insert_image")) type = "insert_image";
+            else if (op.Contains("delete_slide")) type = "delete_slide";
+            else if (op.Contains("duplicate_slide")) type = "duplicate_slide";
+            else if (op.Contains("hide_slide") && !op.Contains("unhide")) type = "hide_slide";
+            else if (op.Contains("unhide_slide")) type = "unhide_slide";
+            else if (op.Contains("apply_layout") || op.Contains("set_layout")) type = "apply_layout";
+            else if (op.Contains("set_shape_text")) type = "set_shape_text";
+            else if (op.Contains("replace_text")) type = "replace_text";
+            else if (op.Contains("add_table")) type = "add_table";
+            else if (op.Contains("add_chart")) type = "add_chart";
+            else if (op.Contains("add_shape")) type = "add_shape";
+            else if (op.Contains("set_font")) type = "set_font";
+            else if (op.Contains("fit_content")) type = "fit_content";
 
             if (type == null) return null;
 
-            return new PowerPointAction
+            var ppa = new PowerPointAction
             {
                 Type = type,
                 Source = GetParameterInt("source"),
@@ -512,10 +596,29 @@ namespace MSOfficeAIAssistant.Core.Actions
                 Section = GetParameterInt("section"),
                 Name = GetParameterString("name"),
                 Notes = GetParameterString("notes"),
+                Layout = GetParameterString("layout"),
+                ShapeType = GetParameterString("shape_type") ?? GetParameterString("shape") ?? GetParameterString("type"),
+                ImagePath = GetParameterString("image_path") ?? GetParameterString("path"),
+                Text = GetParameterString("text") ?? GetParameterString("content"),
+                Title = GetParameterString("title"),
+                ChartType = GetParameterString("chart_type") ?? GetParameterString("chartType"),
+                AltText = GetParameterString("alt_text"),
+                Data = GetParameterString("data"),
+                Rows = GetParameterInt("rows"),
+                Cols = GetParameterInt("cols"),
+                FontName = GetParameterString("font_name"),
+                FontSize = GetParameterString("font_size"),
+                Bold = GetParameterString("bold"),
+                Italic = GetParameterString("italic"),
+                Color = GetParameterString("color"),
                 Status = ToPowerPointActionStatus(Status),
                 ErrorMessage = ErrorMessage,
                 ResultText = ResultText
             };
+            if (ppa.Slide == 0) ppa.Slide = GetParameterInt("index");
+            if (string.IsNullOrWhiteSpace(ppa.Name) && !string.IsNullOrWhiteSpace(ppa.Title)) ppa.Name = ppa.Title;
+            if (string.IsNullOrWhiteSpace(ppa.Text) && !string.IsNullOrWhiteSpace(GetParameterString("value"))) ppa.Text = GetParameterString("value");
+            return ppa;
         }
 
         /// <summary>
@@ -555,6 +658,24 @@ namespace MSOfficeAIAssistant.Core.Actions
             if (pa.Section > 0) action.Parameters["section"] = pa.Section;
             if (!string.IsNullOrEmpty(pa.Name)) action.Parameters["name"] = pa.Name;
             if (!string.IsNullOrEmpty(pa.Notes)) action.Parameters["notes"] = pa.Notes;
+            if (!string.IsNullOrWhiteSpace(pa.Layout)) action.Parameters["layout"] = pa.Layout;
+            if (!string.IsNullOrWhiteSpace(pa.ShapeType)) action.Parameters["shape_type"] = pa.ShapeType;
+            if (!string.IsNullOrWhiteSpace(pa.ImagePath)) action.Parameters["image_path"] = pa.ImagePath;
+            if (!string.IsNullOrWhiteSpace(pa.Text)) action.Parameters["text"] = pa.Text;
+            if (!string.IsNullOrWhiteSpace(pa.Title)) action.Parameters["title"] = pa.Title;
+            if (!string.IsNullOrWhiteSpace(pa.ChartType)) action.Parameters["chart_type"] = pa.ChartType;
+            if (!string.IsNullOrWhiteSpace(pa.AltText)) action.Parameters["alt_text"] = pa.AltText;
+            if (!string.IsNullOrWhiteSpace(pa.Data)) action.Parameters["data"] = pa.Data;
+            if (pa.Rows > 0) action.Parameters["rows"] = pa.Rows;
+            if (pa.Cols > 0) action.Parameters["cols"] = pa.Cols;
+            if (!string.IsNullOrWhiteSpace(pa.FontName)) action.Parameters["font_name"] = pa.FontName;
+            if (!string.IsNullOrWhiteSpace(pa.FontSize)) action.Parameters["font_size"] = pa.FontSize;
+            if (!string.IsNullOrWhiteSpace(pa.Bold)) action.Parameters["bold"] = pa.Bold;
+            if (!string.IsNullOrWhiteSpace(pa.Italic)) action.Parameters["italic"] = pa.Italic;
+            if (!string.IsNullOrWhiteSpace(pa.Color)) action.Parameters["color"] = pa.Color;
+            if (pa.ExtraAttributes != null)
+                foreach (var kv in pa.ExtraAttributes)
+                    if (!action.Parameters.ContainsKey(kv.Key)) action.Parameters[kv.Key] = kv.Value;
 
             return action;
         }

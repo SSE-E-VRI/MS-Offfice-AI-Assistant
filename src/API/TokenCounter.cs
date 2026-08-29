@@ -9,6 +9,12 @@ namespace MSOfficeAIAssistant.API
     {
         private static readonly Regex WordRegex = new Regex(@"\S+", RegexOptions.Compiled);
 
+        public static int CountWords(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0;
+            return WordRegex.Matches(text).Count;
+        }
+
         public static int CountTokens(string text)
         {
             if (string.IsNullOrEmpty(text)) return 0;

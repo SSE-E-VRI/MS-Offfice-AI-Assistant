@@ -2,7 +2,7 @@
 ; Target: 64-bit Microsoft Office (Word, Excel, PowerPoint)
 
 #define MyAppName "MS Office AI Assistant (64-bit)"
-#define MyAppVersion "0.5.0"
+#define MyAppVersion "0.6.0"
 #define MyAppPublisher "D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302"
 #define MyAppURL ""
 #define MyAppExeName "MSOfficeAIAssistant.dll"

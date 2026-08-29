@@ -21,7 +21,23 @@ namespace MSOfficeAIAssistant.Core
         Chart,
         PivotTable,
         NamedRange,
-        RemoveDuplicates
+        RemoveDuplicates,
+        FindReplace,
+        SetCase,
+        TrimRange,
+        NormalizeWhitespace,
+        TextToColumns,
+        WritePython,
+        ApplyTheme,
+        AnalyzeRange,
+        GetFormulaDetails,
+        AddAnalysisColumn,
+        ImportWorksheet,
+        CreateShape,
+        UpdateShape,
+        SetWorkbookRule,
+        GetWorkbookRules,
+        ClearWorkbookRules
     }
 
     public enum SpreadsheetActionStatus
@@ -131,6 +147,22 @@ namespace MSOfficeAIAssistant.Core
                     case SpreadsheetActionType.PivotTable: return "pivot";
                     case SpreadsheetActionType.NamedRange: return "name";
                     case SpreadsheetActionType.RemoveDuplicates: return "dedupe";
+                    case SpreadsheetActionType.FindReplace: return "find";
+                    case SpreadsheetActionType.SetCase: return "case";
+                    case SpreadsheetActionType.TrimRange: return "trim";
+                    case SpreadsheetActionType.NormalizeWhitespace: return "norm";
+                    case SpreadsheetActionType.TextToColumns: return "split";
+                    case SpreadsheetActionType.WritePython: return "py";
+                    case SpreadsheetActionType.ApplyTheme: return "theme";
+                    case SpreadsheetActionType.AnalyzeRange: return "analyze";
+                    case SpreadsheetActionType.GetFormulaDetails: return "fxinfo";
+                    case SpreadsheetActionType.AddAnalysisColumn: return "aicol";
+                    case SpreadsheetActionType.ImportWorksheet: return "import";
+                    case SpreadsheetActionType.CreateShape: return "shape";
+                    case SpreadsheetActionType.UpdateShape: return "shape+";
+                    case SpreadsheetActionType.SetWorkbookRule: return "rule";
+                    case SpreadsheetActionType.GetWorkbookRules: return "rules";
+                    case SpreadsheetActionType.ClearWorkbookRules: return "clear";
                     default: return "val";
                 }
             }
@@ -138,19 +170,21 @@ namespace MSOfficeAIAssistant.Core
 
         public bool IsUndoable
         {
-            get
+            get { return IsUndoableForType(_type); }
+        }
+
+        public static bool IsUndoableForType(SpreadsheetActionType type)
+        {
+            switch (type)
             {
-                switch (_type)
-                {
-                    case SpreadsheetActionType.RemoveDuplicates:
-                    case SpreadsheetActionType.CreateTable:
-                    case SpreadsheetActionType.Chart:
-                    case SpreadsheetActionType.PivotTable:
-                    case SpreadsheetActionType.NamedRange:
-                        return false;
-                    default:
-                        return true;
-                }
+                case SpreadsheetActionType.RemoveDuplicates:
+                case SpreadsheetActionType.CreateTable:
+                case SpreadsheetActionType.Chart:
+                case SpreadsheetActionType.PivotTable:
+                case SpreadsheetActionType.NamedRange:
+                    return false;
+                default:
+                    return true;
             }
         }
 
@@ -171,12 +205,62 @@ namespace MSOfficeAIAssistant.Core
         private const int MaxExcelRow = 1048576;
         private const int MaxExcelColumn = 16384;
 
-        // Validates one bounded, standard A1 cell or range. Sheet-qualified references,
-        // whole columns/rows, and multi-area ranges are intentionally excluded so an AI
-        // response cannot turn a small request into a workbook-wide edit.
+        // Validates one bounded, standard A1 cell or range. Sheet-qualified references
+        // like Sheet1!A1 or 'My Sheet'!A1:B2 are now accepted; whole columns/rows and
+        // multi-area ranges are still excluded so an AI response cannot turn a small
+        // request into a workbook-wide edit.
         private static readonly Regex CellAddressRegex = new Regex(
             @"^([A-Za-z]{1,3})([1-9][0-9]{0,6})(?::([A-Za-z]{1,3})([1-9][0-9]{0,6}))?$",
             RegexOptions.Compiled);
+
+        public static bool IsSafeSheetName(string sheetName)
+        {
+            if (string.IsNullOrWhiteSpace(sheetName)) return false;
+            string s = sheetName.Trim();
+            if (s.Length == 0 || s.Length > 31) return false;
+            if (s.IndexOf(':') >= 0 || s.IndexOf('\\') >= 0 || s.IndexOf('/') >= 0 || s.IndexOf('?') >= 0 || s.IndexOf('*') >= 0 || s.IndexOf('[') >= 0 || s.IndexOf(']') >= 0) return false;
+            return true;
+        }
+
+        public static bool TryParseSheetQualifiedTarget(string target, out string sheetName, out string rangePart)
+        {
+            sheetName = null;
+            rangePart = null;
+            if (string.IsNullOrWhiteSpace(target)) return false;
+            string trimmed = target.Trim();
+            int excl = trimmed.LastIndexOf('!');
+            if (excl < 0)
+            {
+                rangePart = trimmed;
+                return true;
+            }
+            string sheetPart = trimmed.Substring(0, excl);
+            string range = trimmed.Substring(excl + 1);
+            if (string.IsNullOrWhiteSpace(range)) return false;
+            // Handle quoted sheet name: 'My Sheet' or 'O''Brien' -> O'Brien
+            if (sheetPart.Length >= 2 && sheetPart[0] == '\'' && sheetPart[sheetPart.Length - 1] == '\'')
+            {
+                sheetPart = sheetPart.Substring(1, sheetPart.Length - 2).Replace("''", "'");
+            }
+            sheetPart = sheetPart.Trim();
+            if (!IsSafeSheetName(sheetPart)) return false;
+            sheetName = sheetPart;
+            rangePart = range.Trim();
+            return true;
+        }
+
+        public static string BuildSheetQualifiedAddress(string sheetName, string rangeAddress)
+        {
+            if (string.IsNullOrWhiteSpace(rangeAddress)) return string.Empty;
+            if (string.IsNullOrWhiteSpace(sheetName)) return rangeAddress.Trim();
+            string s = sheetName.Trim();
+            bool needsQuote = s.IndexOf(' ') >= 0 || s.IndexOf('\'') >= 0 || s.IndexOf('-') >= 0;
+            if (needsQuote)
+            {
+                s = "'" + s.Replace("'", "''") + "'";
+            }
+            return s + "!" + rangeAddress.Trim();
+        }
 
         public static bool IsSafeTarget(string target)
         {
@@ -193,7 +277,12 @@ namespace MSOfficeAIAssistant.Core
 
             if (string.IsNullOrWhiteSpace(target)) return false;
 
-            Match match = CellAddressRegex.Match(target.Trim());
+            string sheet;
+            string rangePart;
+            if (!TryParseSheetQualifiedTarget(target, out sheet, out rangePart)) return false;
+            if (string.IsNullOrWhiteSpace(rangePart)) return false;
+
+            Match match = CellAddressRegex.Match(rangePart.Trim());
             if (!match.Success) return false;
 
             startColumn = ColumnLetterToIndex(match.Groups[1].Value);
@@ -388,6 +477,22 @@ namespace MSOfficeAIAssistant.Core
             if (op == "excel.create_pivot_table") { actionType = SpreadsheetActionType.PivotTable; return true; }
             if (op == "excel.named_range") { actionType = SpreadsheetActionType.NamedRange; return true; }
             if (op == "excel.remove_duplicates") { actionType = SpreadsheetActionType.RemoveDuplicates; return true; }
+            if (op == "excel.find_replace") { actionType = SpreadsheetActionType.FindReplace; return true; }
+            if (op == "excel.set_case") { actionType = SpreadsheetActionType.SetCase; return true; }
+            if (op == "excel.trim_range") { actionType = SpreadsheetActionType.TrimRange; return true; }
+            if (op == "excel.normalize_whitespace") { actionType = SpreadsheetActionType.NormalizeWhitespace; return true; }
+            if (op == "excel.text_to_columns") { actionType = SpreadsheetActionType.TextToColumns; return true; }
+            if (op == "excel.write_python") { actionType = SpreadsheetActionType.WritePython; return true; }
+            if (op == "excel.apply_theme") { actionType = SpreadsheetActionType.ApplyTheme; return true; }
+            if (op == "excel.analyze_range") { actionType = SpreadsheetActionType.AnalyzeRange; return true; }
+            if (op == "excel.get_formula_details") { actionType = SpreadsheetActionType.GetFormulaDetails; return true; }
+            if (op == "excel.add_analysis_column") { actionType = SpreadsheetActionType.AddAnalysisColumn; return true; }
+            if (op == "excel.import_worksheet") { actionType = SpreadsheetActionType.ImportWorksheet; return true; }
+            if (op == "excel.create_shape") { actionType = SpreadsheetActionType.CreateShape; return true; }
+            if (op == "excel.update_shape") { actionType = SpreadsheetActionType.UpdateShape; return true; }
+            if (op == "excel.set_workbook_rule") { actionType = SpreadsheetActionType.SetWorkbookRule; return true; }
+            if (op == "excel.get_workbook_rules") { actionType = SpreadsheetActionType.GetWorkbookRules; return true; }
+            if (op == "excel.clear_workbook_rules") { actionType = SpreadsheetActionType.ClearWorkbookRules; return true; }
 
             return false;
         }
@@ -401,10 +506,13 @@ namespace MSOfficeAIAssistant.Core
                    actionType == SpreadsheetActionType.Filter ||
                    actionType == SpreadsheetActionType.DataValidation ||
                    actionType == SpreadsheetActionType.PivotTable ||
-                   actionType == SpreadsheetActionType.NamedRange;
+                   actionType == SpreadsheetActionType.NamedRange ||
+                   actionType == SpreadsheetActionType.FindReplace ||
+                   actionType == SpreadsheetActionType.SetCase ||
+                   actionType == SpreadsheetActionType.TextToColumns;
         }
 
-        private static int ColumnLetterToIndex(string column)
+        public static int ColumnLetterToIndex(string column)
         {
             if (string.IsNullOrWhiteSpace(column)) return 0;
             int result = 0;

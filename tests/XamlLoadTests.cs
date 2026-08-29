@@ -25,6 +25,7 @@ namespace MSOfficeAIAssistant.Tests
             TestSettingsWindowLoadsAndLaysOut();
             TestActionHistoryWindowWrapsLongEntries();
             TestResponsePreviewWindowShowsCleanedContent();
+            TestDocumentCompareWindowLoadsAndLaysOut();
         }
 
         private static void TestChatSidebarLoadsAndLaysOut()
@@ -241,6 +242,19 @@ namespace MSOfficeAIAssistant.Tests
             {
                 throw new Exception("The raw response must stay available unchanged for the toggle.");
             }
+        }
+
+        /// <summary>
+        /// DocumentCompareWindow (Slice 5) merges the same Theme/Tokens.xaml + Controls.xaml
+        /// dictionaries as every other window here, via the same StaticResource-resolved-at-load
+        /// mechanism this file exists to test -- it was the one new window this cycle that had no
+        /// construction test, so a bad/missing resource key would have compiled clean and only
+        /// thrown the first time a user clicked "Compare Docs" in a live host.
+        /// </summary>
+        private static void TestDocumentCompareWindowLoadsAndLaysOut()
+        {
+            var window = new DocumentCompareWindow();
+            ForceLayout(window, window.Width, window.Height);
         }
 
         private static void ForceLayout(FrameworkElement element, double width, double height)

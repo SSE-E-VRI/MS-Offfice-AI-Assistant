@@ -27,15 +27,26 @@ namespace MSOfficeAIAssistant.Tests
         // Hash last changed: see `git log -L 20,20:tests/GoldenMasterBaselineTests.cs` for the true
         // history — do not trust a "last changed" date hand-copied here, it will go stale.
         // Bump reason: PromptAssembler.BuildHostAwareSystemPrompt's Word branch gained a new
-        // paragraph instructing the model that an edit/rewrite/grammar-check response on selected
-        // text must be ONLY the replacement text -- no comparison table, no "Key Improvements" /
-        // "Final Recommendation" analysis, no alternate drafts. (Root cause of a real bug: asking
-        // to grammar-check a selection could get back a multi-section critique, and Insert applied
-        // the whole thing -- table included -- as the replacement.) This is the only baseline
-        // section that changed; verified purely additive by reconstructing the pre-change fixture
-        // text (stripping the new paragraph back out) and confirming ITS hash still equals the
-        // previous constant before recomputing this one.
-        public const string ExpectedGoldenMasterSha256 = "8c4c9b4a012ff55f3ad93b38a9bcc2e8adfae1562c553aff079a09ec60aade8d";
+        // paragraph listing the Word structured actions (find_replace, apply_style, set_case,
+        // reorganize_paragraphs, normalize_whitespace) via ToolRegistry.FormatActionTypesList,
+        // purely additive to the existing grammar-check instruction. Previous bump (Word
+        // edit must be ONLY replacement text) remains in the baseline. Verified additive by
+        // stripping the new paragraph and confirming the previous hash still matches.
+        // Second bump in this chain: also includes Slice 1 @-mention infrastructure (no prompt
+        // change) — the hash change here is solely the Word prompt addition, additive.
+        // Bump reason E2.1+E1+E2+E3+E4+E5: Excel prompt now lists 47 types (was 13) including analyze_range,
+        // get_formula_details, add_analysis_column, import_worksheet, create/update_shape, workbook rules.
+        // Hash: 852dde... -> 4d6ffa... (additive prompt expansion + tool catalog).
+        // Bump reason Word formatting family: Word prompt now lists 23 types (was 7) including set_font,
+        // set_paragraph_format, insert_break, set_page_setup, set_header_footer, insert_page_number,
+        // insert_hyperlink, insert_bookmark, insert_image, format_table, list_comments, delete/edit_comment,
+        // list/accept/reject_revision. Hash: 4d6ffa... -> dc9cc7... (purely additive Word tool catalog expansion).
+        // Bump reason compare_documents: added word.compare_documents to Word catalog. Hash: dc9cc7... -> 104fe9... (additive).
+        // Bump reason PowerPoint expanded catalog: PowerPoint prompt now lists 16 types (was 4) including create_slide, insert_image, delete_slide, duplicate_slide, hide_slide, unhide_slide, apply_layout, set_shape_text, add_table, add_chart, add_shape, set_font, fit_content, replace_text. Hash: 104fe9... -> 8dac11... (additive prompt expansion fixing D-5 partial allow-list and D-11 missing lifecycle/layout features).
+        // Bump2 add fit_content+replace_text to allow-list (complete 18-type catalog). Hash: 8dac11... -> 83b3fc...
+        // Bump reason translate: added word.translate to Word catalog (target_language, source_language, paragraph, text) with format preservation, side-by-side preview, Track Changes, auto-detection. Hash: 83b3fc... -> aba224... (additive).
+        // Bump reason Excel+PPT+Word expansion: Excel add_sparkline + pivot fields (rows/columns/values/filters) + chart scatter/area/doughnut + multi-line PY + CF custom color; PowerPoint translate_deck/audit_deck/audit_alt_text/set_alt_text (22 types); Word 11 leftovers (insert_toc/update_toc/export_pdf/save_as/toggle_track_changes/list_styles/set_proofing_language/merge_document/set_watermark/insert_caption/delete/apply_list/readability_stats) + 5 quick-prompt chips. Hash: aba224... -> 2bb340... (additive, no prompt/registry drift).
+        public const string ExpectedGoldenMasterSha256 = "2bb340e3391c4eb378d928f706be1732b0b2fcb7f7758abbb1714c1be20bc0b6";
 
         public static void RunAll()
         {
@@ -398,10 +409,10 @@ namespace MSOfficeAIAssistant.Tests
             List<SpreadsheetAction> unbounded = SpreadsheetActionParser.ExtractActions(unboundedColXml, out dummy);
             Assert(unbounded.Count == 0, "Unbounded column B:B is safely rejected");
 
-            // 2. Sheet-qualified target Sheet1!A1 must be rejected
+            // 2. Sheet-qualified target Sheet1!A1 is now accepted (E2.1)
             string sheetQualifiedXml = "<excel_actions><excel_action target=\"Sheet1!A1\" type=\"value\">42</excel_action></excel_actions>";
             List<SpreadsheetAction> sheetQual = SpreadsheetActionParser.ExtractActions(sheetQualifiedXml, out dummy);
-            Assert(sheetQual.Count == 0, "Sheet-qualified address Sheet1!A1 is safely rejected");
+            Assert(sheetQual.Count == 1 && sheetQual[0].Target == "SHEET1!A1", "Sheet-qualified address Sheet1!A1 is now accepted");
 
             // 3. Multi-area comma separated range A1,B2 must be rejected
             string multiAreaXml = "<excel_actions><excel_action target=\"A1,B2\" type=\"value\">42</excel_action></excel_actions>";

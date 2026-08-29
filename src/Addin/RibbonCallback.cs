@@ -1,5 +1,6 @@
 using System;
 using System.Windows.Forms;
+using MSOfficeAIAssistant.API.Models;
 using MSOfficeAIAssistant.Core;
 using MSOfficeAIAssistant.Core.QuickPrompts;
 using MSOfficeAIAssistant.UI;
@@ -181,6 +182,97 @@ namespace MSOfficeAIAssistant.Addin
             }
         }
 
+        public void OnRewriteVariants(object control)
+        {
+            try
+            {
+                Logger.Info("Ribbon Callback: OnRewriteVariants");
+                _taskPaneManager.ExecutePrompt(
+                    "Rewrite the selected text 3 different ways. Each alternative must fully " +
+                    "preserve the original meaning while varying phrasing and flow. Separate the " +
+                    "3 alternatives with a line containing only " + ChatMessage.VariantDelimiter + " " +
+                    "(before the first alternative, between each pair, and not after the last). " +
+                    "Output ONLY the 3 alternatives and the delimiter lines -- no numbering, no " +
+                    "headers, no commentary before, between, or after them.",
+                    "Rewrite Variants");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnRewriteVariants error", ex);
+            }
+        }
+
+        public void OnVisualizeAsTable(object control)
+        {
+            try
+            {
+                Logger.Info("Ribbon Callback: OnVisualizeAsTable");
+                _taskPaneManager.ExecutePrompt(
+                    "Convert the selected text into a Markdown table that best represents its " +
+                    "structure and content. Output ONLY the Markdown table, with no introductory " +
+                    "remarks, commentary, or text after it.",
+                    "Visualize as Table");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnVisualizeAsTable error", ex);
+            }
+        }
+
+        public void OnTone(object control)
+        {
+            try
+            {
+                string toneId = string.Empty;
+                try
+                {
+                    dynamic ctrl = control;
+                    toneId = Convert.ToString(ctrl.Id);
+                }
+                catch { }
+
+                string label;
+                string prompt;
+                switch (toneId)
+                {
+                    case "btnToneLetter":
+                        label = "Formal Letter";
+                        prompt = "Rewrite the provided text as a formal official letter using proper " +
+                            "government/corporate register: appropriate salutation, reference line, " +
+                            "numbered paragraphs where appropriate, and formal closing. Preserve all " +
+                            "factual details from the source material without elaboration.";
+                        break;
+                    case "btnToneExecutive":
+                        label = "Executive / Concise";
+                        prompt = "Rewrite the provided text as a concise executive summary. Focus on " +
+                            "key decisions, impacts, and recommendations. Avoid jargon and use plain " +
+                            "language. Include only the most critical facts needed for decision-making.";
+                        break;
+                    case "btnToneTechnical":
+                        label = "Technical";
+                        prompt = "Rewrite the provided text as a precise technical note: exact " +
+                            "terminology, specifications, and measurements retained verbatim, neutral " +
+                            "professional tone, no elaboration or informal phrasing.";
+                        break;
+                    case "btnToneOfficial":
+                    default:
+                        label = "Official Register";
+                        prompt = "Rewrite the provided text to conform to official government or " +
+                            "corporate register. Adjust tone and phrasing for formality and clarity " +
+                            "while preserving all factual content and meaning. Maintain the original " +
+                            "structure and intent.";
+                        break;
+                }
+
+                Logger.Info(string.Format("Ribbon Callback: OnTone ({0})", label));
+                _taskPaneManager.ExecutePrompt(prompt, string.Format("Tone: {0}", label));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("OnTone error", ex);
+            }
+        }
+
         public void OnOutline(object control)
         {
             try
@@ -283,6 +375,27 @@ namespace MSOfficeAIAssistant.Addin
                 MessageBox.Show(string.Format("Could not open settings: {0}", ex.Message), "AI Assistant", 
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        public bool GetVisible(object control)
+        {
+            try
+            {
+                dynamic ctrl = control;
+                string id = Convert.ToString(ctrl.Id);
+                // Slides (BuildDeck) is PowerPoint-only, mirroring QuickPromptRegistry host filtering
+                if (id == "btnBuildDeck")
+                {
+                    string host = null;
+                    try { host = _taskPaneManager != null ? _taskPaneManager.CurrentHostType : null; } catch { }
+                    if (!string.IsNullOrWhiteSpace(host))
+                        return string.Equals(host, "PowerPoint", StringComparison.OrdinalIgnoreCase);
+                    // If host not yet known (ribbon loads before host init), show it; it will be hidden after host sets and ribbon invalidates
+                    return true;
+                }
+                return true;
+            }
+            catch { return true; }
         }
     }
 }

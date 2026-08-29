@@ -27,7 +27,7 @@ namespace MSOfficeAIAssistant.Core
                     "1. Inspect the provided Worksheet Context with its explicit Column Letters (Col A, Col B, Col C, etc.) and Header names.\n" +
                     "2. When matching category/text columns with prefixes (e.g. '0001-non ferrous items'), use wildcard criteria (e.g. \"*non ferrous*\") in SUMIF/COUNTIF.\n" +
                     "3. Start row-level data formulas at Row 2 (e.g. F2, G2) rather than header Row 1.\n" +
-                    "4. Propose only bounded A1 cell/range changes (e.g. B2:B100, not unbounded full columns like B:B). Every change is previewed and requires user confirmation.\n" +
+                    "4. Propose only bounded A1 cell/range changes (e.g. B2:B100 or Sheet2!B2:B100, not unbounded full columns like B:B). Sheet-qualified targets like Sheet1!A1 or 'My Sheet'!B2 are allowed when the task spans sheets. Every change is previewed and requires user confirmation.\n" +
                     "5. ALWAYS return executable spreadsheet actions in a structured <excel_actions> XML block when a native change is requested:\n" +
                     "   <excel_actions>\n" +
                     "     <excel_action target=\"K20\" type=\"formula\" formula=\"=SUMIF(B2:B100, &quot;*non ferrous*&quot;, F2:F100)\" description=\"Total non-ferrous value\" />\n" +
@@ -37,7 +37,9 @@ namespace MSOfficeAIAssistant.Core
                     "   </excel_actions>\n" +
                     string.Format("6. Supported action types are {0}. ", ToolRegistry.FormatActionTypesList("Excel")) +
                     "Use the value attribute for each action's concise option (for example value=\"descending\", value=\"list:Open,Closed\", or value=\"columns:1,2\") and state any assumptions in the description.\n" +
-                    "7. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
+                    "7. For advanced analysis you may use excel.write_python with a single-line Python snippet via =PY() targeting a single cell (e.g. target=\"H2\" code=\"df['Total'].sum()\"); it runs in Excel's managed sandbox — never invent data, reference actual Table columns.\n" +
+                    "8. For whole-table styling use excel.apply_theme with a fixed palette: blue, green, grey, or railway — no freeform hex.\n" +
+                    "9. Provide a brief conversational summary above or below the action block without tutorial how-to steps.";
             }
             else if (string.Equals(hostType, "Word", StringComparison.OrdinalIgnoreCase))
             {
@@ -48,7 +50,10 @@ namespace MSOfficeAIAssistant.Core
                     "If the message includes [Selected Context] and asks to edit, rewrite, correct, proofread, fix, or polish that text, your entire response must be ONLY the finished replacement text -- " +
                     "no side-by-side original-vs-corrected table, no bulleted list of changes or rationale, no multiple candidate versions, and no headings such as 'Key Improvements' or 'Final Recommendation'. " +
                     "That response is inserted verbatim in place of the selection, so anything else you write lands in the document too. " +
-                    "Save that kind of analysis for when the user explicitly asks to review, critique, or explain the text rather than edit it.";
+                    "Save that kind of analysis for when the user explicitly asks to review, critique, or explain the text rather than edit it." +
+                    "\n\nWhen a structured document edit is requested, you may emit an optional <office_actions> JSON block for Word operations. " +
+                    string.Format("Supported Word actions are: {0}. ", ToolRegistry.FormatActionTypesList("Word")) +
+                    "Use them for find/replace, style, case, paragraph reorder, or whitespace normalization instead of instructing the user to do it manually.";
             }
             else if (string.Equals(hostType, "PowerPoint", StringComparison.OrdinalIgnoreCase))
             {
@@ -94,6 +99,12 @@ namespace MSOfficeAIAssistant.Core
             string baseContent = userContent ?? string.Empty;
             return string.Format("{0}\n\n{1}\nWhen you rely on an attached source, cite it using [Source: filename, page/section] and do not invent a source.",
                 baseContent, textAttachmentContext);
+        }
+
+        public static string AppendWordCountInstruction(string prompt, int targetWordCount)
+        {
+            if (string.IsNullOrWhiteSpace(prompt) || targetWordCount <= 0) return prompt ?? string.Empty;
+            return string.Format("{0}\n\n[Target length: approximately {1} words. Aim for within 15% of this count.]", prompt.TrimEnd(), targetWordCount);
         }
 
         /// <summary>

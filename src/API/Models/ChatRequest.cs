@@ -40,8 +40,25 @@ namespace MSOfficeAIAssistant.API.Models
                 {
                     _content = value;
                     OnPropertyChanged("Content");
+                    OnPropertyChanged("HasVariants");
                 }
             }
+        }
+
+        /// <summary>
+        /// Marker a "3 Variants" ribbon prompt is instructed to emit between each alternative
+        /// rewrite. Kept in one place so the prompt text (RibbonCallback.OnRewriteVariants) and
+        /// the parser (RewriteVariantParser) can never drift apart.
+        /// </summary>
+        public const string VariantDelimiter = "---VARIANT---";
+
+        /// <summary>Computed: true once streaming has produced the variant delimiter, so the
+        /// "Compare Variants" button can appear as soon as it's usable rather than only when
+        /// streaming finishes.</summary>
+        [JsonIgnore]
+        public bool HasVariants
+        {
+            get { return !string.IsNullOrEmpty(_content) && _content.IndexOf(VariantDelimiter, StringComparison.Ordinal) >= 0; }
         }
 
         [JsonIgnore]
@@ -104,6 +121,26 @@ namespace MSOfficeAIAssistant.API.Models
         /// </summary>
         [JsonIgnore]
         public string SourceSelectionBookmark { get; set; }
+
+        /// <summary>
+        /// The un-augmented prompt text and title this response was generated from (before
+        /// selection/document context was appended), set only for ribbon-triggered quick prompts
+        /// (Rewrite, Tone presets, 3 Variants, Generate, Continue, ...). Lets Regenerate re-run
+        /// the same command with freshly read context rather than resending stale prompt text.
+        /// Session-only, never serialized to conversation history.
+        /// </summary>
+        [JsonIgnore]
+        public string RegenerateSourcePrompt { get; set; }
+
+        [JsonIgnore]
+        public string RegenerateSourceTitle { get; set; }
+
+        /// <summary>Computed: true when this response can be regenerated or discarded.</summary>
+        [JsonIgnore]
+        public bool CanRegenerate
+        {
+            get { return !string.IsNullOrEmpty(RegenerateSourcePrompt); }
+        }
 
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.Actions.OfficeAction> _officeActions;
         private System.Collections.ObjectModel.ObservableCollection<MSOfficeAIAssistant.Core.SpreadsheetAction> _actions;
