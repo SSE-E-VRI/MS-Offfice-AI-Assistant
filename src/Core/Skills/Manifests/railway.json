@@ -154,5 +154,29 @@
     "default_mode": "Edit",
     "risk_ceiling": 1,
     "domain_pack": "railway"
+  },
+  {
+    "id": "explain_formula",
+    "name": "Explain Formula",
+    "description": "Explains a selected Excel formula step-by-step in plain language without modifying the workbook.",
+    "required_context": ["Selection"],
+    "preferred_host": "Excel",
+    "prompt_template": "Explain the formula in the selected Excel cell(s) step-by-step in plain language. Break down each function, reference, and argument using the provided Worksheet Context with Column Letters. Do not propose a new formula or modify the workbook; just explain how the existing formula works and what it returns.",
+    "output_structure": "Formula explanation",
+    "default_mode": "Chat",
+    "risk_ceiling": 0,
+    "domain_pack": "railway"
+  },
+  {
+    "id": "excel_data_cleanup",
+    "name": "Clean Data",
+    "description": "Suggests cleaning steps for Excel data: trim, normalize, text-to-columns, and deduplication.",
+    "required_context": ["Selection", "CurrentFile"],
+    "preferred_host": "Excel",
+    "prompt_template": "Review the selected Excel range for data-quality issues. Propose bounded cleanup actions using only excel.trim_range, excel.normalize_whitespace, excel.text_to_columns, and excel.remove_duplicates. Keep every target bounded (e.g. A2:A100) and describe assumptions in the action description. Do not invent data.",
+    "output_structure": "Data cleanup plan",
+    "default_mode": "Plan",
+    "risk_ceiling": 1,
+    "domain_pack": "railway"
   }
 ]

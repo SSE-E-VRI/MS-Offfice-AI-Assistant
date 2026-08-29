@@ -75,6 +75,41 @@ namespace MSOfficeAIAssistant.Core.QuickPrompts
                     // filter, "Build deck" would now show in Word and Excel too, which is a
                     // real behavior change from what shipped before this refactor.
                     HostFilter = "PowerPoint"
+                },
+                new QuickPrompt
+                {
+                    Id = "AnalyzeExcel",
+                    Label = "Analyze",
+                    PromptText = "Analyze the selected range or current table: report trends, outliers, min/max, distributions and suggest the best chart and PivotTable via excel.analyze_range and excel.create_chart/pivot_table actions.",
+                    HostFilter = "Excel"
+                },
+                new QuickPrompt
+                {
+                    Id = "FormulaVariants",
+                    Label = "Formula ideas",
+                    PromptText = "Propose 3 formula variants for the selected task (e.g. SUMIF, COUNTIF, AVERAGEIF) with different approaches, each as a separate excel.write_formula action so I can pick one to apply.",
+                    HostFilter = "Excel"
+                },
+                new QuickPrompt
+                {
+                    Id = "NotesForAll",
+                    Label = "Notes for all",
+                    PromptText = "Generate speaker notes for every slide in this deck, one set_notes action per slide.",
+                    HostFilter = "PowerPoint"
+                },
+                new QuickPrompt
+                {
+                    Id = "SlidesFromDeck",
+                    Label = "Slides from deck",
+                    PromptText = "Create slides from the attached deck file, preserving titles, bullets, sections and notes.",
+                    HostFilter = "PowerPoint"
+                },
+                new QuickPrompt
+                {
+                    Id = "ExcelToSlide",
+                    Label = "Chart this data",
+                    PromptText = "Take the attached Excel data and create a slide table and chart on the current slide via powerpoint.add_table and add_chart.",
+                    HostFilter = "PowerPoint"
                 }
             };
 

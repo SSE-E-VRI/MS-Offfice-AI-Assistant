@@ -203,6 +203,7 @@
     <Compile Include="Core\ConfigManager.cs" />
     <Compile Include="Core\ConversationStore.cs" />
     <Compile Include="Core\AppPaths.cs" />
+    <Compile Include="Core\WorkbookRulesStore.cs" />
     <Compile Include="Core\ActionAuditStore.cs" />
     <Compile Include="Core\VersionDetector.cs" />
     <Compile Include="Core\Logger.cs" />
@@ -239,6 +240,7 @@
     <Compile Include="Hosts\WordController.cs" />
     <Compile Include="Hosts\WordMarkdownRenderer.cs" />
     <Compile Include="Hosts\ExcelController.cs" />
+    <Compile Include="Hosts\ExcelChangeHighlighter.cs" />
     <Compile Include="Hosts\PowerPointController.cs" />
 
   </ItemGroup>

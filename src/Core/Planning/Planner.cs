@@ -131,6 +131,15 @@ namespace MSOfficeAIAssistant.Core.Planning
             return true;
         }
 
+        public static Plan BuildPowerPointReorgTemplate(string sourceRequest)
+        {
+            var actions = new List<OfficeAction>();
+            actions.Add(new OfficeAction { Host = "PowerPoint", Operation = "powerpoint.move_slide", Target = new ActionTarget { Slide = 1 }, Parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "source", 2 }, { "target", 1 } }, ExpectedResult = "Move slide 2 to position 1" });
+            actions.Add(new OfficeAction { Host = "PowerPoint", Operation = "powerpoint.create_section", Target = new ActionTarget { Slide = 1 }, Parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "name", "New Section" }, { "slide", 1 } }, ExpectedResult = "Create section before slide 1" });
+            actions.Add(new OfficeAction { Host = "PowerPoint", Operation = "powerpoint.set_notes", Target = new ActionTarget { Slide = 1 }, Parameters = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { { "slide", 1 }, { "notes", "Speaker notes" } }, ExpectedResult = "Set speaker notes" });
+            return BuildPlanFromActions("PowerPoint Reorg Plan", sourceRequest ?? "Reorganize deck", actions);
+        }
+
         /// <summary>
         /// Validates that a plan is internally consistent.
         /// Checks Order sequence (1..N with no gaps/duplicates after RenumberSteps),

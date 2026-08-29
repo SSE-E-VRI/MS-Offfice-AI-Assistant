@@ -972,6 +972,1317 @@ namespace MSOfficeAIAssistant.Hosts
             }
         }
 
+        public HostOperationResult ExecuteSetFont(string targetText, string fontName, string fontSizeStr, string boldStr, string italicStr, string underlineStr, string color, string highlight)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    // Locate first occurrence of targetText
+                    dynamic doc = app.ActiveDocument;
+                    int count = 0;
+                    try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                    bool found = false;
+                    for (int i = 1; i <= count; i++)
+                    {
+                        try
+                        {
+                            string paraText = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                            if (paraText.IndexOf(targetText, StringComparison.OrdinalIgnoreCase) >= 0)
+                            {
+                                range = doc.Paragraphs[i].Range;
+                                found = true;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                    if (!found)
+                    {
+                        // Try document Find
+                        try
+                        {
+                            range = doc.Content;
+                            dynamic find = range.Find;
+                            find.ClearFormatting(); try { find.Replacement.ClearFormatting(); } catch { }
+                            find.Text = targetText;
+                            find.Forward = true; find.Wrap = 0; find.Format = false;
+                            bool ok = find.Execute();
+                            if (!ok) return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText));
+                            // after Execute, range is at found location
+                        }
+                        catch { return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText)); }
+                    }
+                }
+                else
+                {
+                    try
+                    {
+                        dynamic selApp = _rawAppObj;
+                        dynamic sel = selApp.Selection;
+                        if (sel != null && Convert.ToInt32(sel.Type) != 1 && sel.Range != null) range = sel.Range;
+                        else range = app.ActiveDocument.Content;
+                    }
+                    catch { range = app.ActiveDocument.Content; }
+                }
+                if (range == null) return HostOperationResult.Failed("Could not resolve target range for font change.");
+
+                dynamic font = range.Font;
+                if (!string.IsNullOrWhiteSpace(fontName)) try { font.Name = fontName.Trim(); } catch { }
+                if (!string.IsNullOrWhiteSpace(fontSizeStr))
+                {
+                    float sz; if (float.TryParse(fontSizeStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out sz) && sz >= 6 && sz <= 72) try { font.Size = sz; } catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(boldStr))
+                {
+                    bool b; if (bool.TryParse(boldStr, out b)) try { font.Bold = b ? 1 : 0; } catch { }
+                    else if (boldStr.Trim() == "1" || boldStr.Trim().ToLowerInvariant() == "true") try { font.Bold = 1; } catch { }
+                    else if (boldStr.Trim() == "0" || boldStr.Trim().ToLowerInvariant() == "false") try { font.Bold = 0; } catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(italicStr))
+                {
+                    bool b; if (bool.TryParse(italicStr, out b)) try { font.Italic = b ? 1 : 0; } catch { }
+                    else if (italicStr.Trim().ToLowerInvariant() == "true") try { font.Italic = 1; } catch { }
+                    else if (italicStr.Trim().ToLowerInvariant() == "false") try { font.Italic = 0; } catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(underlineStr))
+                {
+                    string u = underlineStr.Trim().ToLowerInvariant();
+                    try
+                    {
+                        if (u == "true" || u == "1" || u == "single") font.Underline = 1; // wdUnderlineSingle
+                        else if (u == "false" || u == "0" || u == "none") font.Underline = 0;
+                    }
+                    catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(color))
+                {
+                    try { font.Color = HexToWordColor(color.Trim()); } catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(highlight))
+                {
+                    try
+                    {
+                        int hi = ParseHighlightIndex(highlight.Trim());
+                        if (hi >= 0) range.HighlightColorIndex = hi;
+                    }
+                    catch { }
+                }
+                return HostOperationResult.Ok("Font formatting applied.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteSetFont failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteSetFont");
+            }
+        }
+
+        private static int HexToWordColor(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex)) return 0;
+            string h = hex.Trim().TrimStart('#');
+            if (h.Length != 6) return 0;
+            int r = Convert.ToInt32(h.Substring(0, 2), 16);
+            int g = Convert.ToInt32(h.Substring(2, 2), 16);
+            int b = Convert.ToInt32(h.Substring(4, 2), 16);
+            // Word VBA RGB: R + G*256 + B*65536 (BGR)
+            return r + (g * 256) + (b * 65536);
+        }
+
+        private static int ParseHighlightIndex(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return -1;
+            string n = name.Trim().ToLowerInvariant();
+            if (n == "none" || n == "0") return 0;
+            if (n == "yellow") return 7;
+            if (n == "green") return 4;
+            if (n == "cyan") return 8;
+            if (n == "magenta") return 5;
+            if (n == "blue") return 2;
+            if (n == "red") return 6;
+            if (n == "darkblue") return 9;
+            if (n == "darkyellow") return 14;
+            int v; if (int.TryParse(n, out v) && v >= 0 && v <= 16) return v;
+            return -1;
+        }
+
+        public HostOperationResult ExecuteSetParagraphFormat(string targetText, string alignment, string lineSpacingStr, string spaceBeforeStr, string spaceAfterStr, string leftIndentStr, string firstLineIndentStr)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    dynamic doc = app.ActiveDocument;
+                    int count = 0; try { count = Convert.ToInt32(doc.Paragraphs.Count); } catch { }
+                    bool found = false;
+                    for (int i = 1; i <= count; i++)
+                    {
+                        try
+                        {
+                            string paraText = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                            if (paraText.IndexOf(targetText, StringComparison.OrdinalIgnoreCase) >= 0) { range = doc.Paragraphs[i].Range; found = true; break; }
+                        }
+                        catch { }
+                    }
+                    if (!found) return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText));
+                }
+                else
+                {
+                    try
+                    {
+                        dynamic selApp = _rawAppObj;
+                        dynamic sel = selApp.Selection;
+                        if (sel != null && Convert.ToInt32(sel.Type) != 1 && sel.Range != null) range = sel.Range;
+                        else range = app.ActiveDocument.Content;
+                    }
+                    catch { range = app.ActiveDocument.Content; }
+                }
+                if (range == null) return HostOperationResult.Failed("Could not resolve target range.");
+
+                dynamic pf = range.ParagraphFormat;
+                if (!string.IsNullOrWhiteSpace(alignment))
+                {
+                    string a = alignment.Trim().ToLowerInvariant();
+                    int wdAlign = -1;
+                    if (a == "left") wdAlign = 0;
+                    else if (a == "center") wdAlign = 1;
+                    else if (a == "right") wdAlign = 2;
+                    else if (a == "justify") wdAlign = 3;
+                    if (wdAlign >= 0) try { pf.Alignment = wdAlign; } catch { }
+                }
+                float f;
+                if (!string.IsNullOrWhiteSpace(lineSpacingStr) && float.TryParse(lineSpacingStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { pf.LineSpacing = f * 12f; pf.LineSpacingRule = 0; } catch { } // wdLineSpaceMultiple=5? Use 0 for AtLeast approximated
+                if (!string.IsNullOrWhiteSpace(spaceBeforeStr) && float.TryParse(spaceBeforeStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { pf.SpaceBefore = f; } catch { }
+                if (!string.IsNullOrWhiteSpace(spaceAfterStr) && float.TryParse(spaceAfterStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { pf.SpaceAfter = f; } catch { }
+                if (!string.IsNullOrWhiteSpace(leftIndentStr) && float.TryParse(leftIndentStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { pf.LeftIndent = f; } catch { }
+                if (!string.IsNullOrWhiteSpace(firstLineIndentStr) && float.TryParse(firstLineIndentStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { pf.FirstLineIndent = f; } catch { }
+
+                return HostOperationResult.Ok("Paragraph formatting applied.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteSetParagraphFormat failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteSetParagraphFormat");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertBreak(string breakType, string targetText = null)
+        {
+            if (string.IsNullOrWhiteSpace(breakType))
+                return HostOperationResult.Failed("Break type is required (page, column, section_next_page, section_continuous).");
+            string bt = breakType.Trim().ToLowerInvariant();
+            int wdBreak = -1;
+            if (bt == "page" || bt == "page_break") wdBreak = 7; // wdPageBreak
+            else if (bt == "column" || bt == "column_break") wdBreak = 8;
+            else if (bt == "section_next_page" || bt == "section_next") wdBreak = 2;
+            else if (bt == "section_continuous") wdBreak = 3;
+            else return HostOperationResult.Failed("Break type must be page, column, section_next_page, or section_continuous.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    // Find target then collapse to end
+                    dynamic doc = app.ActiveDocument;
+                    range = doc.Content;
+                    dynamic find = range.Find;
+                    find.ClearFormatting(); try { find.Replacement.ClearFormatting(); } catch { }
+                    find.Text = targetText; find.Forward = true; find.Wrap = 0; find.Format = false;
+                    bool ok = find.Execute();
+                    if (!ok) return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText));
+                    range.Collapse(0); // wdCollapseEnd =0
+                    try { range.MoveStart(1, 1); } catch { } // move past found text? Instead collapse end already
+                    range.Collapse(0);
+                }
+                else
+                {
+                    try { range = app.Selection.Range; } catch { range = app.ActiveDocument.Content; }
+                    try { range.Collapse(0); } catch { } // wdCollapseEnd
+                }
+                if (range == null) return HostOperationResult.Failed("Could not resolve insertion range.");
+                range.InsertBreak(wdBreak);
+                return HostOperationResult.Ok(string.Format("Inserted {0} break.", bt));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertBreak failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertBreak");
+            }
+        }
+
+        public HostOperationResult ExecuteSetPageSetup(string orientation, string topMargin, string bottomMargin, string leftMargin, string rightMargin)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic section = null;
+                try { section = doc.Sections[1]; } catch { }
+                if (section == null) return HostOperationResult.Failed("Could not access document sections.");
+                dynamic ps = section.PageSetup;
+
+                if (!string.IsNullOrWhiteSpace(orientation))
+                {
+                    string o = orientation.Trim().ToLowerInvariant();
+                    if (o == "portrait") try { ps.Orientation = 0; } catch { }
+                    else if (o == "landscape") try { ps.Orientation = 1; } catch { }
+                }
+                float f;
+                if (!string.IsNullOrWhiteSpace(topMargin) && float.TryParse(topMargin, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { ps.TopMargin = app.InchesToPoints(f); } catch { try { ps.TopMargin = f * 72; } catch { } }
+                if (!string.IsNullOrWhiteSpace(bottomMargin) && float.TryParse(bottomMargin, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { ps.BottomMargin = app.InchesToPoints(f); } catch { try { ps.BottomMargin = f * 72; } catch { } }
+                if (!string.IsNullOrWhiteSpace(leftMargin) && float.TryParse(leftMargin, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { ps.LeftMargin = app.InchesToPoints(f); } catch { try { ps.LeftMargin = f * 72; } catch { } }
+                if (!string.IsNullOrWhiteSpace(rightMargin) && float.TryParse(rightMargin, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f))
+                    try { ps.RightMargin = app.InchesToPoints(f); } catch { try { ps.RightMargin = f * 72; } catch { } }
+
+                return HostOperationResult.Ok("Page setup updated.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteSetPageSetup failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteSetPageSetup");
+            }
+        }
+
+        public HostOperationResult ExecuteSetHeaderFooter(string headerText, string footerText)
+        {
+            if (string.IsNullOrWhiteSpace(headerText) && string.IsNullOrWhiteSpace(footerText))
+                return HostOperationResult.Failed("Header or footer text must be provided.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic section = null; try { section = doc.Sections[1]; } catch { }
+                if (section == null) return HostOperationResult.Failed("Could not access sections.");
+
+                if (!string.IsNullOrWhiteSpace(headerText))
+                {
+                    try
+                    {
+                        dynamic header = section.Headers[1]; // wdHeaderFooterPrimary
+                        header.Range.Text = headerText;
+                    }
+                    catch (Exception ex) { Logger.Warn(string.Format("Set header failed: {0}", ex.Message)); return HostOperationResult.Failed("Could not set header: " + ex.Message); }
+                }
+                if (!string.IsNullOrWhiteSpace(footerText))
+                {
+                    try
+                    {
+                        dynamic footer = section.Footers[1];
+                        footer.Range.Text = footerText;
+                    }
+                    catch (Exception ex) { Logger.Warn(string.Format("Set footer failed: {0}", ex.Message)); return HostOperationResult.Failed("Could not set footer: " + ex.Message); }
+                }
+                return HostOperationResult.Ok("Header/footer updated.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteSetHeaderFooter failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteSetHeaderFooter");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertPageNumber(string alignment, string headerFooter)
+        {
+            string align = (alignment ?? "center").Trim().ToLowerInvariant();
+            string hf = (headerFooter ?? "footer").Trim().ToLowerInvariant();
+            int wdAlign = 1; // center
+            if (align == "left") wdAlign = 0;
+            else if (align == "right") wdAlign = 2;
+            else if (align == "center") wdAlign = 1;
+            else if (align == "justify") wdAlign = 3;
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic section = null; try { section = doc.Sections[1]; } catch { }
+                if (section == null) return HostOperationResult.Failed("Could not access sections.");
+
+                dynamic targetRange = null;
+                if (hf == "header") try { targetRange = section.Headers[1].Range; } catch { }
+                else try { targetRange = section.Footers[1].Range; } catch { }
+                if (targetRange == null) return HostOperationResult.Failed("Could not access header/footer range.");
+
+                try { targetRange.Collapse(0); } catch { }
+                // Alignment
+                try { targetRange.ParagraphFormat.Alignment = wdAlign; } catch { }
+                targetRange.Fields.Add(targetRange, 33); // wdFieldPage =33
+                return HostOperationResult.Ok(string.Format("Inserted page number in {0} ({1}).", hf, align));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertPageNumber failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertPageNumber");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertHyperlink(string displayText, string address, string targetText = null)
+        {
+            if (string.IsNullOrWhiteSpace(displayText)) return HostOperationResult.Failed("Display text is required.");
+            if (string.IsNullOrWhiteSpace(address)) return HostOperationResult.Failed("Address is required.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    // Find targetText and use its range
+                    range = doc.Content;
+                    dynamic find = range.Find;
+                    find.ClearFormatting(); try { find.Replacement.ClearFormatting(); } catch { }
+                    find.Text = targetText; find.Forward = true; find.Wrap = 0; find.Format = false;
+                    bool ok = find.Execute();
+                    if (!ok) return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText));
+                    range.Text = string.Empty; // clear target for replacement
+                }
+                else
+                {
+                    try { range = app.Selection.Range; } catch { range = doc.Content; }
+                    try { if (app.Selection.Type != Word.Enums.WdSelectionType.wdSelectionIP) range.Text = string.Empty; } catch { }
+                    range.Collapse(0);
+                }
+                if (range == null) return HostOperationResult.Failed("Could not resolve range.");
+                // Insert hyperlink via Hyperlinks.Add
+                dynamic hl = doc.Hyperlinks.Add(range, address, Type.Missing, Type.Missing, displayText, Type.Missing);
+                if (hl == null) return HostOperationResult.Failed("Could not create hyperlink.");
+                return HostOperationResult.Ok(string.Format("Inserted hyperlink '{0}' -> {1}.", displayText, address));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertHyperlink failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertHyperlink");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertBookmark(string name, string targetText = null)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return HostOperationResult.Failed("Bookmark name is required.");
+            string trimmed = name.Trim();
+            if (!System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^[A-Za-z_][A-Za-z0-9_]*$"))
+                return HostOperationResult.Failed("Bookmark name must start with a letter or underscore and contain only letters, digits, underscore.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                if (doc.Bookmarks.Exists(trimmed)) return HostOperationResult.Failed(string.Format("Bookmark '{0}' already exists.", trimmed));
+
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(targetText))
+                {
+                    range = doc.Content;
+                    dynamic find = range.Find;
+                    find.ClearFormatting(); try { find.Replacement.ClearFormatting(); } catch { }
+                    find.Text = targetText; find.Forward = true; find.Wrap = 0; find.Format = false;
+                    bool ok = find.Execute();
+                    if (!ok) return HostOperationResult.Failed(string.Format("Target text '{0}' not found.", targetText));
+                }
+                else
+                {
+                    try { range = app.Selection.Range; } catch { range = doc.Content; }
+                }
+                if (range == null) return HostOperationResult.Failed("Could not resolve range.");
+                doc.Bookmarks.Add(trimmed, range);
+                return HostOperationResult.Ok(string.Format("Inserted bookmark '{0}'.", trimmed));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertBookmark failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertBookmark");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertImage(string imagePath, string widthStr, string heightStr)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath)) return HostOperationResult.Failed("Image path is required.");
+            if (!System.IO.File.Exists(imagePath)) return HostOperationResult.Failed(string.Format("Image file not found: {0}", imagePath));
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic range = null; try { range = app.Selection.Range; } catch { range = app.ActiveDocument.Content; }
+                try { range.Collapse(0); } catch { }
+                if (range == null) return HostOperationResult.Failed("Could not resolve range.");
+
+                float w = 0, h = 0;
+                float.TryParse(widthStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out w);
+                float.TryParse(heightStr, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out h);
+
+                dynamic shape = null;
+                if (w > 0 && h > 0)
+                {
+                    try { shape = app.ActiveDocument.InlineShapes.AddPicture(imagePath, false, true, range); }
+                    catch { }
+                    if (shape != null)
+                    {
+                        try { if (w > 0) shape.Width = w; } catch { }
+                        try { if (h > 0) shape.Height = h; } catch { }
+                    }
+                }
+                else
+                {
+                    shape = app.ActiveDocument.InlineShapes.AddPicture(imagePath, false, true, range);
+                }
+                if (shape == null) return HostOperationResult.Failed("Could not insert image.");
+                return HostOperationResult.Ok(string.Format("Inserted image {0}.", System.IO.Path.GetFileName(imagePath)));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteInsertImage failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteInsertImage");
+            }
+        }
+
+        public HostOperationResult ExecuteFormatTable(int tableIndex, string styleName, string bordersStr, string shading)
+        {
+            if (tableIndex < 1) return HostOperationResult.Failed("Table index must be at least 1.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Tables.Count); } catch { }
+                if (tableIndex > count) return HostOperationResult.Failed(string.Format("Table {0} does not exist (document has {1} tables).", tableIndex, count));
+
+                dynamic table = doc.Tables[tableIndex];
+                if (!string.IsNullOrWhiteSpace(styleName))
+                {
+                    try { table.Style = styleName.Trim(); } catch { try { table.set_Style(styleName.Trim()); } catch { } }
+                }
+                if (!string.IsNullOrWhiteSpace(bordersStr))
+                {
+                    string b = bordersStr.Trim().ToLowerInvariant();
+                    bool enable = b == "true" || b == "1" || b == "yes";
+                    try { table.Borders.Enable = enable ? 1 : 0; } catch { }
+                }
+                if (!string.IsNullOrWhiteSpace(shading))
+                {
+                    try
+                    {
+                        int col = HexToWordColor(shading.Trim());
+                        // Apply to header row
+                        try { table.Rows[1].Shading.BackgroundPatternColor = col; } catch { }
+                    }
+                    catch { }
+                }
+                return HostOperationResult.Ok(string.Format("Formatted table {0}.", tableIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteFormatTable failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteFormatTable");
+            }
+        }
+
+        public HostOperationResult ExecuteListComments()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Comments.Count); } catch { }
+                if (count == 0) return HostOperationResult.Ok("No comments in document.");
+
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                sb.AppendLine(string.Format("{0} comment(s):", count));
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic c = doc.Comments[i];
+                        string author = string.Empty; try { author = Convert.ToString(c.Author); } catch { }
+                        string date = string.Empty; try { date = Convert.ToString(c.Date); } catch { }
+                        string text = string.Empty;
+                        try { text = Convert.ToString(c.Range.Text); } catch { }
+                        if (string.IsNullOrWhiteSpace(text)) try { text = Convert.ToString(c.Reference); } catch { }
+                        string anchor = string.Empty; try { anchor = Convert.ToString(c.Scope.Text); } catch { try { anchor = Convert.ToString(c.Reference); } catch { } }
+                        sb.AppendLine(string.Format("{0}. {1} {2}: \"{3}\" {4}", i, author, date, text.Trim(), !string.IsNullOrWhiteSpace(anchor) ? string.Format("[Anchor: {0}]", anchor.Trim()) : string.Empty));
+                    }
+                    catch (Exception ex) { Logger.Warn(string.Format("List comment {0} failed: {1}", i, ex.Message)); }
+                }
+                return HostOperationResult.Ok(sb.ToString().TrimEnd());
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteListComments failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteListComments");
+            }
+        }
+
+        public HostOperationResult ExecuteDeleteComment(int commentIndex)
+        {
+            if (commentIndex < 1) return HostOperationResult.Failed("Comment index must be at least 1.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Comments.Count); } catch { }
+                if (commentIndex > count) return HostOperationResult.Failed(string.Format("Comment {0} does not exist (has {1}).", commentIndex, count));
+                dynamic c = doc.Comments[commentIndex];
+                c.Delete();
+                return HostOperationResult.Ok(string.Format("Deleted comment {0}.", commentIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteDeleteComment failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteDeleteComment");
+            }
+        }
+
+        public HostOperationResult ExecuteDeleteCommentByText(string targetText)
+        {
+            if (string.IsNullOrWhiteSpace(targetText)) return HostOperationResult.Failed("Target text is required.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Comments.Count); } catch { }
+                string lower = targetText.Trim().ToLowerInvariant();
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic c = doc.Comments[i];
+                        string txt = string.Empty; try { txt = Convert.ToString(c.Range.Text); } catch { }
+                        if (!string.IsNullOrWhiteSpace(txt) && txt.ToLowerInvariant().IndexOf(lower, StringComparison.Ordinal) >= 0)
+                        {
+                            c.Delete();
+                            return HostOperationResult.Ok(string.Format("Deleted comment {0} matching '{1}'.", i, targetText));
+                        }
+                    }
+                    catch { }
+                }
+                return HostOperationResult.Failed(string.Format("No comment containing '{0}' found.", targetText));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteDeleteCommentByText failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteDeleteCommentByText");
+            }
+        }
+
+        public HostOperationResult ExecuteEditComment(int commentIndex, string newText)
+        {
+            if (commentIndex < 1) return HostOperationResult.Failed("Comment index must be at least 1.");
+            if (string.IsNullOrWhiteSpace(newText)) return HostOperationResult.Failed("New text is required.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Comments.Count); } catch { }
+                if (commentIndex > count) return HostOperationResult.Failed(string.Format("Comment {0} does not exist.", commentIndex));
+                dynamic c = doc.Comments[commentIndex];
+                // Capture anchor range then recreate
+                dynamic anchorRange = null; try { anchorRange = c.Scope; } catch { try { anchorRange = c.Range; } catch { } }
+                if (anchorRange == null) try { anchorRange = c.Reference; } catch { }
+                // Word Comment object has no direct text setter; recreation is safest
+                string anchorText = string.Empty; try { anchorText = Convert.ToString(anchorRange.Text); } catch { }
+                c.Delete();
+                // Re-add at same anchor if possible, else at selection
+                dynamic targetRange = anchorRange;
+                if (targetRange == null) try { targetRange = app.Selection.Range; } catch { targetRange = doc.Content; }
+                doc.Comments.Add(targetRange, newText);
+                return HostOperationResult.Ok(string.Format("Edited comment {0}.", commentIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteEditComment failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteEditComment");
+            }
+        }
+
+        public HostOperationResult ExecuteListRevisions()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Revisions.Count); } catch { }
+                if (count == 0) return HostOperationResult.Ok("No tracked revisions.");
+
+                System.Text.StringBuilder sb = new System.Text.StringBuilder();
+                sb.AppendLine(string.Format("{0} revision(s):", count));
+                for (int i = 1; i <= count; i++)
+                {
+                    try
+                    {
+                        dynamic r = doc.Revisions[i];
+                        string author = string.Empty; try { author = Convert.ToString(r.Author); } catch { }
+                        string date = string.Empty; try { date = Convert.ToString(r.Date); } catch { }
+                        string type = string.Empty; try { type = Convert.ToString(r.Type); } catch { }
+                        string text = string.Empty; try { text = Convert.ToString(r.Range.Text); } catch { }
+                        if (text != null && text.Length > 80) text = text.Substring(0, 77) + "...";
+                        sb.AppendLine(string.Format("{0}. {1} {2} [{3}] \"{4}\"", i, author, date, type, text != null ? text.Trim() : string.Empty));
+                    }
+                    catch (Exception ex) { Logger.Warn(string.Format("List revision {0} failed: {1}", i, ex.Message)); }
+                }
+                return HostOperationResult.Ok(sb.ToString().TrimEnd());
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteListRevisions failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteListRevisions");
+            }
+        }
+
+        public HostOperationResult ExecuteAcceptRevision(int revisionIndex)
+        {
+            if (revisionIndex < 1) return HostOperationResult.Failed("Revision index must be at least 1.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Revisions.Count); } catch { }
+                if (revisionIndex > count) return HostOperationResult.Failed(string.Format("Revision {0} does not exist (has {1}).", revisionIndex, count));
+                dynamic r = doc.Revisions[revisionIndex];
+                r.Accept();
+                return HostOperationResult.Ok(string.Format("Accepted revision {0}.", revisionIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteAcceptRevision failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteAcceptRevision");
+            }
+        }
+
+        public HostOperationResult ExecuteRejectRevision(int revisionIndex)
+        {
+            if (revisionIndex < 1) return HostOperationResult.Failed("Revision index must be at least 1.");
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                int count = 0; try { count = Convert.ToInt32(doc.Revisions.Count); } catch { }
+                if (revisionIndex > count) return HostOperationResult.Failed(string.Format("Revision {0} does not exist (has {1}).", revisionIndex, count));
+                dynamic r = doc.Revisions[revisionIndex];
+                r.Reject();
+                return HostOperationResult.Ok(string.Format("Rejected revision {0}.", revisionIndex));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteRejectRevision failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteRejectRevision");
+            }
+        }
+
+        public HostOperationResult ExecuteCompareDocuments(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath)) return HostOperationResult.Failed("File path is required.");
+            if (!System.IO.File.Exists(filePath)) return HostOperationResult.Failed(string.Format("File not found: {0}", filePath));
+            string ext = System.IO.Path.GetExtension(filePath).ToLowerInvariant();
+            if (ext != ".docx" && ext != ".doc" && ext != ".pdf" && ext != ".txt")
+                return HostOperationResult.Failed("Compare supports .docx/.doc/.pdf/.txt (OpenXML).");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                // Try native Compare - creates a new document with tracked changes
+                try
+                {
+                    dynamic compareDoc = doc.Compare(filePath, "Comparison", 0, true, true, true, true, true, true, true, true, true, true, true, true);
+                    if (compareDoc != null)
+                    {
+                        try { compareDoc.Windows[1].Visible = true; } catch { }
+                        return HostOperationResult.Ok(string.Format("Compared with '{0}' - review the new document with tracked changes.", System.IO.Path.GetFileName(filePath)));
+                    }
+                }
+                catch (Exception ex1)
+                {
+                    Logger.Warn(string.Format("Document.Compare failed, trying Application.CompareDocuments: {0}", ex1.Message));
+                    try
+                    {
+                        dynamic targetDoc = app.Documents.Open(filePath, false, true);
+                        if (targetDoc != null)
+                        {
+                            dynamic result = app.CompareDocuments(doc, targetDoc, 0, 1, true, true, true, true, true, true, true, true, true, true, true);
+                            try { targetDoc.Close(false); } catch { }
+                            if (result != null) return HostOperationResult.Ok(string.Format("Compared with '{0}'.", System.IO.Path.GetFileName(filePath)));
+                        }
+                    }
+                    catch (Exception ex2)
+                    {
+                        Logger.Warn(string.Format("CompareDocuments failed: {0}", ex2.Message));
+                        return HostOperationResult.FromException(ex2, "WordController.ExecuteCompareDocuments");
+                    }
+                }
+                return HostOperationResult.Failed("Could not create comparison document.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteCompareDocuments failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteCompareDocuments");
+            }
+        }
+
+        public HostOperationResult ExecuteTranslate(string targetLanguage, string sourceLanguage, string paragraphTextOrIndex, string translatedText)
+        {
+            if (string.IsNullOrWhiteSpace(targetLanguage))
+                return HostOperationResult.Failed("Target language is required (e.g. en, fr, de, es, zh).");
+            if (string.IsNullOrWhiteSpace(translatedText))
+                return HostOperationResult.Failed("Translated text is required. The AI should supply the translation content.");
+
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null)
+                    return HostOperationResult.Failed("No active Word document available.");
+
+                dynamic doc = app.ActiveDocument;
+                // Automatic language detection if sourceLanguage not supplied
+                string detectedSource = sourceLanguage;
+                if (string.IsNullOrWhiteSpace(detectedSource))
+                {
+                    try
+                    {
+                        // Word's LanguageDetected or LanguageID
+                        dynamic selRange = null;
+                        int paraIdx = 0;
+                        if (!string.IsNullOrWhiteSpace(paragraphTextOrIndex) && int.TryParse(paragraphTextOrIndex.Trim(), out paraIdx) && paraIdx >= 1)
+                        {
+                            try { selRange = doc.Paragraphs[paraIdx].Range; } catch { selRange = app.Selection.Range; }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(paragraphTextOrIndex))
+                        {
+                            // find paragraph containing text
+                            int pCount = Convert.ToInt32(doc.Paragraphs.Count);
+                            string lowerTarget = paragraphTextOrIndex.Trim().ToLowerInvariant();
+                            for (int i = 1; i <= pCount; i++)
+                            {
+                                try
+                                {
+                                    string pt = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                                    if (pt.ToLowerInvariant().IndexOf(lowerTarget, StringComparison.Ordinal) >= 0) { selRange = doc.Paragraphs[i].Range; break; }
+                                }
+                                catch { }
+                            }
+                            if (selRange == null) selRange = app.Selection.Range;
+                        }
+                        else
+                        {
+                            try { selRange = app.Selection.Range; } catch { selRange = doc.Content; }
+                        }
+                        try { detectedSource = Convert.ToString(selRange.LanguageID); } catch { detectedSource = "auto"; }
+                        if (string.IsNullOrWhiteSpace(detectedSource)) detectedSource = "auto";
+                    }
+                    catch { detectedSource = "auto"; }
+                }
+
+                // Resolve target range: paragraph index, or text snippet, or selection, or whole doc fallback
+                dynamic targetRange = null;
+                string resolvedInfo = string.Empty;
+                int pIdx = 0;
+                if (!string.IsNullOrWhiteSpace(paragraphTextOrIndex) && int.TryParse(paragraphTextOrIndex.Trim(), out pIdx) && pIdx >= 1)
+                {
+                    int pCount = Convert.ToInt32(doc.Paragraphs.Count);
+                    if (pIdx > pCount) return HostOperationResult.Failed(string.Format("Paragraph {0} does not exist (document has {1} paragraphs).", pIdx, pCount));
+                    try { targetRange = doc.Paragraphs[pIdx].Range; resolvedInfo = string.Format("paragraph {0}", pIdx); } catch { }
+                }
+                else if (!string.IsNullOrWhiteSpace(paragraphTextOrIndex))
+                {
+                    string lowerTarget = paragraphTextOrIndex.Trim().ToLowerInvariant();
+                    int pCount = Convert.ToInt32(doc.Paragraphs.Count);
+                    for (int i = 1; i <= pCount; i++)
+                    {
+                        try
+                        {
+                            string pt = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? string.Empty;
+                            if (pt.ToLowerInvariant().IndexOf(lowerTarget, StringComparison.Ordinal) >= 0) { targetRange = doc.Paragraphs[i].Range; resolvedInfo = string.Format("paragraph {0} matching \"{1}\"", i, paragraphTextOrIndex.Trim()); break; }
+                        }
+                        catch { }
+                    }
+                    if (targetRange == null)
+                    {
+                        // Fallback to Find
+                        try
+                        {
+                            dynamic findRange = doc.Content;
+                            dynamic find = findRange.Find;
+                            find.ClearFormatting(); try { find.Replacement.ClearFormatting(); } catch { }
+                            find.Text = paragraphTextOrIndex; find.Forward = true; find.Wrap = 0; find.Format = false;
+                            if (find.Execute()) { targetRange = findRange; resolvedInfo = string.Format("range matching \"{0}\"", paragraphTextOrIndex.Trim()); }
+                        }
+                        catch { }
+                    }
+                }
+                if (targetRange == null)
+                {
+                    try
+                    {
+                        dynamic sel = app.Selection;
+                        if (sel != null && Convert.ToInt32(sel.Type) != 1 && sel.Range != null) { targetRange = sel.Range; resolvedInfo = "current selection"; }
+                        else { targetRange = app.Selection.Range; resolvedInfo = "cursor"; }
+                    }
+                    catch { targetRange = doc.Content; resolvedInfo = "document"; }
+                }
+                if (targetRange == null) return HostOperationResult.Failed("Could not resolve target range for translation.");
+
+                string originalText = CleanWordText(Convert.ToString(targetRange.Text) ?? string.Empty);
+                if (string.IsNullOrWhiteSpace(originalText)) originalText = "(empty)";
+
+                // Side-by-side preview: add comment with original text anchored to target
+                try
+                {
+                    string commentText = string.Format("[Original ({0}) → {1}] {2}", detectedSource, targetLanguage.Trim(), originalText.Length > 300 ? originalText.Substring(0, 297) + "..." : originalText);
+                    doc.Comments.Add(targetRange, commentText);
+                }
+                catch (Exception cex) { Logger.Warn(string.Format("Translate side-by-side comment failed: {0}", cex.Message)); }
+
+                // Translation-specific Track Changes: enable TrackRevisions and replace text with translated content, preserving paragraph formatting
+                var wordApp = GetApp();
+                bool wasTrackRevisions = false;
+                bool wasTrackFormatting = true;
+                bool undoRecordStarted = false;
+                try
+                {
+                    if (wordApp != null && wordApp.ActiveDocument != null)
+                    {
+                        wasTrackRevisions = wordApp.ActiveDocument.TrackRevisions;
+                        wasTrackFormatting = TryGetTrackFormatting(wordApp);
+                        undoRecordStarted = TryStartUndoRecord(wordApp, string.Format("Translate {0}→{1}", detectedSource, targetLanguage.Trim()));
+                        wordApp.ActiveDocument.TrackRevisions = true;
+                        TrySetTrackFormatting(wordApp, false);
+                    }
+
+                    // Preserve paragraph style and formatting: save style name
+                    string origStyle = string.Empty;
+                    try { origStyle = Convert.ToString(targetRange.ParagraphStyle); } catch { try { origStyle = Convert.ToString(targetRange.Style); } catch { } }
+
+                    // Replace text - paragraph Range includes trailing \r, so preserve it
+                    string paraMark = string.Empty;
+                    string current = Convert.ToString(targetRange.Text) ?? string.Empty;
+                    if (current.EndsWith("\r")) paraMark = "\r";
+                    // Use translatedText trimmed; Word will handle formatting inheritance
+                    string newText = translatedText.Trim();
+                    if (!string.IsNullOrEmpty(paraMark) && !newText.EndsWith("\r")) newText = newText + paraMark;
+
+                    // Collapse preserving formatting: setting Range.Text retains paragraph formatting but resets character formatting inside.
+                    // We restore style after.
+                    targetRange.Text = newText;
+                    if (!string.IsNullOrWhiteSpace(origStyle))
+                    {
+                        try { targetRange.Style = origStyle; } catch { }
+                    }
+
+                    return HostOperationResult.Ok(string.Format("Translated {0} ({1}→{2}) with Track Changes and side-by-side comment for review.", resolvedInfo, detectedSource, targetLanguage.Trim()), targetRange.Text);
+                }
+                finally
+                {
+                    try
+                    {
+                        if (wordApp != null && wordApp.ActiveDocument != null)
+                        {
+                            wordApp.ActiveDocument.TrackRevisions = wasTrackRevisions;
+                            TrySetTrackFormatting(wordApp, wasTrackFormatting);
+                            EndUndoRecord(wordApp, undoRecordStarted);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("WordController.ExecuteTranslate failed", ex);
+                return HostOperationResult.FromException(ex, "WordController.ExecuteTranslate");
+            }
+        }
+
+        public HostOperationResult ExecuteInsertToc(string headingLevels)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                int upper = 1, lower = 3;
+                if (!string.IsNullOrWhiteSpace(headingLevels))
+                {
+                    string hl = headingLevels.Trim();
+                    string[] parts = hl.Split(new char[] { '-', ':' }, StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length == 2) { int.TryParse(parts[0].Trim(), out upper); int.TryParse(parts[1].Trim(), out lower); }
+                    else if (parts.Length == 1) { int.TryParse(parts[0].Trim(), out lower); upper = 1; }
+                    if (upper < 1) upper = 1;
+                    if (lower < upper) lower = upper;
+                    if (lower > 9) lower = 9;
+                }
+                int tocCount = 0;
+                try { tocCount = Convert.ToInt32(doc.TablesOfContents.Count); } catch { tocCount = 0; }
+                if (tocCount > 0)
+                {
+                    try { doc.TablesOfContents[1].Update(); return HostOperationResult.Ok("Updated existing Table of Contents."); } catch (Exception ex) { return HostOperationResult.FromException(ex, "WordController.ExecuteInsertToc"); }
+                }
+                dynamic range = null;
+                try { range = app.Selection.Range; } catch { range = doc.Content; }
+                try { range.Collapse(0); } catch { }
+                doc.TablesOfContents.Add(range, true, upper, lower, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                return HostOperationResult.Ok(string.Format("Inserted Table of Contents (levels {0}-{1}).", upper, lower));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteInsertToc failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteInsertToc"); }
+        }
+
+        public HostOperationResult ExecuteUpdateToc()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                int tocCount = 0;
+                try { tocCount = Convert.ToInt32(doc.TablesOfContents.Count); } catch { tocCount = 0; }
+                if (tocCount == 0) return HostOperationResult.Failed("No Table of Contents found to update.");
+                int updated = 0;
+                for (int i = 1; i <= tocCount; i++) { try { doc.TablesOfContents[i].Update(); updated++; } catch (Exception ex) { Logger.Warn(string.Format("TOC {0} update failed: {1}", i, ex.Message)); } }
+                return HostOperationResult.Ok(string.Format("Updated {0} Table(s) of Contents.", updated));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteUpdateToc failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteUpdateToc"); }
+        }
+
+        public HostOperationResult ExecuteExportPdf(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return HostOperationResult.Failed("Export path is required.");
+            string p = path.Trim().Trim('"').Trim('\'');
+            if (!p.ToLowerInvariant().EndsWith(".pdf")) p = p + ".pdf";
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                string dir = System.IO.Path.GetDirectoryName(p);
+                if (!string.IsNullOrWhiteSpace(dir) && !System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                doc.ExportAsFixedFormat(p, 17, false, 0, 0, 0, 0, true, true, 0, true, true, false);
+                return HostOperationResult.Ok(string.Format("Exported PDF to {0}.", p));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteExportPdf failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteExportPdf"); }
+        }
+
+        public HostOperationResult ExecuteSaveAs(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return HostOperationResult.Failed("Save path is required.");
+            string p = path.Trim().Trim('"').Trim('\'');
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                string dir = System.IO.Path.GetDirectoryName(p);
+                if (!string.IsNullOrWhiteSpace(dir) && !System.IO.Directory.Exists(dir)) System.IO.Directory.CreateDirectory(dir);
+                doc.SaveAs2(p, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing, Type.Missing);
+                return HostOperationResult.Ok(string.Format("Saved document to {0}.", p));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteSaveAs failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteSaveAs"); }
+        }
+
+        public HostOperationResult ExecuteToggleTrackChanges(string enabled)
+        {
+            if (string.IsNullOrWhiteSpace(enabled)) return HostOperationResult.Failed("Enabled flag required (true/false/on/off).");
+            string v = enabled.Trim().ToLowerInvariant();
+            bool on = v == "true" || v == "1" || v == "on" || v == "yes" || v == "enable" || v == "enabled";
+            bool off = v == "false" || v == "0" || v == "off" || v == "no" || v == "disable" || v == "disabled";
+            if (!on && !off) return HostOperationResult.Failed("Enabled must be true/false/on/off.");
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                app.ActiveDocument.TrackRevisions = on;
+                return HostOperationResult.Ok(on ? "Track Changes enabled." : "Track Changes disabled.");
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteToggleTrackChanges failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteToggleTrackChanges"); }
+        }
+
+        public HostOperationResult ExecuteListStyles()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                int count = 0;
+                try { count = Convert.ToInt32(doc.Styles.Count); } catch { count = 0; }
+                if (count == 0) return HostOperationResult.Ok("No styles found.");
+                var sb = new StringBuilder();
+                sb.AppendLine(string.Format("{0} style(s):", count));
+                for (int i = 1; i <= Math.Min(count, 100); i++) { try { string n = Convert.ToString(doc.Styles[i].NameLocal); if (!string.IsNullOrWhiteSpace(n)) sb.AppendLine(string.Format("{0}. {1}", i, n.Trim())); } catch { } }
+                return HostOperationResult.Ok(sb.ToString().TrimEnd());
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteListStyles failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteListStyles"); }
+        }
+
+        public HostOperationResult ExecuteSetProofingLanguage(string language, string target)
+        {
+            if (string.IsNullOrWhiteSpace(language)) return HostOperationResult.Failed("Language is required (e.g. en-US, fr-FR).");
+            string lang = language.Trim();
+            // Map common codes to wdLanguageID constants (e.g. 1033 for en-US) but allow string via LanguageID
+            var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase) { { "en-US", 1033 }, { "en-GB", 2057 }, { "fr-FR", 1036 }, { "de-DE", 1031 }, { "es-ES", 3082 }, { "it-IT", 1040 }, { "ta-IN", 1097 }, { "hi-IN", 1081 }, { "te-IN", 1098 }, { "kn-IN", 1099 }, { "ml-IN", 1100 }, { "bn-IN", 1093 }, { "mr-IN", 1102 }, { "gu-IN", 1095 } };
+            int wdLang = 0;
+            if (!map.TryGetValue(lang, out wdLang)) { int.TryParse(lang, out wdLang); }
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(target))
+                {
+                    string lower = target.Trim().ToLowerInvariant();
+                    int pCount = Convert.ToInt32(doc.Paragraphs.Count);
+                    for (int i = 1; i <= pCount; i++) { try { string pt = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? ""; if (pt.ToLowerInvariant().IndexOf(lower, StringComparison.Ordinal) >= 0) { range = doc.Paragraphs[i].Range; break; } } catch { } }
+                    if (range == null) { try { range = doc.Content; dynamic f = range.Find; f.ClearFormatting(); f.Text = target; if (!f.Execute()) return HostOperationResult.Failed(string.Format("Target '{0}' not found.", target)); } catch { } }
+                }
+                else { try { dynamic sel = app.Selection; if (sel != null && Convert.ToInt32(sel.Type) != 1 && sel.Range != null) range = sel.Range; else range = doc.Content; } catch { range = doc.Content; } }
+                if (range == null) return HostOperationResult.Failed("Could not resolve range for proofing language.");
+                if (wdLang != 0) try { range.LanguageID = wdLang; } catch { range.LanguageID = lang; }
+                else try { range.LanguageID = lang; } catch (Exception ex) { return HostOperationResult.FromException(ex, "WordController.ExecuteSetProofingLanguage"); }
+                return HostOperationResult.Ok(string.Format("Set proofing language to {0}.", lang));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteSetProofingLanguage failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteSetProofingLanguage"); }
+        }
+
+        public HostOperationResult ExecuteMergeDocument(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path)) return HostOperationResult.Failed("Path is required.");
+            string p = path.Trim().Trim('"').Trim('\'');
+            if (!System.IO.File.Exists(p)) return HostOperationResult.Failed(string.Format("File not found: {0}", p));
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                try { range = app.Selection.Range; } catch { range = doc.Content; }
+                try { range.Collapse(0); } catch { }
+                range.InsertFile(p, Type.Missing, false, false, false);
+                return HostOperationResult.Ok(string.Format("Inserted file {0}.", System.IO.Path.GetFileName(p)));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteMergeDocument failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteMergeDocument"); }
+        }
+
+        public HostOperationResult ExecuteSetWatermark(string text, string color)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return HostOperationResult.Failed("Watermark text is required.");
+            string t = text.Trim();
+            int col = 12632256; // gray
+            if (!string.IsNullOrWhiteSpace(color)) { try { col = HexToWordColor(color.Trim()); } catch { } if (col == 0) col = 12632256; }
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                for (int si = 1; si <= Convert.ToInt32(doc.Sections.Count); si++)
+                {
+                    try
+                    {
+                        dynamic sec = doc.Sections[si];
+                        dynamic hdr = sec.Headers[1];
+                        dynamic shape = hdr.Shapes.AddTextEffect(0, t, "Calibri", 36, -1, -1, 150, 300);
+                        try { shape.Rotation = 315; } catch { }
+                        try { shape.Fill.ForeColor.RGB = col; } catch { }
+                        try { shape.Line.Visible = 0; } catch { }
+                        try { shape.WrapFormat.Type = 3; } catch { }
+                    }
+                    catch (Exception ex) { Logger.Warn(string.Format("Watermark section {0} failed: {1}", si, ex.Message)); }
+                }
+                return HostOperationResult.Ok(string.Format("Watermark '{0}' added.", t));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteSetWatermark failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteSetWatermark"); }
+        }
+
+        public HostOperationResult ExecuteInsertCaption(string label, string title)
+        {
+            if (string.IsNullOrWhiteSpace(title)) return HostOperationResult.Failed("Caption title is required.");
+            string lbl = string.IsNullOrWhiteSpace(label) ? "Figure" : label.Trim();
+            // Normalize label
+            string norm = lbl.ToLowerInvariant();
+            if (norm == "table") lbl = "Table";
+            else if (norm == "equation") lbl = "Equation";
+            else lbl = "Figure";
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                try { range = app.Selection.Range; } catch { range = doc.Content; }
+                // InsertCaption requires a label that exists in CaptionLabels collection
+                try { doc.CaptionLabels.Add(lbl); } catch { }
+                range.InsertCaption(lbl, title.Trim(), Type.Missing, 1, Type.Missing);
+                return HostOperationResult.Ok(string.Format("Inserted {0} caption: {1}", lbl, title.Trim()));
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteInsertCaption failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteInsertCaption"); }
+        }
+
+        public HostOperationResult ExecuteDelete(string target)
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                if (string.IsNullOrWhiteSpace(target))
+                {
+                    try
+                    {
+                        dynamic sel = app.Selection;
+                        if (sel != null && Convert.ToInt32(sel.Type) != 1 && sel.Range != null) { sel.Range.Delete(); return HostOperationResult.Ok("Deleted selection."); }
+                        return HostOperationResult.Failed("Nothing selected to delete.");
+                    }
+                    catch (Exception ex) { return HostOperationResult.FromException(ex, "WordController.ExecuteDelete"); }
+                }
+                string t = target.Trim();
+                if (t.ToLowerInvariant().StartsWith("table:"))
+                {
+                    string numStr = t.Substring(6).Trim();
+                    int idx;
+                    if (!int.TryParse(numStr, out idx) || idx < 1) return HostOperationResult.Failed("Table index must be >=1 (e.g. table:2).");
+                    int cnt = Convert.ToInt32(doc.Tables.Count);
+                    if (idx > cnt) return HostOperationResult.Failed(string.Format("Table {0} not found (has {1}).", idx, cnt));
+                    doc.Tables[idx].Delete();
+                    return HostOperationResult.Ok(string.Format("Deleted table {0}.", idx));
+                }
+                int pIdx;
+                if (int.TryParse(t, out pIdx) && pIdx >= 1)
+                {
+                    int cnt = Convert.ToInt32(doc.Paragraphs.Count);
+                    if (pIdx > cnt) return HostOperationResult.Failed(string.Format("Paragraph {0} not found (has {1}).", pIdx, cnt));
+                    doc.Paragraphs[pIdx].Range.Delete();
+                    return HostOperationResult.Ok(string.Format("Deleted paragraph {0}.", pIdx));
+                }
+                // Text snippet: find and delete
+                try
+                {
+                    dynamic rng = doc.Content;
+                    dynamic f = rng.Find;
+                    f.ClearFormatting();
+                    f.Text = t;
+                    f.Forward = true; f.Wrap = 0; f.Format = false;
+                    if (f.Execute()) { rng.Delete(); return HostOperationResult.Ok(string.Format("Deleted text matching '{0}'.", t)); }
+                    return HostOperationResult.Failed(string.Format("Text '{0}' not found.", t));
+                }
+                catch (Exception ex) { return HostOperationResult.FromException(ex, "WordController.ExecuteDelete"); }
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteDelete failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteDelete"); }
+        }
+
+        public HostOperationResult ExecuteApplyList(string target, string listType)
+        {
+            string lt = (listType ?? "bullet").Trim().ToLowerInvariant();
+            bool isNumber = lt == "number" || lt == "numbered" || lt == "ordered" || lt == "1" || lt == "decimal";
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                dynamic range = null;
+                if (!string.IsNullOrWhiteSpace(target))
+                {
+                    string lower = target.Trim().ToLowerInvariant();
+                    int pCount = Convert.ToInt32(doc.Paragraphs.Count);
+                    for (int i = 1; i <= pCount; i++) { try { string pt = Convert.ToString(doc.Paragraphs[i].Range.Text) ?? ""; if (pt.ToLowerInvariant().IndexOf(lower, StringComparison.Ordinal) >= 0) { range = doc.Paragraphs[i].Range; break; } } catch { } }
+                    if (range == null) { try { range = doc.Content; dynamic f = range.Find; f.ClearFormatting(); f.Text = target; if (!f.Execute()) return HostOperationResult.Failed(string.Format("Target '{0}' not found.", target)); } catch { } }
+                }
+                else { try { dynamic sel = app.Selection; if (sel != null && sel.Range != null) range = sel.Range; else range = doc.Content; } catch { range = doc.Content; } }
+                if (range == null) return HostOperationResult.Failed("Could not resolve range for list.");
+                if (isNumber) range.ListFormat.ApplyNumberDefault();
+                else range.ListFormat.ApplyBulletDefault();
+                return HostOperationResult.Ok(isNumber ? "Applied numbered list." : "Applied bullet list.");
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteApplyList failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteApplyList"); }
+        }
+
+        public HostOperationResult ExecuteReadabilityStats()
+        {
+            try
+            {
+                dynamic app = _rawAppObj;
+                if (app == null || app.ActiveDocument == null) return HostOperationResult.Failed("No active Word document available.");
+                dynamic doc = app.ActiveDocument;
+                var sb = new StringBuilder();
+                sb.AppendLine(string.Format("Words: {0}", Convert.ToString(doc.Words.Count)));
+                sb.AppendLine(string.Format("Characters: {0}", Convert.ToString(doc.Characters.Count)));
+                sb.AppendLine(string.Format("Paragraphs: {0}", Convert.ToString(doc.Paragraphs.Count)));
+                sb.AppendLine(string.Format("Sentences: {0}", Convert.ToString(doc.Sentences.Count)));
+                sb.AppendLine(string.Format("Pages: {0}", Convert.ToString(doc.ComputeStatistics(2)))); // wdStatisticPages =2
+                sb.AppendLine(string.Format("Lines: {0}", Convert.ToString(doc.ComputeStatistics(1)))); // wdStatisticLines =1
+                try
+                {
+                    dynamic rss = doc.ReadabilityStatistics;
+                    int rc = Convert.ToInt32(rss.Count);
+                    for (int i = 1; i <= Math.Min(rc, 10); i++) { try { dynamic rs = rss[i]; string n = Convert.ToString(rs.Name); string v = Convert.ToString(rs.Value); sb.AppendLine(string.Format("{0}: {1}", n, v)); } catch { } }
+                }
+                catch { }
+                return HostOperationResult.Ok(sb.ToString().TrimEnd());
+            }
+            catch (Exception ex) { Logger.Error("WordController.ExecuteReadabilityStats failed", ex); return HostOperationResult.FromException(ex, "WordController.ExecuteReadabilityStats"); }
+        }
+
         /// <summary>
         /// Uses Word's normal one-step undo stack.  This is deliberately a single, explicit
         /// undo rather than a broad rollback; it may undo the last document edit regardless of
@@ -1067,50 +2378,132 @@ namespace MSOfficeAIAssistant.Hosts
                 if (selStart < 0)
                     return "Document: " + GetActiveDocumentName();
 
-                // Scan paragraphs for headings before the cursor position
+                // Find nearest heading above cursor, efficiently even in long documents.
+                // Approach: determine paragraph index containing the selection, then walk backwards
                 int paragraphCount = 0;
-                try { paragraphCount = app.ActiveDocument.Paragraphs.Count; } catch { }
+                try { paragraphCount = app.ActiveDocument.Paragraphs.Count; } catch { paragraphCount = 0; }
+                if (paragraphCount <= 0) return "Document: " + GetActiveDocumentName();
 
-                string lastHeadingFound = null;
-                for (int index = 1; index <= Math.Min(200, paragraphCount); index++)
+                // Locate paragraph index that contains selStart by forward scan until range.End >= selStart
+                int selParaIndex = -1;
+                // For very large docs, use text-based outline fallback to avoid O(n) COM over thousands of paragraphs
+                const int LargeDocThreshold = 800;
+                if (paragraphCount > LargeDocThreshold)
                 {
                     try
                     {
-                        Word.Paragraph paragraph = app.ActiveDocument.Paragraphs[index];
-                        if (paragraph == null || paragraph.Range == null) continue;
-
-                        object rangeStartObj = null;
-                        try { rangeStartObj = paragraph.Range.Start; } catch { }
-                        int rangeStart = rangeStartObj != null ? Convert.ToInt32(rangeStartObj) : -1;
-
-                        // Only consider paragraphs before the cursor
-                        if (rangeStart < 0 || rangeStart >= selStart) continue;
-
-                        int outlineLevel = 0;
-                        try { outlineLevel = Convert.ToInt32(paragraph.OutlineLevel, CultureInfo.InvariantCulture); } catch { }
-
-                        string styleName = string.Empty;
-                        try { styleName = Convert.ToString(paragraph.Style, CultureInfo.InvariantCulture); }
-                        catch { }
-
-                        bool isHeading = (outlineLevel >= 1 && outlineLevel <= 9);
-                        if (!isHeading && styleName.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0)
-                            isHeading = true;
-
-                        if (isHeading)
+                        string docText = CleanWordText(app.ActiveDocument.Content.Text);
+                        string outline = WordDocumentContextBuilder.BuildDocumentOutline(docText, 2400);
+                        if (!string.IsNullOrWhiteSpace(outline))
                         {
-                            string text = CleanWordText(paragraph.Range.Text);
-                            if (!string.IsNullOrWhiteSpace(text))
+                            // Fallback: return last heading line from text-based outline that occurs before selection's text offset ratio
+                            string selText = string.Empty;
+                            try { selText = CleanWordText(app.Selection.Range.Text); } catch { }
+                            // Heuristic: use document outline's first heading as section if we can't map precisely
+                            var outlineLines = outline.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                            if (outlineLines.Length > 0)
                             {
-                                lastHeadingFound = text.Trim();
+                                string firstHeading = outlineLines[0].Trim().TrimStart('-', ' ');
+                                if (!string.IsNullOrWhiteSpace(firstHeading))
+                                    return string.Format("Section: {0}", firstHeading);
                             }
                         }
                     }
                     catch { }
                 }
 
-                if (!string.IsNullOrEmpty(lastHeadingFound))
-                    return string.Format("Section: {0}", lastHeadingFound);
+                // Find selection's paragraph index (1-based)
+                try
+                {
+                    for (int i = 1; i <= paragraphCount; i++)
+                    {
+                        try
+                        {
+                            Word.Paragraph para = app.ActiveDocument.Paragraphs[i];
+                            if (para == null || para.Range == null) continue;
+                            int pStart = Convert.ToInt32(para.Range.Start);
+                            int pEnd = Convert.ToInt32(para.Range.End);
+                            if (selStart >= pStart && selStart <= pEnd)
+                            {
+                                selParaIndex = i;
+                                break;
+                            }
+                            if (pStart > selStart)
+                            {
+                                selParaIndex = i - 1;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                    if (selParaIndex == -1 && paragraphCount > 0) selParaIndex = paragraphCount;
+                }
+                catch { selParaIndex = paragraphCount; }
+
+                // Walk backwards from selParaIndex to find nearest heading (nearest = most recent before cursor)
+                string nearestHeading = null;
+                int walkStart = selParaIndex > 0 ? selParaIndex - 1 : paragraphCount;
+                // Limit backward walk to 400 paragraphs to avoid COM stall on huge docs, but that's enough for typical sections
+                int walkLimit = Math.Max(1, walkStart - 400);
+                for (int index = walkStart; index >= walkLimit; index--)
+                {
+                    try
+                    {
+                        Word.Paragraph paragraph = app.ActiveDocument.Paragraphs[index];
+                        if (paragraph == null || paragraph.Range == null) continue;
+                        int outlineLevel = 0;
+                        try { outlineLevel = Convert.ToInt32(paragraph.OutlineLevel, CultureInfo.InvariantCulture); } catch { }
+                        string styleName = string.Empty;
+                        try { styleName = Convert.ToString(paragraph.Style, CultureInfo.InvariantCulture); } catch { }
+                        bool isHeading = (outlineLevel >= 1 && outlineLevel <= 9);
+                        if (!isHeading && styleName.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0)
+                            isHeading = true;
+                        if (isHeading)
+                        {
+                            string text = CleanWordText(paragraph.Range.Text);
+                            if (!string.IsNullOrWhiteSpace(text))
+                            {
+                                nearestHeading = text.Trim();
+                                break;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+                // Fallback: if not found in immediate 400, scan forward from start up to selParaIndex (covers early headings in huge gaps)
+                if (string.IsNullOrEmpty(nearestHeading) && walkLimit > 1)
+                {
+                    string lastHeadingFound = null;
+                    for (int index = 1; index < selParaIndex; index++)
+                    {
+                        try
+                        {
+                            Word.Paragraph paragraph = app.ActiveDocument.Paragraphs[index];
+                            if (paragraph == null || paragraph.Range == null) continue;
+                            object rangeStartObj = null;
+                            try { rangeStartObj = paragraph.Range.Start; } catch { }
+                            int rangeStart = rangeStartObj != null ? Convert.ToInt32(rangeStartObj) : -1;
+                            if (rangeStart < 0 || rangeStart >= selStart) continue;
+                            int outlineLevel = 0;
+                            try { outlineLevel = Convert.ToInt32(paragraph.OutlineLevel, CultureInfo.InvariantCulture); } catch { }
+                            string styleName = string.Empty;
+                            try { styleName = Convert.ToString(paragraph.Style, CultureInfo.InvariantCulture); } catch { }
+                            bool isHeading = (outlineLevel >= 1 && outlineLevel <= 9);
+                            if (!isHeading && styleName.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0)
+                                isHeading = true;
+                            if (isHeading)
+                            {
+                                string text = CleanWordText(paragraph.Range.Text);
+                                if (!string.IsNullOrWhiteSpace(text)) lastHeadingFound = text.Trim();
+                            }
+                        }
+                        catch { }
+                    }
+                    nearestHeading = lastHeadingFound;
+                }
+
+                if (!string.IsNullOrEmpty(nearestHeading))
+                    return string.Format("Section: {0}", nearestHeading);
 
                 return "Document: " + GetActiveDocumentName();
             }
@@ -1144,14 +2537,285 @@ namespace MSOfficeAIAssistant.Hosts
             try
             {
                 var app = GetApp();
-                if (app != null && app.ActiveDocument != null && app.ActiveDocument.Content != null)
-                    return CleanWordText(app.ActiveDocument.Content.Text);
+                if (app != null && app.ActiveDocument != null)
+                {
+                    // Try rich structure-aware extraction first; fallback to plain Content.Text if COM fails
+                    string rich = TryGetLiveRichDocumentText(48000);
+                    if (!string.IsNullOrWhiteSpace(rich) && rich.Length > 100)
+                        return rich;
+                    if (app.ActiveDocument.Content != null)
+                        return CleanWordText(app.ActiveDocument.Content.Text);
+                }
             }
             catch (Exception ex)
             {
                 Logger.Warn(string.Format("WordController.GetFullDocumentText failed: {0}", ex.Message));
             }
             return string.Empty;
+        }
+
+        private string TryGetLiveRichDocumentText(int maxCharacters)
+        {
+            if (maxCharacters <= 0) maxCharacters = 32000;
+            try
+            {
+                var app = GetApp();
+                if (app == null || app.ActiveDocument == null) return string.Empty;
+                dynamic doc = null;
+                try { doc = _rawAppObj != null ? ((dynamic)_rawAppObj).ActiveDocument : null; } catch { }
+                if (doc == null)
+                {
+                    try { doc = app.ActiveDocument; } catch { return string.Empty; }
+                }
+                var sb = new StringBuilder();
+                // Paragraphs with semantic structure (style, outline level)
+                try
+                {
+                    int pCount = 0;
+                    try { pCount = Convert.ToInt32(doc.Paragraphs.Count); } catch { pCount = 0; }
+                    if (pCount > 1200)
+                    {
+                        // Long document: COM iteration beyond 1200 would be slow and would truncate content after 1200.
+                        // Fall back to complete Content.Text enumeration so content after paragraph 1200 still reaches the AI context.
+                        // This preserves completeness at the cost of per-paragraph style detail, which is acceptable for long docs.
+                        try
+                        {
+                            string contentText = CleanWordText(Convert.ToString(doc.Content.Text) ?? string.Empty);
+                            if (!string.IsNullOrWhiteSpace(contentText))
+                            {
+                                string[] rawParas = contentText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                                for (int pi = 0; pi < rawParas.Length; pi++)
+                                {
+                                    string txt = rawParas[pi].Trim();
+                                    if (string.IsNullOrWhiteSpace(txt)) continue;
+                                    if (txt.Length > 400) txt = txt.Substring(0, 397) + "...";
+                                    sb.AppendLine(string.Format("[¶{0}] {1}", pi + 1, txt));
+                                    if (sb.Length >= maxCharacters) break;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+                    else
+                    {
+                        int cap = pCount;
+                        for (int i = 1; i <= cap; i++)
+                        {
+                            try
+                            {
+                                dynamic para = doc.Paragraphs[i];
+                                if (para == null || para.Range == null) continue;
+                                string txt = CleanWordText(Convert.ToString(para.Range.Text) ?? string.Empty);
+                                if (string.IsNullOrWhiteSpace(txt)) continue;
+                                if (txt.Length > 400) txt = txt.Substring(0, 397) + "...";
+                                string style = string.Empty;
+                                int outlineLevel = 0;
+                                try { outlineLevel = Convert.ToInt32(para.OutlineLevel); } catch { }
+                                try { style = Convert.ToString(para.Style); } catch { }
+                                bool isHeading = (outlineLevel >= 1 && outlineLevel <= 9) || (!string.IsNullOrWhiteSpace(style) && style.IndexOf("heading", StringComparison.OrdinalIgnoreCase) >= 0);
+                                if (isHeading)
+                                    sb.AppendLine(string.Format("[¶{0} {1}] {2}", i, !string.IsNullOrWhiteSpace(style) ? style.Trim() : "Heading" + outlineLevel, txt));
+                                else
+                                    sb.AppendLine(string.Format("[¶{0}] {1}", i, txt));
+                                if (sb.Length >= maxCharacters) break;
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+                // Tables
+                try
+                {
+                    int tCount = 0;
+                    try { tCount = Convert.ToInt32(doc.Tables.Count); } catch { tCount = 0; }
+                    for (int ti = 1; ti <= Math.Min(tCount, 30); ti++)
+                    {
+                        try
+                        {
+                            dynamic tbl = doc.Tables[ti];
+                            if (tbl == null) continue;
+                            sb.AppendLine(string.Format("[Table {0}]", ti));
+                            int rows = 0, cols = 0;
+                            try { rows = Convert.ToInt32(tbl.Rows.Count); } catch { }
+                            try { cols = Convert.ToInt32(tbl.Columns.Count); } catch { }
+                            for (int r = 1; r <= Math.Min(rows, 20); r++)
+                            {
+                                var rowCells = new List<string>();
+                                for (int c = 1; c <= Math.Min(cols, 12); c++)
+                                {
+                                    try
+                                    {
+                                        dynamic cell = tbl.Cell(r, c);
+                                        string cellTxt = CleanWordText(Convert.ToString(cell.Range.Text) ?? string.Empty);
+                                        cellTxt = cellTxt.Replace("|", "/").Replace("\r", " ").Replace("\n", " ").Trim();
+                                        rowCells.Add(cellTxt);
+                                    }
+                                    catch { rowCells.Add(string.Empty); }
+                                }
+                                sb.AppendLine("| " + string.Join(" | ", rowCells) + " |");
+                                if (sb.Length >= maxCharacters) break;
+                            }
+                            if (sb.Length >= maxCharacters) break;
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+                // Headers and Footers per section
+                try
+                {
+                    int secCount = 0;
+                    try { secCount = Convert.ToInt32(doc.Sections.Count); } catch { secCount = 0; }
+                    for (int si = 1; si <= Math.Min(secCount, 20); si++)
+                    {
+                        try
+                        {
+                            dynamic sec = doc.Sections[si];
+                            if (sec == null) continue;
+                            // Headers
+                            try
+                            {
+                                dynamic headers = sec.Headers;
+                                int hCount = Convert.ToInt32(headers.Count);
+                                for (int hi = 1; hi <= hCount; hi++)
+                                {
+                                    try
+                                    {
+                                        dynamic hdr = headers[hi];
+                                        if (hdr == null || hdr.Range == null) continue;
+                                        string hTxt = CleanWordText(Convert.ToString(hdr.Range.Text) ?? string.Empty);
+                                        if (!string.IsNullOrWhiteSpace(hTxt)) sb.AppendLine(string.Format("[Header Sec{0} {1}] {2}", si, hi, hTxt));
+                                    }
+                                    catch { }
+                                }
+                            }
+                            catch { }
+                            try
+                            {
+                                dynamic footers = sec.Footers;
+                                int fCount = Convert.ToInt32(footers.Count);
+                                for (int fi = 1; fi <= fCount; fi++)
+                                {
+                                    try
+                                    {
+                                        dynamic ftr = footers[fi];
+                                        if (ftr == null || ftr.Range == null) continue;
+                                        string fTxt = CleanWordText(Convert.ToString(ftr.Range.Text) ?? string.Empty);
+                                        if (!string.IsNullOrWhiteSpace(fTxt)) sb.AppendLine(string.Format("[Footer Sec{0} {1}] {2}", si, fi, fTxt));
+                                    }
+                                    catch { }
+                                }
+                            }
+                            catch { }
+                        }
+                        catch { }
+                        if (sb.Length >= maxCharacters) break;
+                    }
+                }
+                catch { }
+                // Footnotes & Endnotes
+                try
+                {
+                    int fnCount = 0;
+                    try { fnCount = Convert.ToInt32(doc.Footnotes.Count); } catch { fnCount = 0; }
+                    for (int fi = 1; fi <= Math.Min(fnCount, 50); fi++)
+                    {
+                        try
+                        {
+                            dynamic fn = doc.Footnotes[fi];
+                            string fnTxt = CleanWordText(Convert.ToString(fn.Range.Text) ?? string.Empty);
+                            if (!string.IsNullOrWhiteSpace(fnTxt)) sb.AppendLine(string.Format("[Footnote {0}] {1}", fi, fnTxt));
+                        }
+                        catch { }
+                        if (sb.Length >= maxCharacters) break;
+                    }
+                }
+                catch { }
+                try
+                {
+                    int enCount = 0;
+                    try { enCount = Convert.ToInt32(doc.Endnotes.Count); } catch { enCount = 0; }
+                    for (int ei = 1; ei <= Math.Min(enCount, 50); ei++)
+                    {
+                        try
+                        {
+                            dynamic en = doc.Endnotes[ei];
+                            string enTxt = CleanWordText(Convert.ToString(en.Range.Text) ?? string.Empty);
+                            if (!string.IsNullOrWhiteSpace(enTxt)) sb.AppendLine(string.Format("[Endnote {0}] {1}", ei, enTxt));
+                        }
+                        catch { }
+                        if (sb.Length >= maxCharacters) break;
+                    }
+                }
+                catch { }
+                // Comments
+                try
+                {
+                    int cCount = 0;
+                    try { cCount = Convert.ToInt32(doc.Comments.Count); } catch { cCount = 0; }
+                    for (int ci = 1; ci <= Math.Min(cCount, 100); ci++)
+                    {
+                        try
+                        {
+                            dynamic c = doc.Comments[ci];
+                            string author = string.Empty;
+                            try { author = Convert.ToString(c.Author) ?? string.Empty; } catch { }
+                            string cTxt = CleanWordText(Convert.ToString(c.Range.Text) ?? string.Empty);
+                            if (string.IsNullOrWhiteSpace(cTxt)) try { cTxt = CleanWordText(Convert.ToString(c.Reference) ?? string.Empty); } catch { }
+                            string anchor = string.Empty;
+                            try { anchor = CleanWordText(Convert.ToString(c.Scope.Text) ?? string.Empty); } catch { }
+                            if (!string.IsNullOrWhiteSpace(cTxt))
+                            {
+                                if (!string.IsNullOrWhiteSpace(anchor) && anchor.Length <= 120)
+                                    sb.AppendLine(string.Format("[Comment {0} by {1} on \"{2}\"] {3}", ci, author, anchor, cTxt));
+                                else
+                                    sb.AppendLine(string.Format("[Comment {0} by {1}] {2}", ci, author, cTxt));
+                            }
+                        }
+                        catch { }
+                        if (sb.Length >= maxCharacters) break;
+                    }
+                }
+                catch { }
+                // Revisions (tracked changes)
+                try
+                {
+                    int rCount = 0;
+                    try { rCount = Convert.ToInt32(doc.Revisions.Count); } catch { rCount = 0; }
+                    for (int ri = 1; ri <= Math.Min(rCount, 100); ri++)
+                    {
+                        try
+                        {
+                            dynamic rev = doc.Revisions[ri];
+                            string author = string.Empty;
+                            try { author = Convert.ToString(rev.Author) ?? string.Empty; } catch { }
+                            string revType = string.Empty;
+                            try { revType = Convert.ToString(rev.Type); } catch { }
+                            string revTxt = CleanWordText(Convert.ToString(rev.Range.Text) ?? string.Empty);
+                            if (revTxt != null && revTxt.Length > 80) revTxt = revTxt.Substring(0, 77) + "...";
+                            sb.AppendLine(string.Format("[Revision {0} {1} by {2}] {3}", ri, revType, author, revTxt));
+                        }
+                        catch { }
+                        if (sb.Length >= maxCharacters) break;
+                    }
+                }
+                catch { }
+                // Document sections outline (OutlineLevel)
+                if (sb.Length > 0 && sb.Length < maxCharacters)
+                {
+                    // Trim to maxCharacters
+                    string result = sb.ToString();
+                    if (result.Length > maxCharacters) result = result.Substring(0, maxCharacters) + "\n...[truncated]";
+                    return result;
+                }
+                return sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn(string.Format("WordController.TryGetLiveRichDocumentText failed: {0}", ex.Message));
+                return string.Empty;
+            }
         }
 
         private string GetTextAroundSelection(int maxCharacters)

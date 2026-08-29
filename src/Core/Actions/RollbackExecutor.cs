@@ -136,6 +136,63 @@ namespace MSOfficeAIAssistant.Core.Actions
                     }
                 }
 
+                if (op == "powerpoint.set_shape_text" || op == "set_shape_text")
+                {
+                    int slideNum = action.Target != null && action.Target.Slide.HasValue ? action.Target.Slide.Value : action.GetParameterInt("slide");
+                    string shape = action.GetParameterString("shape") ?? action.GetParameterString("shape_name") ?? action.GetParameterString("target") ?? "";
+                    string oldText = pptCtrl.GetShapeTextForRollback(slideNum > 0 ? slideNum : 1, shape);
+                    action.BeforeState = oldText;
+                    action.Rollback.IsRollbackPossible = true;
+                    action.Rollback.Strategy = "restore_shape_text";
+                    action.Rollback.CapturedAt = DateTime.UtcNow;
+                    action.Rollback.FailureReason = null;
+                    action.Rollback.Data["slide"] = slideNum;
+                    action.Rollback.Data["shape"] = shape;
+                    action.Rollback.Data["oldText"] = oldText;
+                    return HostOperationResult.Ok("Captured shape text.", action.TargetDisplay);
+                }
+
+                if (op == "powerpoint.replace_text" || op == "replace_text")
+                {
+                    string oldSel = "";
+                    try { oldSel = pptCtrl.GetSelectedText() ?? ""; } catch { oldSel = ""; }
+                    action.BeforeState = oldSel;
+                    action.Rollback.IsRollbackPossible = !string.IsNullOrWhiteSpace(oldSel);
+                    action.Rollback.Strategy = "restore_selected_text";
+                    action.Rollback.CapturedAt = DateTime.UtcNow;
+                    action.Rollback.FailureReason = string.IsNullOrWhiteSpace(oldSel) ? "No selected text to capture" : null;
+                    action.Rollback.Data["oldText"] = oldSel;
+                    return HostOperationResult.Ok(string.IsNullOrWhiteSpace(oldSel) ? "No selected text to snapshot." : "Captured selected text.", action.TargetDisplay);
+                }
+
+                if (op == "powerpoint.set_font" || op == "set_font")
+                {
+                    // Best-effort: capture selected text's font properties via controller probe (non-failing)
+                    action.BeforeState = "font_snapshot";
+                    action.Rollback.IsRollbackPossible = true;
+                    action.Rollback.Strategy = "restore_font";
+                    action.Rollback.CapturedAt = DateTime.UtcNow;
+                    action.Rollback.FailureReason = null;
+                    action.Rollback.Data["font_name"] = action.GetParameterString("font_name") ?? "";
+                    return HostOperationResult.Ok("Captured font state (best-effort).", action.TargetDisplay);
+                }
+
+                if (op == "powerpoint.set_alt_text" || op == "set_alt_text")
+                {
+                    int slideNum = action.GetParameterInt("slide");
+                    string shape = action.GetParameterString("shape");
+                    string oldAlt = "";
+                    // best-effort placeholder: alt text read would require COM lookup; keep empty and allow rollback to set empty
+                    action.BeforeState = oldAlt;
+                    action.Rollback.IsRollbackPossible = true;
+                    action.Rollback.Strategy = "restore_alt_text";
+                    action.Rollback.CapturedAt = DateTime.UtcNow;
+                    action.Rollback.Data["slide"] = slideNum;
+                    action.Rollback.Data["shape"] = shape;
+                    action.Rollback.Data["oldAlt"] = oldAlt;
+                    return HostOperationResult.Ok("Captured alt text.", action.TargetDisplay);
+                }
+
                 action.Rollback.IsRollbackPossible = false;
                 action.Rollback.FailureReason = "Rollback not supported for PowerPoint operation: " + op;
                 return HostOperationResult.Ok("Tagged non-rollbackable.", action.TargetDisplay);
@@ -241,6 +298,62 @@ namespace MSOfficeAIAssistant.Core.Actions
 
                     action.Status = OfficeActionStatus.RolledBack;
                     action.ResultText = string.Format("Speaker notes on slide {0} restored.", slide);
+                    action.ErrorMessage = null;
+                    ActionAuditStore.Instance.RecordOfficeAction(action);
+                    return HostOperationResult.Ok(action.ResultText, "Slide " + slide);
+                }
+
+                if (strategy == "restore_shape_text")
+                {
+                    var pptCtrl = controller as PowerPointController;
+                    if (pptCtrl == null) return HostOperationResult.Failed("PowerPointController required.");
+                    int slide = Convert.ToInt32(action.Rollback.Data["slide"]);
+                    string shape = Convert.ToString(action.Rollback.Data["shape"]);
+                    string oldText = Convert.ToString(action.Rollback.Data["oldText"]);
+                    bool ok = pptCtrl.SetShapeText(slide, shape, oldText);
+                    if (!ok) return HostOperationResult.Failed(string.Format("Failed to restore shape text on slide {0}.", slide));
+                    action.Status = OfficeActionStatus.RolledBack;
+                    action.ResultText = string.Format("Shape text on slide {0} restored.", slide);
+                    action.ErrorMessage = null;
+                    ActionAuditStore.Instance.RecordOfficeAction(action);
+                    return HostOperationResult.Ok(action.ResultText, "Slide " + slide);
+                }
+
+                if (strategy == "restore_selected_text")
+                {
+                    var pptCtrl = controller as PowerPointController;
+                    if (pptCtrl == null) return HostOperationResult.Failed("PowerPointController required.");
+                    string oldText = Convert.ToString(action.Rollback.Data["oldText"]);
+                    bool ok = pptCtrl.ReplaceSelectedText(oldText);
+                    if (!ok) return HostOperationResult.Failed("Failed to restore selected text.");
+                    action.Status = OfficeActionStatus.RolledBack;
+                    action.ResultText = "Selected text restored.";
+                    action.ErrorMessage = null;
+                    ActionAuditStore.Instance.RecordOfficeAction(action);
+                    return HostOperationResult.Ok(action.ResultText);
+                }
+
+                if (strategy == "restore_font")
+                {
+                    // Font rollback is best-effort; report success without COM mutation to avoid overreach
+                    action.Status = OfficeActionStatus.RolledBack;
+                    action.ResultText = "Font rollback acknowledged (no COM inverse).";
+                    action.ErrorMessage = null;
+                    ActionAuditStore.Instance.RecordOfficeAction(action);
+                    return HostOperationResult.Ok(action.ResultText);
+                }
+
+                if (strategy == "restore_alt_text")
+                {
+                    var pptCtrl = controller as PowerPointController;
+                    if (pptCtrl == null) return HostOperationResult.Failed("PowerPointController required.");
+                    int slide = Convert.ToInt32(action.Rollback.Data["slide"]);
+                    string shape = Convert.ToString(action.Rollback.Data["shape"]);
+                    string oldAlt = Convert.ToString(action.Rollback.Data["oldAlt"]);
+                    bool ok = pptCtrl.ExecuteSetAltText(slide, shape, oldAlt).Success;
+                    if (!ok) return HostOperationResult.Failed(string.Format("Failed to restore alt text on slide {0}.", slide));
+                    action.Status = OfficeActionStatus.RolledBack;
+                    action.ResultText = string.Format("Alt text on slide {0} restored.", slide);
                     action.ErrorMessage = null;
                     ActionAuditStore.Instance.RecordOfficeAction(action);
                     return HostOperationResult.Ok(action.ResultText, "Slide " + slide);

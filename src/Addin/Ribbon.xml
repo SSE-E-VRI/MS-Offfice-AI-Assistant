@@ -34,7 +34,7 @@
           <button id="btnOutline" label="Outline" imageMso="Redo" size="normal" onAction="OnOutline"/>
           <button id="btnActionItems" label="Actions" imageMso="FileOpen" size="normal" onAction="OnActionItems"/>
           <button id="btnReviewContent" label="Review" imageMso="FileNew" size="normal" onAction="OnReviewContent"/>
-          <button id="btnBuildDeck" label="Slides" imageMso="FileSave" size="normal" onAction="OnBuildSlides"/>
+          <button id="btnBuildDeck" label="Slides" imageMso="FileSave" size="normal" onAction="OnBuildSlides" getVisible="GetVisible"/>
           <button id="btnRewriteVariants" label="3 Variants" imageMso="CopyPictureCommand" size="normal"
                   screentip="3 Rewrite Variants"
                   supertip="Generate 3 alternative rewrites of the selection and choose which one to apply."

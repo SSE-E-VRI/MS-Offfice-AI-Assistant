@@ -1,6 +1,6 @@
 # AI Assistant for Microsoft Office 🤖
 
-**Version 0.5.0**  
+**Version 0.6.0**
 *Designed and developed by D.Manikandan B.E, SSE/E/VRI, Mob No 9444861302*
 
 A cross-version Microsoft Office COM Add-in bringing modern AI chat and document intelligence to **Word, Excel, and PowerPoint** across **Office 2010 through Office 365**.
@@ -17,7 +17,7 @@ Powered by a provider-neutral orchestration architecture supporting **Mistral, G
 - **Modern WPF Sidebar UI**: Sleek, responsive chat interface with Markdig Markdown rendering, animated token streaming, code blocks, clickable source citations, and instant copy/insert buttons.
 - **Deep Office Integration**:
   - **Word**: Document drafting, text continuation, summarization, rewriting, structured comments/tables, Track Changes integration (insert, accept/reject), and multilingual translation (9-language ribbon submenu).
-  - **Excel**: Range analysis and 13 confirm-before-apply action types — formulas, fill-down, table writes, Excel Tables, conditional formatting, sorting/filtering, data validation, charts, PivotTables, named ranges, and duplicate removal.
+  - **Excel**: Range analysis and 48 confirm-before-apply action types — formulas, fill-down, table writes, Excel Tables, conditional formatting, sorting/filtering, data validation, charts (column/bar/line/pie/scatter/area/doughnut), PivotTables with field config, named ranges, duplicate removal, find/replace, set_case, trim/normalize, text-to-columns, row/column insert/delete/hide, merge/format/autofit/freeze, summary rows, Python `=PY()`, themes, sparklines, analysis (`analyze_range`/`get_formula_details`/`add_analysis_column`), local import, shapes, workbook rules, and highlights.
   - **PowerPoint**: Deck build/update from an outline, whole-deck review, slide move, sections, speaker notes, and local image insert with alt text.
 - **Domain packs & skills**: Swappable prompt-template packs — `general` (official letters, minutes, inspection reports, RCA, dashboards) and `railway` (adds DRM briefings, failure/Pareto analysis, asset health, deficiency tracking, and railway terminology) — surfaced as context-aware quick-prompt chips in the chat panel.
 - **Structured actions, risk levels, rollback**: Every proposed mutation is a typed, risk-classified action (0–3) resolved against a single tool registry, previewed for approval, and — for undoable risk-2+ mutations — rollback-capable via before-state capture and strict-LIFO inverse execution.

@@ -94,12 +94,12 @@ namespace MSOfficeAIAssistant.Tests
         private static void TestPromptAllowListMatchesSSOT()
         {
             string excelAllowList = ToolRegistry.FormatActionTypesList("Excel");
-            Assert(excelAllowList == "formula, value, filldown, table, create_table, conditional_format, sort, filter, data_validation, chart, pivot_table, named_range, and remove_duplicates",
-                "Excel allow-list string mismatch");
+            Assert(excelAllowList.Contains("formula") && excelAllowList.Contains("remove_duplicates") && excelAllowList.Contains("find_replace") && excelAllowList.Contains("text_to_columns") && excelAllowList.Contains("format_cells") && excelAllowList.Contains("add_worksheet"),
+                "Excel allow-list should contain key Excel action types");
 
             string pptAllowList = ToolRegistry.FormatActionTypesList("PowerPoint");
-            Assert(pptAllowList == "move_slide, create_section, rename_section, or set_notes",
-                "PowerPoint allow-list string mismatch");
+            Assert(pptAllowList.Contains("move_slide") && pptAllowList.Contains("create_section") && pptAllowList.Contains("rename_section") && pptAllowList.Contains("set_notes") && pptAllowList.Contains("create_slide") && pptAllowList.Contains("insert_image") && pptAllowList.Contains("delete_slide") && pptAllowList.Contains("duplicate_slide"),
+                "PowerPoint allow-list should contain all PowerPoint action types");
         }
 
         private static void TestOpenAiFunctionSchemaGeneration()

@@ -87,7 +87,7 @@ $legacyProgIds = @("MistralAI.Addin", "MistralAI.Connect", "MistralAI.TaskPaneCo
 
 # Clean stale registrations BEFORE importing new ones to avoid merging orphan subkeys.
 # This prevents old assembly versions (e.g., 1.0.0.0, 0.4.0.0) from persisting and overriding
-# the current version (0.5.0.0), which would cause manifest-mismatch COM activation failures.
+# the current version (0.6.0.0), which would cause manifest-mismatch COM activation failures.
 Write-Host "      Cleaning stale COM registrations..." -ForegroundColor DarkGray
 $roots = @("HKCU:\Software\Classes")
 if (Test-Path "HKCU:\Software\Classes\Wow6432Node") {
@@ -169,10 +169,10 @@ foreach ($root in $roots) {
     foreach ($c in $clsids) {
         $inproc = "$root\CLSID\$c\InprocServer32"
         if (Test-Path $inproc) {
-            # Set CodeBase on parent and current version subkey (0.5.0.0).
+            # Set CodeBase on parent and current version subkey (0.6.0.0).
             # Do NOT stamp CodeBase on arbitrary child keys to avoid poisoning stale versions.
             $inprocKeys = @($inproc)
-            $currentVersion = "$inproc\0.5.0.0"
+            $currentVersion = "$inproc\0.6.0.0"
             if (Test-Path $currentVersion) {
                 $inprocKeys += $currentVersion
             }

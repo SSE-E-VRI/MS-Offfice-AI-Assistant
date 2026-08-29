@@ -117,9 +117,10 @@ namespace MSOfficeAIAssistant.Tests
 
         private static void TestRejectedTargets()
         {
-            // Sheet-qualified targets
-            Assert(!SpreadsheetActionParser.IsSafeTarget("'Sheet2'!A1"), "'Sheet2'!A1 is rejected");
-            Assert(!SpreadsheetActionParser.IsSafeTarget("Sheet1!B2:C10"), "Sheet1!B2:C10 is rejected");
+            // Sheet-qualified targets are now accepted (E2.1 prerequisite for multi-sheet support)
+            Assert(SpreadsheetActionParser.IsSafeTarget("'Sheet2'!A1"), "'Sheet2'!A1 is now accepted (sheet-qualified)");
+            Assert(SpreadsheetActionParser.IsSafeTarget("Sheet1!B2:C10"), "Sheet1!B2:C10 is now accepted");
+            Assert(SpreadsheetActionParser.IsSafeTarget("'My Sheet'!A1"), "'My Sheet'!A1 is now accepted (quoted sheet)");
             // Multi-area targets
             Assert(!SpreadsheetActionParser.IsSafeTarget("A1,C1"), "A1,C1 multi-area is rejected");
             Assert(!SpreadsheetActionParser.IsSafeTarget("A1:B2,D1:E2"), "A1:B2,D1:E2 is rejected");
@@ -128,6 +129,9 @@ namespace MSOfficeAIAssistant.Tests
             Assert(!SpreadsheetActionParser.IsSafeTarget("1:1"), "1:1 whole row is rejected");
             // Special / injected addresses
             Assert(!SpreadsheetActionParser.IsSafeTarget("CMD|'/C calc'!A1"), "DDE injection address is rejected");
+            // Invalid sheet names
+            Assert(!SpreadsheetActionParser.IsSafeTarget("Sheet:1!A1"), "Sheet name with ':' is rejected");
+            Assert(!SpreadsheetActionParser.IsSafeTarget("Sheet[A]!A1"), "Sheet name with '[' is rejected");
         }
 
         private static void TestUndoableFlags()

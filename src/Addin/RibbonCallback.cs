@@ -376,5 +376,26 @@ namespace MSOfficeAIAssistant.Addin
                     MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
+
+        public bool GetVisible(object control)
+        {
+            try
+            {
+                dynamic ctrl = control;
+                string id = Convert.ToString(ctrl.Id);
+                // Slides (BuildDeck) is PowerPoint-only, mirroring QuickPromptRegistry host filtering
+                if (id == "btnBuildDeck")
+                {
+                    string host = null;
+                    try { host = _taskPaneManager != null ? _taskPaneManager.CurrentHostType : null; } catch { }
+                    if (!string.IsNullOrWhiteSpace(host))
+                        return string.Equals(host, "PowerPoint", StringComparison.OrdinalIgnoreCase);
+                    // If host not yet known (ribbon loads before host init), show it; it will be hidden after host sets and ribbon invalidates
+                    return true;
+                }
+                return true;
+            }
+            catch { return true; }
+        }
     }
 }

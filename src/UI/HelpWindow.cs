@@ -55,7 +55,7 @@ namespace MSOfficeAIAssistant.UI
 
             var hint = new TextBlock
             {
-                Text = "AI Assistant — User Manual (v0.5.0)",
+                Text = "AI Assistant — User Manual (v0.6.0)",
                 VerticalAlignment = VerticalAlignment.Center,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 23, 42))

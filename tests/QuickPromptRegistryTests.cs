@@ -28,12 +28,16 @@ namespace MSOfficeAIAssistant.Tests
             Assert(!wordPrompts.Any(p => p.Id == "Deck"), "Expected Deck to be excluded for Word");
 
             var excelPrompts = QuickPromptRegistry.GetPrompts("Excel");
-            Assert(excelPrompts.Count == 5, string.Format("Expected 5 prompts for Excel, got {0}", excelPrompts.Count));
+            Assert(excelPrompts.Count == 7, string.Format("Expected 7 prompts for Excel, got {0}", excelPrompts.Count));
             Assert(!excelPrompts.Any(p => p.Id == "Deck"), "Expected Deck to be excluded for Excel");
+            Assert(excelPrompts.Any(p => p.Id == "AnalyzeExcel"), "Expected AnalyzeExcel for Excel");
+            Assert(excelPrompts.Any(p => p.Id == "FormulaVariants"), "Expected FormulaVariants for Excel");
 
             var pptPrompts = QuickPromptRegistry.GetPrompts("PowerPoint");
-            Assert(pptPrompts.Count == 6, string.Format("Expected 6 prompts for PowerPoint, got {0}", pptPrompts.Count));
+            Assert(pptPrompts.Count == 9, string.Format("Expected 9 prompts for PowerPoint, got {0}", pptPrompts.Count));
             Assert(pptPrompts.Any(p => p.Id == "Deck"), "Expected Deck to be included for PowerPoint");
+            Assert(pptPrompts.Any(p => p.Id == "NotesForAll"), "Expected NotesForAll for PowerPoint");
+            Assert(pptPrompts.Any(p => p.Id == "ExcelToSlide"), "Expected ExcelToSlide for PowerPoint");
 
             var unknownPrompts = QuickPromptRegistry.GetPrompts("UnknownHost");
             Assert(unknownPrompts.Count == 5, string.Format("Expected 5 prompts for unknown host, got {0}", unknownPrompts.Count));

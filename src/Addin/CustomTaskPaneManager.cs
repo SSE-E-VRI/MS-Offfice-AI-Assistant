@@ -377,6 +377,11 @@ namespace MSOfficeAIAssistant.Addin
         private object _appObj;
         private string _hostType = "Office";
 
+        public string CurrentHostType
+        {
+            get { return _hostType; }
+        }
+
         public bool IsVisible
         {
             get

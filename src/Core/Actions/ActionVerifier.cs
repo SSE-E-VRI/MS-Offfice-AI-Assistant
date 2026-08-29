@@ -146,6 +146,10 @@ namespace MSOfficeAIAssistant.Core.Actions
                             else if (string.Equals(param.Name, "value", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(action.ContentDisplay)) present = true;
                             else if (string.Equals(param.Name, "comment", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(action.ContentDisplay)) present = true;
                             else if (string.Equals(param.Name, "slide", StringComparison.OrdinalIgnoreCase) && action.Target != null && action.Target.Slide.HasValue) present = true;
+                            else if (string.Equals(param.Name, "slide", StringComparison.OrdinalIgnoreCase) && (action.GetParameterInt("index") > 0 || action.GetParameterInt("slide_index") > 0)) present = true;
+                            else if (string.Equals(param.Name, "title", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(action.ContentDisplay)) present = true;
+                            else if (string.Equals(param.Name, "text", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(action.ContentDisplay)) present = true;
+                            else if (string.Equals(param.Name, "image_path", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(action.ContentDisplay)) present = true;
                             // Word tool handlers accept these parameters through alternate channels
                             // (see ToolRegistry's word.find_replace/apply_style/reorganize_paragraphs
                             // handlers) -- the required-parameter check must recognize the same
